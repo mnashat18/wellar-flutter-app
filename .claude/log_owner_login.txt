@@ -1,0 +1,60 @@
+07-08 11:38:27.036  1105  1105 D AudioALSAHardware: -createAudioPatch() num_sources [1] , num_sinks [1], handle [0xd31c]
+07-08 11:38:27.036  1105  1105 D AHAL_Module: setAudioPatch: default: updated patch AudioPatch{id: 1265, sourcePortConfigIds: [29], sinkPortConfigIds: [2726], minimumStreamBufferSizeFrames: 1024, latenciesMs: [134]}
+07-08 11:38:27.037  1151  1565 D AudioFlinger: setCurDevice() 0x2
+07-08 11:38:27.041  1151 22752 V APM_AudioPolicyManager: setOutputDevices() AF::createAudioPatch returned 0 patchHandle 427860 num_sources 1 num_sinks 1
+07-08 11:38:27.044  1151 22752 V APM_AudioPolicyManager: checkAndSetVolume: output 13, stream 10, index 7, devices 0x2, volume 0.070795, delayMs 0, muted false
+07-08 11:38:27.044  1151 22752 V APM_AudioPolicyManager: checkAndSetVolume: output 13, stream 9, index 7, devices 0x2, volume 0.211349, delayMs 0, muted false
+07-08 11:38:27.044  1151 22752 V APM_AudioPolicyManager: checkAndSetVolume: output 13, stream 8, index 15, devices 0x2, volume 1.000000, delayMs 0, muted false
+07-08 11:38:27.049  1151 22752 V APM_AudioPolicyManager: checkAndSetVolume: output 13, stream 5, index 15, devices 0x2, volume 0.630957, delayMs 0, muted false
+07-08 11:38:27.049  1151 22752 D APM_AudioPolicyManager: checkAndSetGainTableAnalogGain stream 5, devices 0x2, index 15
+07-08 11:38:27.054  1180  1180 D Audio_ParameterParser: parseVendorParameters: scope: STREAM, keys/values: volumeDevice=2;volumeIndex=15;volumeStreamType=5
+07-08 11:38:27.056  1105 30601 D AudioALSAStreamOut: +setParameters(): flag 2
+07-08 11:38:27.056  1105 30601 D AudioALSAStreamManager: setVolumeIndex() stream= 5, device= 0x2, index= f
+07-08 11:38:27.056  1105 30601 D AudioMTKGainController: setNormalVolume(), mSceneIndex = 0, stream 5, devices 0x2, index 15, mode 0x0, gainDevice 0x2
+07-08 11:38:27.058  1151 22752 V APM_AudioPolicyManager: checkAndSetVolume: output 13, stream 4, index 12, devices 0x2, volume 0.281838, delayMs 0, muted false
+07-08 11:38:27.059  1151 22752 V APM_AudioPolicyManager: checkAndSetVolume: output 13, stream 3, index 7, devices 0x2, volume 0.089125, delayMs 0, muted false
+07-08 11:38:27.059  1151 22752 V APM_AudioPolicyManager: checkAndSetVolume: output 13, stream 2, index 15, devices 0x2, volume 1.000000, delayMs 0, muted false
+07-08 11:38:27.060  1151 22752 V APM_AudioPolicyManager: checkAndSetVolume: output 13, stream 1, index 15, devices 0x2, volume 0.794328, delayMs 0, muted false
+07-08 11:38:27.062  1151 22752 V APM_AudioPolicyManager: checkAndSetVolume: output 13, stream 0, index 8, devices 0x2, volume 1.000000, delayMs 0, muted false
+07-08 11:38:27.064  1151 22752 V APM_AudioPolicyManager: checkAndSetVolume: output 13, stream 11, index 15, devices 0x2, volume 1.000000, delayMs 0, muted false
+07-08 11:38:27.064  1151 22752 V APM_AudioPolicyManager: checkAndSetVolume: output 13, stream 5, index 15, devices 0x2, volume 0.630957, delayMs 0, muted false
+07-08 11:38:27.065  1151 22752 I AudioFlinger: updateStageIndex new -1301
+07-08 11:38:27.066  1338 28009 I MediaClock: setThreshold mThresholdTimeUsForAnchor(500000), mMinClockModificationTimeUs(80000), mMaxCorrectionTimeUs(30000)
+07-08 11:38:27.067  1338 11065 D MediaPlayerService: onAudioDeviceUpdate deviceIds: 3
+07-08 11:38:27.069  1105  1488 W MTKAdapterStreamLayer: getStreamState(), stub == NULL
+07-08 11:38:27.069  1338 11065 V AudioSink: getRoutedDeviceIds
+07-08 11:38:27.069  1338 28009 I NuPlayerRenderer: onAudioSinkChanged() getPosition : 0
+07-08 11:38:27.070  1338 28009 I NuPlayerRenderer: onDrainAudioQueue() send kWhatPollingAudioStarted audio_out : 0
+07-08 11:38:27.070  1338 28009 I NuPlayerRenderer: setAudioFirstAnchorTime mAudioFirstAnchorTimeMediaUs : -1, new mediaTimeUs : 0
+07-08 11:38:27.070  1338 27951 V NuPlayer: media rendering started
+07-08 11:38:27.071  1105  1488 D AudioALSAStreamOut: write(), flag 0x2, usePolicyDevice/standbyByHifi: 1/0, output_devices: 0x2 -> latest policyDevice 0x2 (ori policyDevice 0x2)
+07-08 11:38:27.071  1105  1488 D AudioALSAStreamManager: +syncSharedOutDevice(), originDevice/routingSharedOutDevice: 0x2/0x2, mAudioMode: 0
+07-08 11:38:27.071  1105  1488 D AudioALSAStreamManager: getMode(), mAudioMode = 0
+07-08 11:38:27.071  1105  1488 D AudioIEMsController: routing(+), cur out 0x0 in 0x0, hs 0, bt 0, usb 0, device 0x2, mask 0x1, on 0
+07-08 11:38:27.071  1105  1488 D AudioIEMsController: routing(-), cur out 0x0 in 0x0
+07-08 11:38:27.071  1105  1488 D AudioALSAUltrasoundOutOfCallController: afterOutputDeviceRouting(), output_device=0x2, mTargetOutputDevice=0x1
+07-08 11:38:27.071  1105  1488 D AudioMTKGainController: setNormalVolume(), mSceneIndex = 0, stream 5, devices 0x2, index 15, mode 0x0, gainDevice 0x2
+07-08 11:38:27.071  1105  1488 D AudioALSAStreamOut: open(), flags 2
+07-08 11:38:27.071  1105  1488 D AudioALSAStreamManager: +createPlaybackHandler(), mAudioMode = 0, output_devices = 0x2, isMixerOut = 0, isBypassAurisys = 0, flag = 2, isIEMsSource = 0, isIEMsOn = 0
+07-08 11:38:27.071  1105  1488 D AudioALSAStreamManager: needEnableVoip(), output_devices = 0x2, flags: 0x2, mAvailableOutputFlags: 0x1000e, enable: 0
+07-08 11:38:27.071  1105  1488 D AudioSpeechEnhanceInfo: IsAPDMNRTuningEnable(), 0
+07-08 11:38:27.073  2194  3111 D SoundCraft.PlayingAudioConditionHandler: onPlaybackConfigChanged : lastStartedPackageName=null, lastStartedUid=-1, newStartedUid=-1, newStartPackageName=null, thread=Thread[RoutineHandlerThread,5,main]
+07-08 11:38:27.077  1105  1488 D AudioALSAPlaybackHandlerMixer: open(+), source flag 2, mDevice = 0x2, buffer_size 4096, sample_rate 48000
+07-08 11:38:27.077  1105  1488 D AudioALSAPlaybackHandlerBase: CreateAurisysLibManager, ph type: 11, voip: 0, mAurisysScenario: 0
+07-08 11:38:27.077  1105  1488 D aurisys_utility: input dev: 0x80000080 0x0, fmt = 0x1, fs: 48000, max fs: 48000, ch: 2, max ch: 2, ch maks: 0x3, hw_info_mask: 0x0; output dev: 0x2 0x0, fmt = 0x1, fs: 48000, max fs: 48000, ch: 2, max ch: 4, ch maks: 0x3, hw_info_mask: 0x8; task_scene: 2, audio_mode: 0, stream_type: 5, output_flags: 0x2, input_source: 0, input_flags: 0x0; network_info: 0, enhancement_feature_mask: 0x0
+07-08 11:38:27.077  1105  1488 D AudioUtility: setupCustomInfoStr(), custom_info = "SetAudioCustomScene=Default;", (scene = Default, vol_level = -1, bt_codec = -1, gameChatMode = -1)
+07-08 11:38:27.077  1105  1488 D aurisys_lib_handler: aurisys_arsi_parsing_param_file(), gProductInfo "platform=MT6789,device=a15,model=SM-A155F", file_path "/vendor/etc/audio_param", enhancement_mode 0, param_buf_size 128, data_size 128, custom_info SetAudioCustomScene=Default;
+07-08 11:38:27.077  1105  1488 D aurisys_lib_manager: DL Lib, lib_name aurisys_demo, 0xb400007bb4622400, sample_rate: 48000 => 48000, num_channels: 2 => 2, audio_format: 0x1 => 0x3, interleave: 1 => 1, frame: 0 => 0
+07-08 11:38:27.077  1105  1488 D aurisys_lib_manager: DL out, sample_rate: 48000 => 48000, num_channels: 2 => 2, audio_format: 0x3 => 0x3, interleave: 1 => 1, frame: 0 => 0
+07-08 11:38:27.077  1105  1488 D audio_sw_mixer: sw_mixer_source_attach(), MIXER_PLAYBACK  , name T_PRIMARY    order 4 sz 4096 fmt 3 ch 2 rate 48000 latency_us 10666
+07-08 11:38:27.077  1105  1488 D AudioUtility: chooseTargetSampleRate() hiFiState 0 isDeviceSupportHiFi 0 sampleRate 48000 targetSampleRate 48000, isUltra96k 0
+07-08 11:38:27.078  1105  1488 D AudioALSAStreamManager: +createPlaybackHandler(), mAudioMode = 0, output_devices = 0x2, isMixerOut = 1, isBypassAurisys = 1, flag = 2, isIEMsSource = 0, isIEMsOn = 0
+07-08 11:38:27.078  1105  1488 D AudioALSAStreamManager: needEnableVoip(), output_devices = 0x2, flags: 0x2, mAvailableOutputFlags: 0x1000e, enable: 0
+07-08 11:38:27.078  1105  1488 D AudioSpeechEnhanceInfo: IsAPDMNRTuningEnable(), 0
+07-08 11:38:27.078  1105  1488 D AudioALSAPlaybackHandlerNormal: +open(), flag = 2, source output_devices = 0x2, audio_format = 3, buffer_size = 8192, sample_rate = 48000
+07-08 11:38:27.078  2194  3111 D SoundCraft.PlayingAudioConditionHandler: onPlaybackConfigChanged : lastStartedPackageName=null, lastStartedUid=-1, newStartedUid=-1, newStartPackageName=null, thread=Thread[RoutineHandlerThread,5,main]
+07-08 11:38:27.078  1105  1488 D AudioALSADeviceConfigManager: ApplyDeviceTurnonSequenceByName() DeviceName = PLAYBACK1_TO_I2S3 descriptor->DeviceStatusCounte = 0, Ctlsize=4
+07-08 11:38:27.082  1105  1488 D AudioUtility: chooseTargetSampleRate() hiFiState 0 isDeviceSupportHiFi 0 sampleRate 48000 targetSampleRate 48000, isUltra96k 0
+07-08 11:38:27.082  1105  1488 D AudioALSAPlaybackHandlerBase: transferAudioFormatToPcmFormat(), audio_format(0x4) => pcm_format(0x3)
+07-08 11:38:27.083  1105  1488 D AudioALSAPlaybackHandlerNormal: open(), flag = 2, mConfig: channels = 2, sample_rate(target) = 48000, period_size = 1024, period_count = 2, format = 3, avail_min = 1024, start_threshold = 2048
+07-08 11:38:27.085  1105  1488 D AudioALSAPlaybackHandlerBase: openPcmDriverWithFlag(), pcm device = 0 flag = 0xc mPcm = 0xb400007bb6168900

@@ -1,0 +1,508 @@
+﻿{
+    "data":  [
+                 {
+                     "id":  "0add623c-e9c5-4998-b928-dff08c264c4e",
+                     "name":  "Alert Action",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.update",
+                                     "collections":  "alerts"
+                                 },
+                     "operation":  "95a4f690-f5d1-41aa-bbbd-764682377c5b",
+                     "date_created":  "2026-04-11T16:28:03.466Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "1e09f397-3d46-4c6a-9e5b-d476b3b87154",
+                                        "4a13544d-dd4f-4fd0-a4d1-0b84003c4d02",
+                                        "8ce7757f-0568-4795-ba9d-8147fa30ec2f",
+                                        "93ff2a47-00c1-4326-bbd0-981f4b55a3a2",
+                                        "95a4f690-f5d1-41aa-bbbd-764682377c5b",
+                                        "aa8bf6af-a9df-41d2-8fd5-c19f26be5893",
+                                        "f8d9e43a-e8a7-4bc1-af2f-a6e24e7f3198"
+                                    ]
+                 },
+                 {
+                     "id":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "name":  " Claim Invite",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "webhook",
+                     "accountability":  "all",
+                     "options":  {
+                                     "method":  "POST"
+                                 },
+                     "operation":  "f6b828b3-a5b2-4e47-93f5-2199a03d0916",
+                     "date_created":  "2026-05-12T11:22:12.175Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "1f493a63-0a66-41b9-8470-d61508f62975",
+                                        "31ec0969-e7cd-47c6-b712-01130d1da8da",
+                                        "383e0d5c-4e03-4b55-b646-4db235827ca4",
+                                        "4b9264cc-607d-4d52-9472-473954211180",
+                                        "5cf45acb-b335-4e00-b503-2e2f1222f9fd",
+                                        "78919b59-7e2f-4863-8bc5-2e01a6da9308",
+                                        "9fefcdfe-cb58-4c5d-ad32-4d69346e6a71",
+                                        "cec4089f-54f3-4ea0-91d5-e12103557719",
+                                        "d2f9a1b9-6d75-4d99-9139-035e2177d2c4",
+                                        "deecd67a-0492-4eac-9f3d-75b8a64fb304",
+                                        "e1fa4da6-7b83-4ae7-9e8c-8ec6998370cf",
+                                        "efecab3c-be25-4dcb-9b0f-34eb1a6075ea",
+                                        "f6b828b3-a5b2-4e47-93f5-2199a03d0916"
+                                    ]
+                 },
+                 {
+                     "id":  "36c14ae3-c39b-4182-bad9-2ef34767a4af",
+                     "name":  "CLAIM INVITES ON SIGNUP0",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "inactive",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "directus_users"
+                                 },
+                     "operation":  "65db5cb2-c28e-46bc-ba68-386899257c4a",
+                     "date_created":  "2026-02-24T20:12:19.133Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "65db5cb2-c28e-46bc-ba68-386899257c4a",
+                                        "8bf3a187-60b0-4e6d-b2b8-516e5b2f1578",
+                                        "a6b687d0-9357-49ee-8abc-e8d9a3e83cb3"
+                                    ]
+                 },
+                 {
+                     "id":  "9de929f7-26f0-43a4-86da-e0638c7ca48b",
+                     "name":  "Consent Accepted",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "consent_logs"
+                                 },
+                     "operation":  "adc2a2fd-3ab2-474d-af5a-156e932e9616",
+                     "date_created":  "2026-04-11T11:17:56.446Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  "adc2a2fd-3ab2-474d-af5a-156e932e9616"
+                 },
+                 {
+                     "id":  "4f514fe3-48c5-4c11-9ad4-2090085c5710",
+                     "name":  "Create Invite + Send Email",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "request_invites"
+                                 },
+                     "operation":  "d0f7d896-b6f8-4ef7-90a0-3b3bdf54b99a",
+                     "date_created":  "2026-05-11T16:29:51.468Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "0d93eb9b-7542-4b44-af56-24113c82378d",
+                                        "1febb486-389d-4458-afbf-1a79e313d55d",
+                                        "b3d9ec08-af50-4c54-9761-644d3030d6f0",
+                                        "d0f7d896-b6f8-4ef7-90a0-3b3bdf54b99a"
+                                    ]
+                 },
+                 {
+                     "id":  "f716b6e1-0523-4b44-a959-a99ee34dc1ad",
+                     "name":  "Daily Media Purge",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "schedule",
+                     "accountability":  "all",
+                     "options":  {
+                                     "cron":  "0 3 * * *"
+                                 },
+                     "operation":  "35ba502c-3afd-49a1-9afe-db74eb50a5f2",
+                     "date_created":  "2026-04-11T16:38:03.197Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "210a2e7a-d07f-4f58-93de-bc6d64305f64",
+                                        "35ba502c-3afd-49a1-9afe-db74eb50a5f2",
+                                        "741d2802-d67e-4195-94ec-547a7ea8332b",
+                                        "d1d00a33-80e7-4050-8ce1-d0883975243b"
+                                    ]
+                 },
+                 {
+                     "id":  "00f22515-e4eb-482c-89a5-05ca2fdafc2f",
+                     "name":  "Export Reports",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "inactive",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "reports_exports"
+                                 },
+                     "operation":  "7871a23a-e81f-4aa0-a7f6-86adcc981b81",
+                     "date_created":  "2026-02-03T15:10:35.982Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "7049cc67-9836-46e0-86c1-7be68a89ce82",
+                                        "7871a23a-e81f-4aa0-a7f6-86adcc981b81",
+                                        "acb3ffa6-d57e-483b-aaad-b77d9e095378",
+                                        "f5325482-1511-4840-87aa-f4d1577ad05d"
+                                    ]
+                 },
+                 {
+                     "id":  "75e967de-5c2b-4727-b83f-85aa1d468323",
+                     "name":  "High Risk Result → Alert + Notification",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "scan_results"
+                                 },
+                     "operation":  "02fcfa9e-8003-4c74-981a-bd489d1bc507",
+                     "date_created":  "2026-04-11T13:03:26.780Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "02fcfa9e-8003-4c74-981a-bd489d1bc507",
+                                        "7ed11e10-b6b2-4688-b5a4-f4d47716c5f8",
+                                        "9e8f4488-ba11-4c62-8570-95544a8dc4e5",
+                                        "a5dd8da6-c066-4028-ae90-4526df6a31e4",
+                                        "cae653c7-d20a-4993-b69c-9c06ae469505",
+                                        "f0b2fc8c-964f-4dab-be04-e1dba3fea0af",
+                                        "fe7a8f53-249e-4a4b-b9b2-d7c2aa22dd62"
+                                    ]
+                 },
+                 {
+                     "id":  "67e69672-0bdf-498e-a27c-c8cdc44b9cf6",
+                     "name":  "Invite Accepted",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.update",
+                                     "collections":  "request_invites"
+                                 },
+                     "operation":  "06cf0470-da33-4380-aa20-595d27903fb9",
+                     "date_created":  "2026-04-11T09:51:52.951Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "06cf0470-da33-4380-aa20-595d27903fb9",
+                                        "24560f3d-fabf-4c65-80bf-912fc06dd030",
+                                        "55b8fe5f-932b-47d9-80a1-60bca6a42dd4",
+                                        "6b3d735e-0303-4259-b172-7ac7b7ccfa92",
+                                        "eec5e811-41c9-476a-8d68-788867d510ed",
+                                        "f0dbc0dd-bf68-4ae8-a46f-c1242f165fd8"
+                                    ]
+                 },
+                 {
+                     "id":  "3a1ff66b-7972-4762-8268-13b30f2d8c29",
+                     "name":  "Push Token Upsert",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "push_subscriptions"
+                                 },
+                     "operation":  "1a8a7e48-cfe6-4ec2-9090-e9d7d557b603",
+                     "date_created":  "2026-04-11T16:51:36.268Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "1a8a7e48-cfe6-4ec2-9090-e9d7d557b603",
+                                        "d1494be1-6c10-468c-b484-f1d096ed8cdd",
+                                        "ea0711bf-49b0-4279-8601-b7f55a004d1b"
+                                    ]
+                 },
+                 {
+                     "id":  "92443fe9-1bb9-4898-b97f-7f9f4a5e2f31",
+                     "name":  "Scan Completed",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.update",
+                                     "collections":  "wellness_scans"
+                                 },
+                     "operation":  "b401228e-a4b5-4459-8862-bd3d0572ff70",
+                     "date_created":  "2026-04-11T11:22:35.289Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "310fea03-1b35-475e-8e6c-d1964f905ea1",
+                                        "71e3c66a-fd41-4bf4-adb8-467a5dce4f9c",
+                                        "75fc4742-0c0c-4d98-a046-c75a62397dd4",
+                                        "8628af07-8cce-41dc-a082-cfcb05c5d8db",
+                                        "b401228e-a4b5-4459-8862-bd3d0572ff70",
+                                        "bc68372b-4d8f-43fa-8ee8-9b7907d1798c",
+                                        "c6720287-d1fb-446d-a387-27ac1a8d5f4c",
+                                        "dfa5ae77-ad1b-4903-b2f8-9c87ac181f79"
+                                    ]
+                 },
+                 {
+                     "id":  "c1ea5607-f639-4867-b10b-18bcc666e8a3",
+                     "name":  "Scan Request Created → Notification",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "scan_requests"
+                                 },
+                     "operation":  "b97642a7-c9f5-4d63-9ac3-8b2068621951",
+                     "date_created":  "2026-04-11T16:35:08.735Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "b97642a7-c9f5-4d63-9ac3-8b2068621951",
+                                        "d508f37b-09eb-4b78-b685-67877737de3c",
+                                        "f4269705-0802-44f4-9876-bd5852129406"
+                                    ]
+                 },
+                 {
+                     "id":  "ab56cfa0-fbff-40c0-8e25-94883b822d70",
+                     "name":  "Scan Result Created",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "scan_results"
+                                 },
+                     "operation":  "e2dafb3e-c02f-4574-bfbd-8722c1de279f",
+                     "date_created":  "2026-04-11T12:41:55.436Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "a26248a0-1d80-41af-b827-f506c9b694f0",
+                                        "af9e2c81-e191-4050-8d5b-75560463dc2f",
+                                        "cdd7194b-ffe8-4a72-9add-6707ce26372d",
+                                        "e2dafb3e-c02f-4574-bfbd-8722c1de279f"
+                                    ]
+                 },
+                 {
+                     "id":  "494f1f43-3ce3-4a0d-b6ab-e7a45b8e59f9",
+                     "name":  "Send Push When Scan Request Created",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "scan_requests"
+                                 },
+                     "operation":  "bc134b35-d507-46b3-b2f9-502e30a83270",
+                     "date_created":  "2026-06-10T18:04:52.866Z",
+                     "user_created":  "a9936961-4de4-4bce-a700-1d062d567178",
+                     "operations":  "bc134b35-d507-46b3-b2f9-502e30a83270"
+                 },
+                 {
+                     "id":  "157da82c-b094-4e8e-bd32-7bb23fdc9c37",
+                     "name":  "Shut down",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "inactive",
+                     "trigger":  "schedule",
+                     "accountability":  "all",
+                     "options":  {
+                                     "cron":  "0 0 * * *"
+                                 },
+                     "operation":  "94832c51-fbfd-437c-8cc9-d42e80b9da0a",
+                     "date_created":  "2026-02-27T16:26:09.012Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "3ba8aff5-fdb6-461d-9159-02be48611165",
+                                        "94832c51-fbfd-437c-8cc9-d42e80b9da0a",
+                                        "ebb7cfbf-4f9d-4d83-8ff7-6e7ae2fe0557"
+                                    ]
+                 },
+                 {
+                     "id":  "55eacae7-137f-4753-a3c8-076bb7fca39b",
+                     "name":  "START REQUEST",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "inactive",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "requests"
+                                 },
+                     "operation":  "9243fdf6-27ca-4e2b-97b7-3acb6dfbcdde",
+                     "date_created":  "2026-02-22T22:26:31.940Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "25e9dbac-113d-4750-b5a3-11c60632afbf",
+                                        "3f65c970-1645-4009-9d4c-be0c8d2743b5",
+                                        "8e631a70-4e85-4dc0-9332-809980a60bed",
+                                        "9036a3ed-3dac-4eaf-bdbc-bc4a66b116b6",
+                                        "9243fdf6-27ca-4e2b-97b7-3acb6dfbcdde"
+                                    ]
+                 },
+                 {
+                     "id":  "849aa3dc-b064-4188-9f07-390945fa1889",
+                     "name":  "WallerAi",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "inactive",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.update",
+                                     "collections":  "wellness_scans"
+                                 },
+                     "operation":  "b338f34c-8f32-4eb7-b4cf-fe704bbc087d",
+                     "date_created":  "2026-01-19T22:36:05.181Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "b338f34c-8f32-4eb7-b4cf-fe704bbc087d",
+                                        "be238796-4e62-42a0-9220-21afebe048a9",
+                                        "c9a62fa9-d7b3-4d85-a11b-f13b46c29cff",
+                                        "dee53fdc-ba8e-4900-aad3-78fefc08111b"
+                                    ]
+                 },
+                 {
+                     "id":  "2cc1e5b8-fed3-4168-8ec8-efd1eb624bbf",
+                     "name":  "When Request Created0",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "scan_requests"
+                                 },
+                     "operation":  "a5c20230-9951-438b-abec-7afc519c5fb2",
+                     "date_created":  "2026-02-04T13:24:38.572Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "a5c20230-9951-438b-abec-7afc519c5fb2",
+                                        "c1b1516e-28b8-423d-be99-2160eb68f48b",
+                                        "f1a76583-b116-4afa-a790-1f532aedbedc"
+                                    ]
+                 },
+                 {
+                     "id":  "a9efafe7-ce9d-4263-bebc-3fea6d1effe4",
+                     "name":  " When Request Status Updated",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "inactive",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.update",
+                                     "collections":  "requests"
+                                 },
+                     "operation":  "c2dacf27-c00d-498d-8db8-e57a650ce985",
+                     "date_created":  "2026-02-03T15:05:15.421Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "7c5248b4-a55f-4d7a-af69-db4044b67155",
+                                        "c2dacf27-c00d-498d-8db8-e57a650ce985",
+                                        "d103d798-8925-405a-a679-ad4dad5293f9",
+                                        "fb0028ea-c259-4376-937b-ea3f406759c2"
+                                    ]
+                 },
+                 {
+                     "id":  "81f17ff9-95a0-4278-9416-a3793fb4e435",
+                     "name":  "When Scan Completed",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "inactive",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.update",
+                                     "collections":  "wellness_scans"
+                                 },
+                     "operation":  "52abc2ee-ff5a-4b2c-8fb5-759731ba3a91",
+                     "date_created":  "2026-02-03T15:07:06.590Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "1e02a2db-d085-4d8e-8828-c89a844ba45a",
+                                        "46264931-150c-4695-ba5d-dd46ca525dd5",
+                                        "52abc2ee-ff5a-4b2c-8fb5-759731ba3a91",
+                                        "8d548e57-a204-4ad9-86a4-4a6a8f0a4bbb"
+                                    ]
+                 },
+                 {
+                     "id":  "17b0fed7-1048-47c6-8245-3910665525b3",
+                     "name":  "When Scan Result Created0",
+                     "icon":  "bolt",
+                     "color":  null,
+                     "description":  null,
+                     "status":  "active",
+                     "trigger":  "event",
+                     "accountability":  "all",
+                     "options":  {
+                                     "type":  "action",
+                                     "scope":  "items.create",
+                                     "collections":  "scan_results"
+                                 },
+                     "operation":  "b4ff6a5a-82d0-418c-8e74-0da2d3d6c92b",
+                     "date_created":  "2026-02-06T23:40:09.962Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948",
+                     "operations":  [
+                                        "851ee46f-f83e-41ab-939c-670fe502bd02",
+                                        "8bc03b09-b9d6-4b53-9e39-b5c332406ae9",
+                                        "b4ff6a5a-82d0-418c-8e74-0da2d3d6c92b"
+                                    ]
+                 }
+             ]
+}

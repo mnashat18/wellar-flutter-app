@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="60dp"
+    android:height="60dp"
+    android:viewportWidth="160"
+    android:viewportHeight="160">
+    <group
+        android:name="wellar_mark_group"
+        android:pivotX="80"
+        android:pivotY="80"
+        android:scaleX="1"
+        android:scaleY="1">
+        <path
+            android:name="wellar_sweep_path"
+            android:fillColor="@android:color/transparent"
+            android:strokeColor="@color/wellar_splash_primary"
+            android:strokeWidth="12"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round"
+            android:pathData="M28,58 L50,110 L74,70 L98,110 L120,58" />
+        <path
+            android:name="wellar_dot_left"
+            android:fillColor="@color/wellar_splash_accent"
+            android:pathData="M46,44m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+        <path
+            android:name="wellar_dot_center"
+            android:fillColor="@color/wellar_splash_accent"
+            android:pathData="M82,44m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+        <path
+            android:name="wellar_dot_right"
+            android:fillColor="@color/wellar_splash_accent"
+            android:pathData="M108,120m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+    </group>
+</vector>

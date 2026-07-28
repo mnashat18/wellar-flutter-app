@@ -1,0 +1,13 @@
+# Wellar Android release signing configuration — EXAMPLE ONLY.
+#
+# Copy this file to `android/key.properties` on the release machine and fill in
+# the real values. Never commit `android/key.properties` or the keystore file
+# itself — both are excluded by .gitignore.
+#
+# storeFile is resolved relative to the project root (D:/flutter/waller_app).
+# A common layout is to place the keystore at android/upload-keystore.jks.
+
+storeFile=android/upload-keystore.jks
+storePassword=REPLACE_ME
+keyAlias=REPLACE_ME
+keyPassword=REPLACE_ME

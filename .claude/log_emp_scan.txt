@@ -1,0 +1,15 @@
+07-08 21:30:15.428  1136  1167 E BatteryDump: !@new_battery_dump : 4172,1045,1200,1500,74,374,377,419,0,0,385,419,0,Charging,NO_CHARGING,Normal,Good,USB_CDP,2,Normal,0,0,9600,0x0,0xf0000,0x0,0,0,0000,0000,00000000,0,0,0,0,-1,4038,7360,990,0,
+07-08 21:30:16.611 20897 20991 E msgr.msys: E[N mns:DGWClient]_LogError(328)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+07-08 21:30:16.619 20897 20991 E msgr.msys: E[N mns:DGWClient]_LogError(328)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+07-08 21:30:20.513  1311  1316 E thermal_core: dump_thermal_log:"Error: sccanf error, ret=9\n"
+07-08 21:30:25.546  1136  1167 E BatteryDump: !@new_battery_dump : 4173,1100,1200,1500,74,374,377,418,0,0,386,418,0,Charging,NO_CHARGING,Normal,Good,USB_CDP,2,Normal,0,0,9600,0x0,0xf0000,0x0,0,0,0000,0000,00000000,0,0,0,0,-1,4040,7370,990,0,
+07-08 21:30:27.037 20897 20991 E msgr.msys: E[N mns:DGWClient]_LogError(328)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+07-08 21:30:27.044 20897 20991 E msgr.msys: E[N mns:DGWClient]_LogError(328)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+07-08 21:30:31.533  1311  1316 E thermal_core: dump_thermal_log:"Error: sccanf error, ret=9\n"
+07-08 21:30:35.631  1136  1167 E BatteryDump: !@new_battery_dump : 4175,1072,1200,1500,74,374,377,417,0,0,385,417,0,Charging,NO_CHARGING,Normal,Good,USB_CDP,2,Normal,0,0,9600,0x0,0xf0000,0x0,0,0,0000,0000,00000000,0,0,0,0,-1,4041,7370,990,0,
+07-08 21:30:37.457 20897 20991 E msgr.msys: E[N mns:DGWClient]_LogError(328)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+07-08 21:30:37.464 20897 20991 E msgr.msys: E[N mns:DGWClient]_LogError(328)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+07-08 21:30:42.560  1311  1316 E thermal_core: dump_thermal_log:"Error: sccanf error, ret=9\n"
+07-08 21:30:45.753  1136  1167 E BatteryDump: !@new_battery_dump : 4175,1099,1200,1500,74,374,377,416,0,0,384,416,0,Charging,NO_CHARGING,Normal,Good,USB_CDP,2,Normal,0,0,9600,0x0,0xf0000,0x0,0,0,0000,0000,00000000,0,0,0,0,-1,4041,7380,990,0,
+07-08 21:30:47.878 20897 20991 E msgr.msys: E[N mns:DGWClient]_LogError(328)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname
+07-08 21:30:47.886 20897 20991 E msgr.msys: E[N mns:DGWClient]_LogError(328)=>Failed to resolve using system DNS resolver, getaddrinfo(): No address associated with hostname

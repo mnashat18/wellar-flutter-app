@@ -1,0 +1,21 @@
+{
+  "_comment": "Wellar Mobile store-release configuration — EXAMPLE ONLY. Copy this file to config/store_release.json on the release machine (or an equivalent path outside the repo), fill in the release values, and pass it to Flutter with --dart-define-from-file. Never commit the real file. All keys map 1:1 to String.fromEnvironment / bool.fromEnvironment names in lib/config/app_config.dart.",
+  "_build_command_android": "flutter build appbundle --release --dart-define-from-file=config/store_release.json",
+  "_build_command_ios": "flutter build ipa --release --dart-define-from-file=config/store_release.json",
+  "_notes": [
+    "DIRECTUS_URL, GOOGLE_MOBILE_EXCHANGE_BASE_URL, and AI_SERVER_URL must all be HTTPS in release builds.",
+    "ENABLE_PUSH_SUBSCRIPTION_WRITES must be true in the store-release configuration so that installations can be tracked in Directus.",
+    "ACCOUNT_DELETION_URL is REQUIRED before store submission. The Play Console and App Store both require a functioning account deletion path.",
+    "GOOGLE_MOBILE_CLIENT_ID must be the Web-typed OAuth 2.0 client ID that the mobile exchange service is configured to accept. It is not a client secret; do not paste any client secret into this file.",
+    "APP_VERSION is optional and may be used for in-app version reporting. Leave empty to fall back to the pubspec-driven build version.",
+    "Never place client secrets, refresh tokens, service accounts, APNs keys, or keystore passwords in this file. This JSON is only for non-secret --dart-define values."
+  ],
+
+  "DIRECTUS_URL": "https://dash.conntinuity.com",
+  "GOOGLE_MOBILE_CLIENT_ID": "REPLACE_WITH_WEB_TYPED_OAUTH_CLIENT_ID",
+  "GOOGLE_MOBILE_EXCHANGE_BASE_URL": "https://conntinuity-mobile-auth.csiwm3.easypanel.host",
+  "ENABLE_PUSH_SUBSCRIPTION_WRITES": true,
+  "AI_SERVER_URL": "https://conntinuity-ai-server.csiwm3.easypanel.host/process",
+  "ACCOUNT_DELETION_URL": "https://app.conntinuity.com/delete-account",
+  "APP_VERSION": ""
+}

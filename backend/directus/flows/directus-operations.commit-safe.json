@@ -1,0 +1,2249 @@
+﻿{
+    "data":  [
+                 {
+                     "id":  "7871a23a-e81f-4aa0-a7f6-86adcc981b81",
+                     "name":  "Update Data",
+                     "key":  "item_update_obrq4",
+                     "type":  "item-update",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$trigger",
+                                     "emitEvents":  false,
+                                     "collection":  "reports_exports",
+                                     "payload":  {
+                                                     "status":  "pending"
+                                                 },
+                                     "key":  "{{ $trigger.key }}"
+                                 },
+                     "resolve":  "acb3ffa6-d57e-483b-aaad-b77d9e095378",
+                     "reject":  null,
+                     "flow":  "00f22515-e4eb-482c-89a5-05ca2fdafc2f",
+                     "date_created":  "2026-02-03T16:24:11.348Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "acb3ffa6-d57e-483b-aaad-b77d9e095378",
+                     "name":  "Webhook / Request URL",
+                     "key":  "request_d956f",
+                     "type":  "request",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "method":  "POST",
+                                     "url":  "[REDACTED_REPORT_EXPORT_URL]",
+                                     "body":  "{\n  \"export_id\": \"{{ $trigger.key }}\",\n  \"type\": \"{{ $trigger.payload.format }}\"\n}\n"
+                                 },
+                     "resolve":  "f5325482-1511-4840-87aa-f4d1577ad05d",
+                     "reject":  "7049cc67-9836-46e0-86c1-7be68a89ce82",
+                     "flow":  "00f22515-e4eb-482c-89a5-05ca2fdafc2f",
+                     "date_created":  "2026-02-03T16:54:56.790Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "f5325482-1511-4840-87aa-f4d1577ad05d",
+                     "name":  "Update Data",
+                     "key":  "item_update_qls90",
+                     "type":  "item-update",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$trigger",
+                                     "emitEvents":  false,
+                                     "collection":  "reports_exports",
+                                     "key":  "{{ $trigger.payload.id }}",
+                                     "payload":  {
+                                                     "status":  "ready",
+                                                     "file":  "{{ $last.file_id }}",
+                                                     "completed_at":  "{{ $now }}"
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "00f22515-e4eb-482c-89a5-05ca2fdafc2f",
+                     "date_created":  "2026-02-03T16:54:56.741Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "7049cc67-9836-46e0-86c1-7be68a89ce82",
+                     "name":  "Update Data",
+                     "key":  "item_update_b0jtw",
+                     "type":  "item-update",
+                     "position_x":  55,
+                     "position_y":  17,
+                     "options":  {
+                                     "permissions":  "$trigger",
+                                     "emitEvents":  false,
+                                     "collection":  "reports_exports",
+                                     "payload":  {
+                                                     "status":  "failed",
+                                                     "error_message":  "Export failed"
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "00f22515-e4eb-482c-89a5-05ca2fdafc2f",
+                     "date_created":  "2026-02-03T16:54:56.764Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "95a4f690-f5d1-41aa-bbbd-764682377c5b",
+                     "name":  "Read Data",
+                     "key":  "alert_info",
+                     "type":  "item-read",
+                     "position_x":  18,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "alerts",
+                                     "key":  "{{$trigger.keys[0]}}"
+                                 },
+                     "resolve":  "1e09f397-3d46-4c6a-9e5b-d476b3b87154",
+                     "reject":  null,
+                     "flow":  "0add623c-e9c5-4998-b928-dff08c264c4e",
+                     "date_created":  "2026-04-19T16:01:35.774Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "1e09f397-3d46-4c6a-9e5b-d476b3b87154",
+                     "name":  "Condition",
+                     "key":  "condition_fjrn3",
+                     "type":  "condition",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "filter":  {
+                                                    "$trigger":  {
+                                                                     "payload":  {
+                                                                                     "action_type":  {
+                                                                                                         "_nnull":  true,
+                                                                                                         "_neq":  "none"
+                                                                                                     }
+                                                                                 }
+                                                                 }
+                                                }
+                                 },
+                     "resolve":  "f8d9e43a-e8a7-4bc1-af2f-a6e24e7f3198",
+                     "reject":  null,
+                     "flow":  "0add623c-e9c5-4998-b928-dff08c264c4e",
+                     "date_created":  "2026-04-11T16:34:21.959Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "f8d9e43a-e8a7-4bc1-af2f-a6e24e7f3198",
+                     "name":  "Condition",
+                     "key":  "condition_21qn6",
+                     "type":  "condition",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "filter":  {
+                                                    "$trigger":  {
+                                                                     "payload":  {
+                                                                                     "action_type":  {
+                                                                                                         "_neq":  "re_scan"
+                                                                                                     }
+                                                                                 }
+                                                                 }
+                                                }
+                                 },
+                     "resolve":  "4a13544d-dd4f-4fd0-a4d1-0b84003c4d02",
+                     "reject":  "8ce7757f-0568-4795-ba9d-8147fa30ec2f",
+                     "flow":  "0add623c-e9c5-4998-b928-dff08c264c4e",
+                     "date_created":  "2026-04-18T16:35:11.067Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "4a13544d-dd4f-4fd0-a4d1-0b84003c4d02",
+                     "name":  "Update Data",
+                     "key":  "item_update_6gbxp",
+                     "type":  "item-update",
+                     "position_x":  71,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "alerts",
+                                     "key":  "{{$trigger.keys[0]}}",
+                                     "payload":  {
+                                                     "reviewed_by":  "{{$accountability.user}}",
+                                                     "status":  "resolved",
+                                                     "reviewed_at":  "$NOW"
+                                                 }
+                                 },
+                     "resolve":  "aa8bf6af-a9df-41d2-8fd5-c19f26be5893",
+                     "reject":  null,
+                     "flow":  "0add623c-e9c5-4998-b928-dff08c264c4e",
+                     "date_created":  "2026-04-11T16:34:21.937Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "aa8bf6af-a9df-41d2-8fd5-c19f26be5893",
+                     "name":  "Create Data",
+                     "key":  "item_create_noit6",
+                     "type":  "item-create",
+                     "position_x":  86,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "activity_events",
+                                     "payload":  {
+                                                     "actor":  "{{$accountability.user}}",
+                                                     "target_user":  "{{alert_info.target_user}}",
+                                                     "action":  "alert_action_taken",
+                                                     "entity_type":  "alert",
+                                                     "entity_id":  "{{$trigger.keys[0]}}",
+                                                     "business_profile":  "{{alert_info.business_profile}}",
+                                                     "department":  "{{alert_info.department}}",
+                                                     "payload":  {
+                                                                     "action_type":  "{{$trigger.payload.action_type}}",
+                                                                     "action_note":  "{{$trigger.payload.action_note}}"
+                                                                 }
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "0add623c-e9c5-4998-b928-dff08c264c4e",
+                     "date_created":  "2026-04-11T16:34:21.862Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "8ce7757f-0568-4795-ba9d-8147fa30ec2f",
+                     "name":  "Condition",
+                     "key":  "condition_3m78r",
+                     "type":  "condition",
+                     "position_x":  71,
+                     "position_y":  19,
+                     "options":  {
+                                     "filter":  {
+                                                    "$trigger":  {
+                                                                     "payload":  {
+                                                                                     "action_type":  {
+                                                                                                         "_eq":  "re_scan"
+                                                                                                     }
+                                                                                 }
+                                                                 }
+                                                }
+                                 },
+                     "resolve":  "93ff2a47-00c1-4326-bbd0-981f4b55a3a2",
+                     "reject":  null,
+                     "flow":  "0add623c-e9c5-4998-b928-dff08c264c4e",
+                     "date_created":  "2026-04-18T16:35:11.160Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "93ff2a47-00c1-4326-bbd0-981f4b55a3a2",
+                     "name":  "Create Data",
+                     "key":  "item_create_qwkx1_ijmlj",
+                     "type":  "item-create",
+                     "position_x":  89,
+                     "position_y":  19,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  true,
+                                     "collection":  "scan_requests",
+                                     "payload":  {
+                                                     "business_profile":  "{{alert_info.business_profile}}",
+                                                     "department":  "{{alert_info.department}}",
+                                                     "target_member":  "{{alert_info.target_member}}",
+                                                     "requested_by_user":  "{{$accountability.user}}",
+                                                     "status":  "pending",
+                                                     "message":  "Re-scan requested after manager review.",
+                                                     "requested_at":  "$NOW",
+                                                     "request_type":  "manual"
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "0add623c-e9c5-4998-b928-dff08c264c4e",
+                     "date_created":  "2026-04-18T16:35:11.142Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "94832c51-fbfd-437c-8cc9-d42e80b9da0a",
+                     "name":  "Read Data",
+                     "key":  "item_read_wlm8b",
+                     "type":  "item-read",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "subscriptions",
+                                     "query":  {
+                                                   "limit":  200,
+                                                   "filter":  {
+                                                                  "_and":  [
+                                                                               {
+                                                                                   "status":  {
+                                                                                                  "_in":  [
+                                                                                                              "trial",
+                                                                                                              "active"
+                                                                                                          ]
+                                                                                              }
+                                                                               },
+                                                                               {
+                                                                                   "expires_at":  {
+                                                                                                      "_lt":  "$NOW"
+                                                                                                  }
+                                                                               }
+                                                                           ]
+                                                              }
+                                               }
+                                 },
+                     "resolve":  "ebb7cfbf-4f9d-4d83-8ff7-6e7ae2fe0557",
+                     "reject":  null,
+                     "flow":  "157da82c-b094-4e8e-bd32-7bb23fdc9c37",
+                     "date_created":  "2026-02-27T16:30:54.489Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "ebb7cfbf-4f9d-4d83-8ff7-6e7ae2fe0557",
+                     "name":  "Update Data",
+                     "key":  "item_update_cdnw5",
+                     "type":  "item-update",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "subscriptions",
+                                     "key":  "{{$trigger.body}}",
+                                     "payload":  {
+                                                     "status":  "expired"
+                                                 }
+                                 },
+                     "resolve":  "3ba8aff5-fdb6-461d-9159-02be48611165",
+                     "reject":  null,
+                     "flow":  "157da82c-b094-4e8e-bd32-7bb23fdc9c37",
+                     "date_created":  "2026-02-27T16:30:54.458Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "3ba8aff5-fdb6-461d-9159-02be48611165",
+                     "name":  "Update Data",
+                     "key":  "item_update_l4uus",
+                     "type":  "item-update",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "key":  "{{$last.business_profile}}",
+                                     "collection":  "business_profiles",
+                                     "payload":  {
+                                                     "billing_status":  "expired",
+                                                     "is_active":  false
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "157da82c-b094-4e8e-bd32-7bb23fdc9c37",
+                     "date_created":  "2026-02-27T16:30:54.449Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "b4ff6a5a-82d0-418c-8e74-0da2d3d6c92b",
+                     "name":  "Read Data",
+                     "key":  "item_read_kyobg",
+                     "type":  "item-read",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$trigger",
+                                     "emitEvents":  false,
+                                     "collection":  "scan_results",
+                                     "key":  "{{ $trigger.key }}"
+                                 },
+                     "resolve":  "8bc03b09-b9d6-4b53-9e39-b5c332406ae9",
+                     "reject":  null,
+                     "flow":  "17b0fed7-1048-47c6-8245-3910665525b3",
+                     "date_created":  "2026-02-06T23:41:34.316Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "8bc03b09-b9d6-4b53-9e39-b5c332406ae9",
+                     "name":  "Read Data",
+                     "key":  "item_read_qdur0",
+                     "type":  "item-read",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$trigger",
+                                     "emitEvents":  false,
+                                     "collection":  "wellness_scans",
+                                     "key":  "{{ $last.scan_id }}"
+                                 },
+                     "resolve":  "851ee46f-f83e-41ab-939c-670fe502bd02",
+                     "reject":  null,
+                     "flow":  "17b0fed7-1048-47c6-8245-3910665525b3",
+                     "date_created":  "2026-02-06T23:43:11.146Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "851ee46f-f83e-41ab-939c-670fe502bd02",
+                     "name":  "Create Data",
+                     "key":  "item_create_z03rh",
+                     "type":  "item-create",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$trigger",
+                                     "emitEvents":  false,
+                                     "collection":  "notifications",
+                                     "payload":  {
+                                                     "user":  "{{ $last.user }}",
+                                                     "title":  "New result ready",
+                                                     "body":  "Your scan result is ready.",
+                                                     "type":  "result",
+                                                     "status":  "unread",
+                                                     "link_type":  "result",
+                                                     "link_id":  "{{ $trigger.key }}"
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "17b0fed7-1048-47c6-8245-3910665525b3",
+                     "date_created":  "2026-02-06T23:43:56.840Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "a5c20230-9951-438b-abec-7afc519c5fb2",
+                     "name":  "Read Data",
+                     "key":  "item_read_lx02t",
+                     "type":  "item-read",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "requests"
+                                 },
+                     "resolve":  "f1a76583-b116-4afa-a790-1f532aedbedc",
+                     "reject":  null,
+                     "flow":  "2cc1e5b8-fed3-4168-8ec8-efd1eb624bbf",
+                     "date_created":  "2026-02-04T13:24:54.850Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "f1a76583-b116-4afa-a790-1f532aedbedc",
+                     "name":  "Create Data",
+                     "key":  "item_create_ghmb9",
+                     "type":  "item-create",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$trigger",
+                                     "emitEvents":  false,
+                                     "collection":  "activity_events",
+                                     "payload":  {
+                                                     "actor":  "{{ $accountability.user }}",
+                                                     "target_user":  "{{ $trigger.payload.requested_for }}",
+                                                     "action":  "Request Sent",
+                                                     "entity_type":  "request",
+                                                     "entity_id":  "{{ $trigger.key }}"
+                                                 }
+                                 },
+                     "resolve":  "c1b1516e-28b8-423d-be99-2160eb68f48b",
+                     "reject":  null,
+                     "flow":  "2cc1e5b8-fed3-4168-8ec8-efd1eb624bbf",
+                     "date_created":  "2026-02-04T13:25:16.033Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "c1b1516e-28b8-423d-be99-2160eb68f48b",
+                     "name":  "Create Data",
+                     "key":  "item_create_4o4it",
+                     "type":  "item-create",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$trigger",
+                                     "emitEvents":  false,
+                                     "collection":  "notifications",
+                                     "payload":  {
+                                                     "user":  "{{ $trigger.payload.requested_for }}",
+                                                     "title":  "New request",
+                                                     "body":  "You received a new request",
+                                                     "type":  "request",
+                                                     "status":  "unread",
+                                                     "link_type":  "request",
+                                                     "link_id":  "{{ $trigger.key }}"
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "2cc1e5b8-fed3-4168-8ec8-efd1eb624bbf",
+                     "date_created":  "2026-02-04T13:33:04.806Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "65db5cb2-c28e-46bc-ba68-386899257c4a",
+                     "name":  "Read Data",
+                     "key":  "read_invite",
+                     "type":  "item-read",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "request_invites",
+                                     "query":  {
+                                                   "filter":  {
+                                                                  "email":  {
+                                                                                "_eq":  "{{$trigger.payload.email}}"
+                                                                            },
+                                                                  "status":  {
+                                                                                 "_eq":  "sent"
+                                                                             }
+                                                              },
+                                                   "limit":  1
+                                               }
+                                 },
+                     "resolve":  "8bf3a187-60b0-4e6d-b2b8-516e5b2f1578",
+                     "reject":  null,
+                     "flow":  "36c14ae3-c39b-4182-bad9-2ef34767a4af",
+                     "date_created":  "2026-02-24T20:12:45.703Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "8bf3a187-60b0-4e6d-b2b8-516e5b2f1578",
+                     "name":  "Update Data",
+                     "key":  "item_update_26rqb",
+                     "type":  "item-update",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "requests",
+                                     "payload":  {
+                                                     "requested_for_user":  "{{$trigger.key}}"
+                                                 },
+                                     "key":  {
+
+                                             }
+                                 },
+                     "resolve":  "a6b687d0-9357-49ee-8abc-e8d9a3e83cb3",
+                     "reject":  null,
+                     "flow":  "36c14ae3-c39b-4182-bad9-2ef34767a4af",
+                     "date_created":  "2026-02-24T20:13:43.134Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "a6b687d0-9357-49ee-8abc-e8d9a3e83cb3",
+                     "name":  "Update Data",
+                     "key":  "item_update_ncpxc",
+                     "type":  "item-update",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "request_invites",
+                                     "key":  {
+
+                                             },
+                                     "payload":  {
+                                                     "status":  "claimed"
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "36c14ae3-c39b-4182-bad9-2ef34767a4af",
+                     "date_created":  "2026-02-24T20:17:03.529Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "1a8a7e48-cfe6-4ec2-9090-e9d7d557b603",
+                     "name":  "Read Data",
+                     "key":  "existing_sub",
+                     "type":  "item-read",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "query":  {
+                                                   "token":  {
+                                                                 "_eq":  "{{$trigger.payload.token}}"
+                                                             }
+                                               },
+                                     "collection":  "push_subscriptions"
+                                 },
+                     "resolve":  "ea0711bf-49b0-4279-8601-b7f55a004d1b",
+                     "reject":  null,
+                     "flow":  "3a1ff66b-7972-4762-8268-13b30f2d8c29",
+                     "date_created":  "2026-04-11T16:56:44.313Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "ea0711bf-49b0-4279-8601-b7f55a004d1b",
+                     "name":  "Condition",
+                     "key":  "condition_pamd7",
+                     "type":  "condition",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "filter":  {
+                                                    "existing_sub":  {
+                                                                         "_empty":  false
+                                                                     }
+                                                }
+                                 },
+                     "resolve":  "d1494be1-6c10-468c-b484-f1d096ed8cdd",
+                     "reject":  null,
+                     "flow":  "3a1ff66b-7972-4762-8268-13b30f2d8c29",
+                     "date_created":  "2026-04-11T16:56:44.288Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "d1494be1-6c10-468c-b484-f1d096ed8cdd",
+                     "name":  "Update Data",
+                     "key":  "item_update_a6ey3",
+                     "type":  "item-update",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "push_subscriptions",
+                                     "key":  "{{existing_sub[0].id}}",
+                                     "payload":  {
+                                                     "last_seen_at":  "$NOW",
+                                                     "user":  "{{$trigger.payload.user}}",
+                                                     "is_active":  true
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "3a1ff66b-7972-4762-8268-13b30f2d8c29",
+                     "date_created":  "2026-04-11T16:56:44.280Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "bc134b35-d507-46b3-b2f9-502e30a83270",
+                     "name":  "Webhook / Request URL",
+                     "key":  "request_11469",
+                     "type":  "request",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "method":  "POST",
+                                     "url":  "[REDACTED_PUSH_SERVICE_URL]",
+                                     "headers":  [
+                                                     {
+                                                         "header":  "Content-Type",
+                                                         "value":  "application/json"
+                                                     },
+                                                     {
+                                                         "header":  "X-Directus-Secret",
+                                                         "value":  "[REDACTED_SECRET_VALUE]"
+                                                     }
+                                                 ],
+                                     "body":  "{\n  \"scan_request_id\": \"{{$trigger.key}}\",\n  \"event\": \"scan_request_created\",\n  \"target_member\": \"{{$trigger.payload.target_member}}\",\n  \"business_profile\": \"{{$trigger.payload.business_profile}}\",\n  \"requested_by_user\": \"{{$trigger.payload.requested_by_user}}\"\n}"
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "494f1f43-3ce3-4a0d-b6ab-e7a45b8e59f9",
+                     "date_created":  "2026-06-10T18:07:56.309Z",
+                     "user_created":  "a9936961-4de4-4bce-a700-1d062d567178"
+                 },
+                 {
+                     "id":  "d0f7d896-b6f8-4ef7-90a0-3b3bdf54b99a",
+                     "name":  "Run Script",
+                     "key":  "generate_invite_token",
+                     "type":  "exec",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "code":  "module.exports = async function(data) {\n  // Generate a readable invite token like WLR-YMTWBI\n  const chars = \"ABCDEFGHJKLMNPQRSTUVWXYZ23456789\";\n  let inviteCode = \"WLR-\";\n\n  for (let i = 0; i \u003c 6; i++) {\n    inviteCode += chars[Math.floor(Math.random() * chars.length)];\n  }\n\n  // Current send time\n  const now = new Date();\n\n  // Expiration date: 7 days from now\n  const expiresAt = new Date(now);\n  expiresAt.setDate(expiresAt.getDate() + 7);\n\n  // Frontend claim URL\n  const frontendUrl = \"[REDACTED_INVITE_FRONTEND_URL]\";\n  const claimUrl = `${frontendUrl}/invites/claim?token=${encodeURIComponent(inviteCode)}`;\n\n  return {\n    token: inviteCode,\n    invite_code: inviteCode,\n    sent_at: now.toISOString(),\n    expires_at: expiresAt.toISOString(),\n    status: \"pending\",\n    claim_url: claimUrl\n  };\n};"
+                                 },
+                     "resolve":  "1febb486-389d-4458-afbf-1a79e313d55d",
+                     "reject":  null,
+                     "flow":  "4f514fe3-48c5-4c11-9ad4-2090085c5710",
+                     "date_created":  "2026-05-11T16:44:57.037Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "b3d9ec08-af50-4c54-9761-644d3030d6f0",
+                     "name":  "Transform Payload",
+                     "key":  "transform_3ngge",
+                     "type":  "transform",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "json":  {
+                                                  "invite_code":  "{{generate_invite_token.invite_code}}",
+                                                  "token":  "{{generate_invite_token.token}}",
+                                                  "claim_url":  "{{generate_invite_token.claim_url}}",
+                                                  "email":  "{{$trigger.payload.email}}",
+                                                  "member_role":  "{{$trigger.payload.member_role}}"
+                                              }
+                                 },
+                     "resolve":  "0d93eb9b-7542-4b44-af56-24113c82378d",
+                     "reject":  null,
+                     "flow":  "4f514fe3-48c5-4c11-9ad4-2090085c5710",
+                     "date_created":  "2026-05-11T16:44:57.006Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "0d93eb9b-7542-4b44-af56-24113c82378d",
+                     "name":  "Send Email",
+                     "key":  "mail_x327k",
+                     "type":  "mail",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "type":  "wysiwyg",
+                                     "to":  "{{$trigger.payload.email}}",
+                                     "subject":  "دعوة للانضمام إلى Wellar AI",
+                                     "body":  "\u003cdiv style=\"direction: rtl; text-align: right; background-color: #f9fafb; padding: 40px 20px; font-family: \u0027Segoe UI\u0027, Tahoma, Geneva, Verdana, sans-serif;\"\u003e\n\u003cdiv style=\"max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e5e7eb;\"\u003e\n\u003cdiv style=\"background-color: #4f46e5; padding: 30px; text-align: center;\"\u003e\n\u003ch1 style=\"color: #ffffff; margin: 0; font-size: 28px; letter-spacing: 1px;\"\u003eWellar AI\u003c/h1\u003e\n\u003c/div\u003e\n\u003cdiv style=\"padding: 40px 30px;\"\u003e\n\u003ch2 style=\"color: #111827; margin-bottom: 20px; font-size: 22px;\"\u003eأهلاً بك في المستقبل!\u003c/h2\u003e\n\u003cp style=\"color: #4b5563; font-size: 16px; line-height: 1.6;\"\u003eلقد تم اختيارك للانضمام إلى منصة \u003cstrong\u003eWellar AI\u003c/strong\u003e. نحن حريصون على انضمام المبدعين مثلك لفريقنا.\u003c/p\u003e\n\u003cdiv style=\"margin: 35px 0; padding: 25px; background-color: #f3f4f6; border-radius: 12px; text-align: center; border: 1px dashed #4f46e5;\"\u003e\n\u003cp style=\"color: #6b7280; font-size: 14px; margin-bottom: 10px; margin-top: 0;\"\u003eكود الدعوة الخاص بك\u003c/p\u003e\n\u003cspan style=\"font-family: monospace; font-size: 32px; font-weight: bold; color: #4f46e5; letter-spacing: 4px;\"\u003e{{transform_3ngge.invite_code}}\u0026nbsp;\u003c/span\u003e\u003c/div\u003e\n\u003cp style=\"color: #4b5563; font-size: 15px; margin-bottom: 30px;\"\u003eببساطة، قم بنسخ الكود أعلاه واستخدمه في صفحة تسجيل الدخول لإتمام عملية انضمامك.\u003c/p\u003e\n\u003cdiv style=\"text-align: center;\"\u003e\u003ca href=\"{{transform_3ngge.claim_url}}\" target=\"_blank\" rel=\"noopener\"\u003eتفعيل الحساب الآن\u003c/a\u003e\u003c/div\u003e\n\u003cp style=\"color: #9ca3af; font-size: 12px; margin-top: 40px; text-align: center;\"\u003e* تنتهي صلاحية هذه الدعوة تلقائياً خلال 7 أيام.\u003c/p\u003e\n\u003c/div\u003e\n\u003cdiv style=\"background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;\"\u003e\n\u003cp style=\"color: #9ca3af; font-size: 12px; margin: 0;\"\u003e\u0026copy; 2026 Wellar AI. جميع الحقوق محفوظة.\u003c/p\u003e\n\u003c/div\u003e\n\u003c/div\u003e\n\u003c/div\u003e"
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "4f514fe3-48c5-4c11-9ad4-2090085c5710",
+                     "date_created":  "2026-05-11T16:44:56.995Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "1febb486-389d-4458-afbf-1a79e313d55d",
+                     "name":  "Update Data",
+                     "key":  "item_update_ymobx",
+                     "type":  "item-update",
+                     "position_x":  17,
+                     "position_y":  19,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "request_invites",
+                                     "key":  "{{$trigger.key}}",
+                                     "payload":  {
+                                                     "token":  "{{generate_invite_token.token}}",
+                                                     "sent_at":  "{{generate_invite_token.sent_at}}",
+                                                     "expires_at":  "{{generate_invite_token.expires_at}}",
+                                                     "status":  "pending"
+                                                 }
+                                 },
+                     "resolve":  "b3d9ec08-af50-4c54-9761-644d3030d6f0",
+                     "reject":  null,
+                     "flow":  "4f514fe3-48c5-4c11-9ad4-2090085c5710",
+                     "date_created":  "2026-05-13T12:06:51.974Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "9243fdf6-27ca-4e2b-97b7-3acb6dfbcdde",
+                     "name":  "Read Data",
+                     "key":  "read_data",
+                     "type":  "item-read",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "directus_users",
+                                     "query":  {
+                                                   "filter":  {
+                                                                  "email":  {
+                                                                                "_eq":  "{{$trigger.payload.recipient_email}}"
+                                                                            }
+                                                              },
+                                                   "limit":  1
+                                               }
+                                 },
+                     "resolve":  "3f65c970-1645-4009-9d4c-be0c8d2743b5",
+                     "reject":  null,
+                     "flow":  "55eacae7-137f-4753-a3c8-076bb7fca39b",
+                     "date_created":  "2026-02-22T22:28:43.708Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "3f65c970-1645-4009-9d4c-be0c8d2743b5",
+                     "name":  "Update Data",
+                     "key":  "item_update_j58wh",
+                     "type":  "item-update",
+                     "position_x":  36,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "requests",
+                                     "query":  null,
+                                     "payload":  {
+                                                     "response_status":  "pending",
+                                                     "Target":  "scan",
+                                                     "requested_for_user":  "{{$last[0].id}}"
+                                                 },
+                                     "key":  "{{$trigger.key}}"
+                                 },
+                     "resolve":  null,
+                     "reject":  "9036a3ed-3dac-4eaf-bdbc-bc4a66b116b6",
+                     "flow":  "55eacae7-137f-4753-a3c8-076bb7fca39b",
+                     "date_created":  "2026-02-22T22:39:42.877Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "9036a3ed-3dac-4eaf-bdbc-bc4a66b116b6",
+                     "name":  "Create Data",
+                     "key":  "create_data",
+                     "type":  "item-create",
+                     "position_x":  5,
+                     "position_y":  20,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "request_invites",
+                                     "payload":  {
+                                                     "email":  "{{$trigger.payload.requested_for_email}}",
+                                                     "request":  "{{$trigger.key}}",
+                                                     "status":  "pending",
+                                                     "business_profile":  "{{$trigger.payload.business_profile}}",
+                                                     "requested_by_user":  "{{$accountability.user}}"
+                                                 }
+                                 },
+                     "resolve":  "8e631a70-4e85-4dc0-9332-809980a60bed",
+                     "reject":  null,
+                     "flow":  "55eacae7-137f-4753-a3c8-076bb7fca39b",
+                     "date_created":  "2026-02-22T22:39:42.860Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "8e631a70-4e85-4dc0-9332-809980a60bed",
+                     "name":  "Read Data",
+                     "key":  "read_data1",
+                     "type":  "item-read",
+                     "position_x":  23,
+                     "position_y":  20,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "request_invites",
+                                     "key":  "{{$last[0]}}",
+                                     "query":  null
+                                 },
+                     "resolve":  "25e9dbac-113d-4750-b5a3-11c60632afbf",
+                     "reject":  null,
+                     "flow":  "55eacae7-137f-4753-a3c8-076bb7fca39b",
+                     "date_created":  "2026-02-23T04:57:32.329Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "25e9dbac-113d-4750-b5a3-11c60632afbf",
+                     "name":  "Send Email",
+                     "key":  "mail_f18ng",
+                     "type":  "mail",
+                     "position_x":  41,
+                     "position_y":  20,
+                     "options":  {
+                                     "type":  "markdown",
+                                     "to":  "{{$last.email}}",
+                                     "subject":  "You\u0027ve been invited",
+                                     "body":  "Hello 👋\n\nYou have been invited to join our platform.\n\nAccept Invitation:\n\nhttps://conntinuity.com/invite/{{$last.id}}\n\nIf you did not request this, please ignore this email.\n\nThanks,\nContinuity Team"
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "55eacae7-137f-4753-a3c8-076bb7fca39b",
+                     "date_created":  "2026-02-23T03:58:14.173Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "f6b828b3-a5b2-4e47-93f5-2199a03d0916",
+                     "name":  "Run Script",
+                     "key":  "prepare_claim_payload",
+                     "type":  "exec",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "code":  "module.exports = async function(data) {\n  const body =\n    data?.$trigger?.body ||\n    data?.$trigger?.payload ||\n    data?.payload ||\n    data?.body ||\n    {};\n\n  const token =\n    body.token ||\n    body.invite ||\n    body.code ||\n    null;\n\n  if (!token || typeof token !== \"string\") {\n    throw new Error(\"Invite token is missing.\");\n  }\n\n  const normalizedToken = token.trim().toUpperCase();\n  const now = new Date();\n\n  return {\n    token: normalizedToken,\n    now: now.toISOString()\n  };\n};"
+                                 },
+                     "resolve":  "deecd67a-0492-4eac-9f3d-75b8a64fb304",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T16:17:54.728Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "deecd67a-0492-4eac-9f3d-75b8a64fb304",
+                     "name":  "Read Data",
+                     "key":  "find_invite",
+                     "type":  "item-read",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "request_invites",
+                                     "query":  {
+                                                   "filter":  {
+                                                                  "_and":  [
+                                                                               {
+                                                                                   "token":  {
+                                                                                                 "_eq":  "{{prepare_claim_payload.token}}"
+                                                                                             }
+                                                                               },
+                                                                               {
+                                                                                   "status":  {
+                                                                                                  "_eq":  "pending"
+                                                                                              }
+                                                                               }
+                                                                           ]
+                                                              },
+                                                   "limit":  1
+                                               }
+                                 },
+                     "resolve":  "31ec0969-e7cd-47c6-b712-01130d1da8da",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T16:17:54.636Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "31ec0969-e7cd-47c6-b712-01130d1da8da",
+                     "name":  "Run Script",
+                     "key":  "validate_invite",
+                     "type":  "exec",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "code":  "module.exports = async function(data) {\n  const result = data.find_invite;\n\n  let invite = null;\n\n  if (Array.isArray(result)) {\n    invite = result[0] || null;\n  } else if (Array.isArray(result?.data)) {\n    invite = result.data[0] || null;\n  } else {\n    invite = result || null;\n  }\n\n  if (!invite) {\n    throw new Error(\"Invite not found, already used, or invalid.\");\n  }\n\n  if (!invite.id) {\n    throw new Error(\"Invite id is missing.\");\n  }\n\n  if (!invite.token) {\n    throw new Error(\"Invite token is missing in database.\");\n  }\n\n  if (invite.status !== \"pending\") {\n    throw new Error(`Invite is not pending. Current status: ${invite.status}`);\n  }\n\n  if (invite.expires_at) {\n    const expiresAt = new Date(invite.expires_at);\n    const now = new Date();\n\n    if (Number.isNaN(expiresAt.getTime())) {\n      throw new Error(\"Invite expiry date is invalid.\");\n    }\n\n    if (expiresAt \u003c now) {\n      throw new Error(\"Invite expired.\");\n    }\n  }\n\n  if (!invite.email) {\n    throw new Error(\"Invite email is missing.\");\n  }\n\n  if (!invite.business_profile) {\n    throw new Error(\"Invite business profile is missing.\");\n  }\n\n  if (!invite.member_role) {\n    throw new Error(\"Invite member role is missing.\");\n  }\n\n  let normalizedRole = String(invite.member_role || \"\")\n    .toLowerCase()\n    .trim();\n\n  const roleAliases = {\n    manger: \"manager\"\n  };\n\n  normalizedRole = roleAliases[normalizedRole] || normalizedRole;\n\n  const allowedRoles = [\"owner\", \"hr\", \"manager\", \"employee\"];\n\n  if (!allowedRoles.includes(normalizedRole)) {\n    throw new Error(`Invite member role is invalid: ${invite.member_role}`);\n  }\n\n  return {\n    invite_id: invite.id,\n    token: invite.token,\n    invite_email: String(invite.email).toLowerCase().trim(),\n    business_profile: invite.business_profile,\n    department: invite.department || null,\n    member_role: normalizedRole\n  };\n};"
+                                 },
+                     "resolve":  "4b9264cc-607d-4d52-9472-473954211180",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T16:17:54.566Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "4b9264cc-607d-4d52-9472-473954211180",
+                     "name":  "Run Script",
+                     "key":  "get_current_user_id",
+                     "type":  "exec",
+                     "position_x":  73,
+                     "position_y":  1,
+                     "options":  {
+                                     "code":  "module.exports = async function(data) {\n  const userId =\n    data?.$accountability?.user ||\n    data?.$trigger?.accountability?.user ||\n    data?.accountability?.user ||\n    data?.$trigger?.headers?.[\"x-user-id\"] ||\n    null;\n\n  if (!userId) {\n    throw new Error(\"You must be logged in to accept this invite.\");\n  }\n\n  return {\n    user_id: userId\n  };\n};"
+                                 },
+                     "resolve":  "efecab3c-be25-4dcb-9b0f-34eb1a6075ea",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T16:17:54.529Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "efecab3c-be25-4dcb-9b0f-34eb1a6075ea",
+                     "name":  "Read Data",
+                     "key":  "read_current_user",
+                     "type":  "item-read",
+                     "position_x":  91,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "directus_users",
+                                     "key":  {
+
+                                             },
+                                     "query":  {
+                                                   "filter":  {
+                                                                  "id":  {
+                                                                             "_eq":  "{{get_current_user_id.user_id}}"
+                                                                         }
+                                                              },
+                                                   "fields":  [
+                                                                  "id",
+                                                                  "email"
+                                                              ],
+                                                   "limit":  1
+                                               }
+                                 },
+                     "resolve":  "d2f9a1b9-6d75-4d99-9139-035e2177d2c4",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T16:17:54.434Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "d2f9a1b9-6d75-4d99-9139-035e2177d2c4",
+                     "name":  "Run Script",
+                     "key":  "validate_user_email",
+                     "type":  "exec",
+                     "position_x":  109,
+                     "position_y":  1,
+                     "options":  {
+                                     "code":  "module.exports = async function(data) {\n  const result = data.read_current_user;\n\n  let user = null;\n\n  if (Array.isArray(result)) {\n    user = result[0] || null;\n  } else if (Array.isArray(result?.data)) {\n    user = result.data[0] || null;\n  } else {\n    user = result || null;\n  }\n\n  const invite = data.validate_invite;\n\n  if (!user || !user.id) {\n    throw new Error(\"Current user was not found.\");\n  }\n\n  if (!user.email) {\n    throw new Error(\"Current user email is missing.\");\n  }\n\n  const userEmail = String(user.email).toLowerCase().trim();\n  const inviteEmail = String(invite.invite_email).toLowerCase().trim();\n\n  if (userEmail !== inviteEmail) {\n    throw new Error(\"This invite was sent to another email.\");\n  }\n\n  return {\n    user_id: user.id,\n    user_email: userEmail,\n    invite_id: invite.invite_id,\n    business_profile: invite.business_profile,\n    department: invite.department,\n    member_role: invite.member_role\n  };\n};"
+                                 },
+                     "resolve":  "78919b59-7e2f-4863-8bc5-2e01a6da9308",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T16:17:54.357Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "78919b59-7e2f-4863-8bc5-2e01a6da9308",
+                     "name":  "Read Data",
+                     "key":  "check_existing_membership",
+                     "type":  "item-read",
+                     "position_x":  127,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "business_profile_members",
+                                     "query":  {
+                                                   "filter":  {
+                                                                  "_and":  [
+                                                                               {
+                                                                                   "user":  {
+                                                                                                "_eq":  "{{validate_user_email.user_id}}"
+                                                                                            }
+                                                                               },
+                                                                               {
+                                                                                   "business_profile":  {
+                                                                                                            "_eq":  "{{validate_user_email.business_profile}}"
+                                                                                                        }
+                                                                               }
+                                                                           ]
+                                                              },
+                                                   "limit":  1
+                                               }
+                                 },
+                     "resolve":  "cec4089f-54f3-4ea0-91d5-e12103557719",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T16:17:54.348Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "cec4089f-54f3-4ea0-91d5-e12103557719",
+                     "name":  "Run Script",
+                     "key":  "resolve_existing_membership",
+                     "type":  "exec",
+                     "position_x":  145,
+                     "position_y":  1,
+                     "options":  {
+                                     "code":  "module.exports = async function(data) {\n  const result = data.check_existing_membership;\n\n  let membership = null;\n\n  if (Array.isArray(result)) {\n    membership = result[0] || null;\n  } else if (Array.isArray(result?.data)) {\n    membership = result.data[0] || null;\n  } else {\n    membership = result || null;\n  }\n\n  const claim = data.validate_user_email;\n\n  if (membership \u0026\u0026 membership.id) {\n    return {\n      already_member: true,\n      membership_id: membership.id,\n      user_id: claim.user_id,\n      business_profile: claim.business_profile,\n      department: claim.department,\n      member_role: claim.member_role\n    };\n  }\n\n  return {\n    already_member: false,\n    membership_id: null,\n    user_id: claim.user_id,\n    business_profile: claim.business_profile,\n    department: claim.department,\n    member_role: claim.member_role\n  };\n};"
+                                 },
+                     "resolve":  "e1fa4da6-7b83-4ae7-9e8c-8ec6998370cf",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T22:19:27.044Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "e1fa4da6-7b83-4ae7-9e8c-8ec6998370cf",
+                     "name":  "Create Data",
+                     "key":  "create_membership",
+                     "type":  "item-create",
+                     "position_x":  163,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "business_profile_members",
+                                     "payload":  {
+                                                     "status":  "active",
+                                                     "user":  "{{resolve_existing_membership.user_id}}",
+                                                     "business_profile":  "{{resolve_existing_membership.business_profile}}",
+                                                     "member_role":  "{{resolve_existing_membership.member_role}}",
+                                                     "department":  "{{resolve_existing_membership.department}}",
+                                                     "joined_at":  "{{prepare_claim_payload.now}}"
+                                                 }
+                                 },
+                     "resolve":  "1f493a63-0a66-41b9-8470-d61508f62975",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T22:19:26.947Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "1f493a63-0a66-41b9-8470-d61508f62975",
+                     "name":  "Update Data",
+                     "key":  "mark_invite_accepted",
+                     "type":  "item-update",
+                     "position_x":  181,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "request_invites",
+                                     "key":  "{{validate_user_email.invite_id}}",
+                                     "payload":  {
+                                                     "status":  "accepted",
+                                                     "claimed_at":  "{{prepare_claim_payload.now}}",
+                                                     "accepted_user":  "{{validate_user_email.user_id}}"
+                                                 }
+                                 },
+                     "resolve":  "5cf45acb-b335-4e00-b503-2e2f1222f9fd",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T22:19:26.921Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "5cf45acb-b335-4e00-b503-2e2f1222f9fd",
+                     "name":  "Run Script",
+                     "key":  "resolve_directus_role",
+                     "type":  "exec",
+                     "position_x":  198,
+                     "position_y":  1,
+                     "options":  {
+                                     "code":  "module.exports = async function(data) {\n  const rawRole = String(data.validate_user_email?.member_role || \"\")\n    .toLowerCase()\n    .trim();\n\n  const roleAliases = {\n    manger: \"manager\"\n  };\n\n  const normalizedRole = roleAliases[rawRole] || rawRole;\n\n  const roleIds = {\n    owner: \"b293f748-436b-4957-bab0-c3111fb6a52e\",\n    hr: \"068ea7ce-c549-480d-8ebd-fce901aae4ef\",\n    manager: \"417b3bf9-1ab9-4f9a-bb38-c464ae35ecaa\",\n    employee: \"70f73477-0435-4bcf-91f0-1915c27eea1a\"\n  };\n\n  const directusRoleId = roleIds[normalizedRole];\n\n  if (!directusRoleId) {\n    throw new Error(`No Directus role configured for member_role: ${rawRole}`);\n  }\n\n  return {\n    original_member_role: rawRole,\n    member_role: normalizedRole,\n    directus_role_id: directusRoleId\n  };\n};"
+                                 },
+                     "resolve":  "383e0d5c-4e03-4b55-b646-4db235827ca4",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-14T22:58:05.237Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "383e0d5c-4e03-4b55-b646-4db235827ca4",
+                     "name":  "Update Data",
+                     "key":  "update_user_active_workspace",
+                     "type":  "item-update",
+                     "position_x":  215,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "directus_users",
+                                     "key":  "{{validate_user_email.user_id}}",
+                                     "payload":  {
+                                                     "role":  "{{resolve_directus_role.directus_role_id}}",
+                                                     "active_business_profile":  "{{validate_user_email.business_profile}}",
+                                                     "active_department":  "{{validate_user_email.department}}",
+                                                     "active_member_role":  "{{resolve_directus_role.member_role}}"
+                                                 }
+                                 },
+                     "resolve":  "9fefcdfe-cb58-4c5d-ad32-4d69346e6a71",
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T22:19:26.852Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "9fefcdfe-cb58-4c5d-ad32-4d69346e6a71",
+                     "name":  "Transform Payload",
+                     "key":  "return_claim_success",
+                     "type":  "transform",
+                     "position_x":  232,
+                     "position_y":  1,
+                     "options":  {
+                                     "json":  {
+                                                  "ok":  true,
+                                                  "message":  "Workspace joined successfully.",
+                                                  "invite_id":  "{{validate_user_email.invite_id}}",
+                                                  "business_profile_id":  "{{validate_user_email.business_profile}}",
+                                                  "department_id":  "{{validate_user_email.department}}",
+                                                  "member_role":  "{{resolve_directus_role.member_role}}",
+                                                  "user_id":  "{{validate_user_email.user_id}}",
+                                                  "membership_id":  "{{create_membership}}"
+                                              }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "5bba9797-b6de-4819-a51b-6366d30a5bf0",
+                     "date_created":  "2026-05-13T22:19:26.844Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "06cf0470-da33-4380-aa20-595d27903fb9",
+                     "name":  "Condition",
+                     "key":  "condition_k7q5w",
+                     "type":  "condition",
+                     "position_x":  16,
+                     "position_y":  1,
+                     "options":  {
+                                     "filter":  {
+                                                    "$trigger":  {
+                                                                     "payload":  {
+                                                                                     "status":  {
+                                                                                                    "_eq":  "claimed"
+                                                                                                }
+                                                                                 }
+                                                                 }
+                                                }
+                                 },
+                     "resolve":  "f0dbc0dd-bf68-4ae8-a46f-c1242f165fd8",
+                     "reject":  null,
+                     "flow":  "67e69672-0bdf-498e-a27c-c8cdc44b9cf6",
+                     "date_created":  "2026-04-11T09:53:40.661Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "24560f3d-fabf-4c65-80bf-912fc06dd030",
+                     "name":  "Create Data",
+                     "key":  "item_create_5cwt2",
+                     "type":  "item-create",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "business_profile_members",
+                                     "payload":  {
+                                                     "user":  "{{$last.accepted_user}}",
+                                                     "business_profile":  "{{$last.business_profile}}",
+                                                     "member_role":  "{{$last.member_role}}",
+                                                     "department":  "{{$last.department}}",
+                                                     "status":  "active",
+                                                     "joined_at":  "$NOW"
+                                                 }
+                                 },
+                     "resolve":  "6b3d735e-0303-4259-b172-7ac7b7ccfa92",
+                     "reject":  null,
+                     "flow":  "67e69672-0bdf-498e-a27c-c8cdc44b9cf6",
+                     "date_created":  "2026-04-11T10:26:34.839Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "6b3d735e-0303-4259-b172-7ac7b7ccfa92",
+                     "name":  "Update Data",
+                     "key":  "item_update_qtqeg",
+                     "type":  "item-update",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "key":  "{{$trigger.keys[0]}}",
+                                     "collection":  "request_invites",
+                                     "payload":  {
+                                                     "status":  "accepted"
+                                                 }
+                                 },
+                     "resolve":  "eec5e811-41c9-476a-8d68-788867d510ed",
+                     "reject":  null,
+                     "flow":  "67e69672-0bdf-498e-a27c-c8cdc44b9cf6",
+                     "date_created":  "2026-04-11T10:26:34.828Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "eec5e811-41c9-476a-8d68-788867d510ed",
+                     "name":  "Update Data",
+                     "key":  "item_update_0o3vj",
+                     "type":  "item-update",
+                     "position_x":  73,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "directus_users",
+                                     "key":  "{{invite_data.accepted_user}}",
+                                     "payload":  {
+                                                     "active_business_profile":  "{{invite_data.business_profile}}",
+                                                     "active_department":  "{{invite_data.department}}",
+                                                     "active_member_role":  "{{invite_data.member_role}}"
+                                                 }
+                                 },
+                     "resolve":  "55b8fe5f-932b-47d9-80a1-60bca6a42dd4",
+                     "reject":  null,
+                     "flow":  "67e69672-0bdf-498e-a27c-c8cdc44b9cf6",
+                     "date_created":  "2026-04-11T10:30:59.997Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "55b8fe5f-932b-47d9-80a1-60bca6a42dd4",
+                     "name":  "Create Data",
+                     "key":  "item_create_5xc0l",
+                     "type":  "item-create",
+                     "position_x":  91,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "activity_events",
+                                     "payload":  {
+                                                     "actor":  "{{invite_data.requested_by_user}}",
+                                                     "target_user":  "{{invite_data.accepted_user}}",
+                                                     "action":  "member_joined",
+                                                     "entity_type":  "invite",
+                                                     "entity_id":  "{{invite_data.id}}",
+                                                     "business_profile":  "{{invite_data.business_profile}}",
+                                                     "department":  "{{invite_data.department}}",
+                                                     "payload":  {
+                                                                     "member_role":  "{{invite_data.member_role}}",
+                                                                     "invite_type":  "{{invite_data.invite_type}}"
+                                                                 }
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "67e69672-0bdf-498e-a27c-c8cdc44b9cf6",
+                     "date_created":  "2026-04-11T10:30:59.987Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "f0dbc0dd-bf68-4ae8-a46f-c1242f165fd8",
+                     "name":  "Read Data",
+                     "key":  "invite_data",
+                     "type":  "item-read",
+                     "position_x":  27,
+                     "position_y":  19,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "request_invites",
+                                     "key":  "{{$trigger.keys[0]}}",
+                                     "query":  null
+                                 },
+                     "resolve":  "24560f3d-fabf-4c65-80bf-912fc06dd030",
+                     "reject":  null,
+                     "flow":  "67e69672-0bdf-498e-a27c-c8cdc44b9cf6",
+                     "date_created":  "2026-04-13T23:01:27.747Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "02fcfa9e-8003-4c74-981a-bd489d1bc507",
+                     "name":  "Run Script",
+                     "key":  "exec_49qjm",
+                     "type":  "exec",
+                     "position_x":  20,
+                     "position_y":  1,
+                     "options":  {
+                                     "code":  "module.exports = async function(data) {\n    const risk = data.$trigger.payload.risk_level;\n    if (risk === \u0027high_risk\u0027 || risk === \u0027elevated_fatigue\u0027) {\n        return true;\n    }\n    throw new Error(\u0027Not high risk\u0027);\n}"
+                                 },
+                     "resolve":  "9e8f4488-ba11-4c62-8570-95544a8dc4e5",
+                     "reject":  null,
+                     "flow":  "75e967de-5c2b-4727-b83f-85aa1d468323",
+                     "date_created":  "2026-04-17T22:38:39.385Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "9e8f4488-ba11-4c62-8570-95544a8dc4e5",
+                     "name":  "Read Data",
+                     "key":  "read_data_1",
+                     "type":  "item-read",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "wellness_scans",
+                                     "key":  {
+
+                                             },
+                                     "query":  {
+                                                   "id":  {
+                                                              "_eq":  "{{$trigger.payload.scan_id}}"
+                                                          }
+                                               }
+                                 },
+                     "resolve":  "fe7a8f53-249e-4a4b-b9b2-d7c2aa22dd62",
+                     "reject":  null,
+                     "flow":  "75e967de-5c2b-4727-b83f-85aa1d468323",
+                     "date_created":  "2026-04-11T13:05:53.721Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "fe7a8f53-249e-4a4b-b9b2-d7c2aa22dd62",
+                     "name":  "Create Data",
+                     "key":  "create_alert",
+                     "type":  "item-create",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  true,
+                                     "collection":  "alerts",
+                                     "payload":  {
+                                                     "business_profile":  "{{read_data_1[0].business_profile}}",
+                                                     "department":  "{{read_data_1[0].department}}",
+                                                     "target_member":  "{{read_data_1[0].member}}",
+                                                     "target_user":  "{{read_data_1[0].user}}",
+                                                     "scan":  "{{$trigger.payload.scan_id}}",
+                                                     "severity":  "critical",
+                                                     "title":  "Readiness needs attention",
+                                                     "message":  "Pre-shift result requires manager review.",
+                                                     "status":  "new",
+                                                     "action_type":  "none"
+                                                 }
+                                 },
+                     "resolve":  "f0b2fc8c-964f-4dab-be04-e1dba3fea0af",
+                     "reject":  null,
+                     "flow":  "75e967de-5c2b-4727-b83f-85aa1d468323",
+                     "date_created":  "2026-04-11T16:01:03.188Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "f0b2fc8c-964f-4dab-be04-e1dba3fea0af",
+                     "name":  "Read Data",
+                     "key":  "item_read_3bk1f",
+                     "type":  "item-read",
+                     "position_x":  73,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "departments",
+                                     "query":  {
+                                                   "id":  {
+                                                              "_eq":  "{{read_data_1[0].department}}"
+                                                          }
+                                               },
+                                     "key":  {
+
+                                             }
+                                 },
+                     "resolve":  "7ed11e10-b6b2-4688-b5a4-f4d47716c5f8",
+                     "reject":  null,
+                     "flow":  "75e967de-5c2b-4727-b83f-85aa1d468323",
+                     "date_created":  "2026-04-11T16:01:03.167Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "7ed11e10-b6b2-4688-b5a4-f4d47716c5f8",
+                     "name":  "Read Data",
+                     "key":  "manager_member",
+                     "type":  "item-read",
+                     "position_x":  91,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "business_profile_members",
+                                     "query":  {
+                                                   "id":  {
+                                                              "_eq":  "{{read_data_1[0].manager_member}}"
+                                                          }
+                                               },
+                                     "key":  {
+
+                                             }
+                                 },
+                     "resolve":  "a5dd8da6-c066-4028-ae90-4526df6a31e4",
+                     "reject":  null,
+                     "flow":  "75e967de-5c2b-4727-b83f-85aa1d468323",
+                     "date_created":  "2026-04-11T16:01:03.142Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "a5dd8da6-c066-4028-ae90-4526df6a31e4",
+                     "name":  "Create Data",
+                     "key":  "item_create_2kf15",
+                     "type":  "item-create",
+                     "position_x":  109,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  true,
+                                     "collection":  "notifications",
+                                     "payload":  {
+                                                     "user":  "{{manager_member[0].user}}",
+                                                     "business_profile":  "{{manager_member[0].business_profile}}",
+                                                     "title":  "New readiness alert",
+                                                     "body":  "A team member needs review before shift continuation.",
+                                                     "type":  "alert",
+                                                     "status":  "unread",
+                                                     "link_type":  "alert",
+                                                     "link_id":  "{{create_alert}}"
+                                                 }
+                                 },
+                     "resolve":  "cae653c7-d20a-4993-b69c-9c06ae469505",
+                     "reject":  null,
+                     "flow":  "75e967de-5c2b-4727-b83f-85aa1d468323",
+                     "date_created":  "2026-04-11T16:01:03.114Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "cae653c7-d20a-4993-b69c-9c06ae469505",
+                     "name":  "Create Data",
+                     "key":  "item_create_i3i9n",
+                     "type":  "item-create",
+                     "position_x":  127,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "activity_events",
+                                     "payload":  {
+                                                     "actor":  "{{read_data_1[0].user}}",
+                                                     "target_user":  "{{read_data_1[0].user}}",
+                                                     "action":  "alert_created",
+                                                     "entity_type":  "alert",
+                                                     "entity_id":  "{{create_alert[0]}}",
+                                                     "business_profile":  "{{read_data_1[0].business_profile}}",
+                                                     "department":  "{{read_data_1[0].department}}",
+                                                     "payload":  {
+                                                                     "risk_level":  "{{$trigger.payload.risk_level}}",
+                                                                     "scan_id":  "{{$trigger.payload.scan_id}}"
+                                                                 }
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "75e967de-5c2b-4727-b83f-85aa1d468323",
+                     "date_created":  "2026-04-11T16:01:03.103Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "46264931-150c-4695-ba5d-dd46ca525dd5",
+                     "name":  "Create Data",
+                     "key":  "item_create_z5gm6",
+                     "type":  "item-create",
+                     "position_x":  51,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "notifications",
+                                     "payload":  {
+                                                     "user":  "{{ $last.user }}",
+                                                     "title":  "New result",
+                                                     "body":  "You received a new result",
+                                                     "type":  "result",
+                                                     "status":  "unread",
+                                                     "link_type":  "scan_result",
+                                                     "link_id":  "{{ $trigger.keys[0] }}"
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "81f17ff9-95a0-4278-9416-a3793fb4e435",
+                     "date_created":  "2026-02-03T15:08:03.597Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "52abc2ee-ff5a-4b2c-8fb5-759731ba3a91",
+                     "name":  "Read Data",
+                     "key":  "item_read_3kgbq",
+                     "type":  "item-read",
+                     "position_x":  2,
+                     "position_y":  20,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "wellness_scans",
+                                     "key":  "{{ $trigger.keys[0] }}"
+                                 },
+                     "resolve":  "8d548e57-a204-4ad9-86a4-4a6a8f0a4bbb",
+                     "reject":  null,
+                     "flow":  "81f17ff9-95a0-4278-9416-a3793fb4e435",
+                     "date_created":  "2026-02-03T23:23:22.677Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "8d548e57-a204-4ad9-86a4-4a6a8f0a4bbb",
+                     "name":  "Create Data",
+                     "key":  "item_create_5im8t",
+                     "type":  "item-create",
+                     "position_x":  18,
+                     "position_y":  20,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "activity_events",
+                                     "payload":  {
+                                                     "actor":  null,
+                                                     "target_user":  "{{ $last.user }}",
+                                                     "action":  "Scan Completed",
+                                                     "entity_type":  "result",
+                                                     "entity_id":  "{{ $trigger.keys[0] }}"
+                                                 }
+                                 },
+                     "resolve":  "1e02a2db-d085-4d8e-8828-c89a844ba45a",
+                     "reject":  null,
+                     "flow":  "81f17ff9-95a0-4278-9416-a3793fb4e435",
+                     "date_created":  "2026-02-03T15:08:03.605Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "1e02a2db-d085-4d8e-8828-c89a844ba45a",
+                     "name":  "Read Data",
+                     "key":  "item_read_ie1tt",
+                     "type":  "item-read",
+                     "position_x":  36,
+                     "position_y":  20,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "key":  "{{ $trigger.keys[0] }}",
+                                     "collection":  "wellness_scans"
+                                 },
+                     "resolve":  "46264931-150c-4695-ba5d-dd46ca525dd5",
+                     "reject":  null,
+                     "flow":  "81f17ff9-95a0-4278-9416-a3793fb4e435",
+                     "date_created":  "2026-02-04T00:14:10.988Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "b338f34c-8f32-4eb7-b4cf-fe704bbc087d",
+                     "name":  "read_scan_media",
+                     "key":  "item_read_8a76c",
+                     "type":  "item-read",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$trigger",
+                                     "emitEvents":  false,
+                                     "collection":  "scan_media",
+                                     "query":  {
+                                                   "filter":  {
+                                                                  "scan_id":  {
+                                                                                  "_eq":  "{{ $trigger.keys[0] }}"
+                                                                              }
+                                                              }
+                                               }
+                                 },
+                     "resolve":  "c9a62fa9-d7b3-4d85-a11b-f13b46c29cff",
+                     "reject":  null,
+                     "flow":  "849aa3dc-b064-4188-9f07-390945fa1889",
+                     "date_created":  "2026-01-19T22:37:33.312Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "c9a62fa9-d7b3-4d85-a11b-f13b46c29cff",
+                     "name":  "Run Script",
+                     "key":  "exec_arf39",
+                     "type":  "exec",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "code":  "module.exports = async function (data) {\n  const scanId = data.$trigger.keys[0];\n\n  // ⚠️ غير الاسم هنا بالـ Key الحقيقي\n  const media = data[\"item_read_8a76c\"]?.[0];\n\n  const BASE = \"[REDACTED_DIRECTUS_ASSETS_URL]\";\n\n  return {\n    scan_id: scanId,\n    media: {\n      image: media?.thumbnail ? `${BASE}/${media.thumbnail}` : null,\n      audio: media?.audio_file ? `${BASE}/${media.audio_file}` : null,\n      video: media?.video_file ? `${BASE}/${media.video_file}` : null\n    },\n    task: {\n      reaction_time: null,\n      errors: null\n    },\n    previous_confidence: null\n  };\n};\n"
+                                 },
+                     "resolve":  "be238796-4e62-42a0-9220-21afebe048a9",
+                     "reject":  null,
+                     "flow":  "849aa3dc-b064-4188-9f07-390945fa1889",
+                     "date_created":  "2026-01-19T22:40:46.429Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "be238796-4e62-42a0-9220-21afebe048a9",
+                     "name":  "Webhook / Request URL",
+                     "key":  "request_2hb31",
+                     "type":  "request",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "method":  "POST",
+                                     "body":  "{{ $last }}\n",
+                                     "url":  "[REDACTED_AI_PROCESSING_URL]",
+                                     "headers":  {
+                                                     "header":  "Content-Type",
+                                                     "value":  "application/json"
+                                                 }
+                                 },
+                     "resolve":  "dee53fdc-ba8e-4900-aad3-78fefc08111b",
+                     "reject":  null,
+                     "flow":  "849aa3dc-b064-4188-9f07-390945fa1889",
+                     "date_created":  "2026-01-19T22:42:22.405Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "dee53fdc-ba8e-4900-aad3-78fefc08111b",
+                     "name":  "Create Data",
+                     "key":  "item_create_ws16g",
+                     "type":  "item-create",
+                     "position_x":  73,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "scan_results",
+                                     "payload":  {
+                                                     "scan_id":  "{{ $trigger.keys[0] }}",
+                                                     "risk_level":  "{{ $last.data.overall_state }}",
+                                                     "confidence":  "{{ $last.data.confidence }}",
+                                                     "confidence_drift":  "{{ $last.data.confidence_drift }}",
+                                                     "camera_confidence":  "{{ $last.data.camera_confidence }}",
+                                                     "voice_confidence":  "{{ $last.data.voice_confidence }}",
+                                                     "task_performance_score":  "{{ $last.data.task_performance_score }}",
+                                                     "explanation":  "{{ $last.data.explanation }}",
+                                                     "ai_model_version":  "Ai_V1"
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "849aa3dc-b064-4188-9f07-390945fa1889",
+                     "date_created":  "2026-01-19T22:44:14.416Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "b401228e-a4b5-4459-8862-bd3d0572ff70",
+                     "name":  "Condition",
+                     "key":  "condition_7tdlb",
+                     "type":  "condition",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "filter":  {
+                                                    "$trigger":  {
+                                                                     "payload":  {
+                                                                                     "status":  {
+                                                                                                    "_eq":  "completed"
+                                                                                                }
+                                                                                 }
+                                                                 }
+                                                }
+                                 },
+                     "resolve":  "bc68372b-4d8f-43fa-8ee8-9b7907d1798c",
+                     "reject":  null,
+                     "flow":  "92443fe9-1bb9-4898-b97f-7f9f4a5e2f31",
+                     "date_created":  "2026-04-11T12:12:10.244Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "310fea03-1b35-475e-8e6c-d1964f905ea1",
+                     "name":  "Update Data",
+                     "key":  "item_update_8xg3f",
+                     "type":  "item-update",
+                     "position_x":  34,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  true,
+                                     "key":  "{{scan_info.member}}",
+                                     "collection":  "business_profile_members",
+                                     "payload":  {
+                                                     "last_scan_at":  "{{$last.date_updated}}"
+                                                 }
+                                 },
+                     "resolve":  "75fc4742-0c0c-4d98-a046-c75a62397dd4",
+                     "reject":  null,
+                     "flow":  "92443fe9-1bb9-4898-b97f-7f9f4a5e2f31",
+                     "date_created":  "2026-04-11T12:12:10.196Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "75fc4742-0c0c-4d98-a046-c75a62397dd4",
+                     "name":  "Create Data",
+                     "key":  "item_create_3fr9y",
+                     "type":  "item-create",
+                     "position_x":  50,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "activity_events",
+                                     "payload":  {
+                                                     "actor":  "{{scan_info.user}}",
+                                                     "target_user":  "{{scan_info.user}}",
+                                                     "action":  "scan_completed",
+                                                     "entity_type":  "scan",
+                                                     "entity_id":  "{{scan_info.id}}",
+                                                     "business_profile":  "{{scan_info.business_profile}}",
+                                                     "department":  "{{scan_info.department}}",
+                                                     "payload":  {
+                                                                     "request_source":  "{{scan_info.request_source}}",
+                                                                     "device_platform":  "{{scan_info.device_platform}}"
+                                                                 }
+                                                 }
+                                 },
+                     "resolve":  "dfa5ae77-ad1b-4903-b2f8-9c87ac181f79",
+                     "reject":  null,
+                     "flow":  "92443fe9-1bb9-4898-b97f-7f9f4a5e2f31",
+                     "date_created":  "2026-04-11T12:12:10.185Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "dfa5ae77-ad1b-4903-b2f8-9c87ac181f79",
+                     "name":  "Is Manager Request",
+                     "key":  "condition_13ap7",
+                     "type":  "condition",
+                     "position_x":  65,
+                     "position_y":  1,
+                     "options":  {
+                                     "filter":  {
+                                                    "scan_info":  {
+                                                                      "request_source":  {
+                                                                                             "_eq":  "manager_request"
+                                                                                         }
+                                                                  }
+                                                }
+                                 },
+                     "resolve":  "8628af07-8cce-41dc-a082-cfcb05c5d8db",
+                     "reject":  null,
+                     "flow":  "92443fe9-1bb9-4898-b97f-7f9f4a5e2f31",
+                     "date_created":  "2026-04-11T12:12:10.222Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "8628af07-8cce-41dc-a082-cfcb05c5d8db",
+                     "name":  "Read Open Scan Request",
+                     "key":  "read_open_scan_request",
+                     "type":  "item-read",
+                     "position_x":  80,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "scan_requests",
+                                     "query":  {
+                                                   "filter":  {
+                                                                  "target_member":  {
+                                                                                        "_eq":  "{{scan_info.member}}"
+                                                                                    },
+                                                                  "status":  {
+                                                                                 "_in":  [
+                                                                                             "pending",
+                                                                                             "sent",
+                                                                                             "opened"
+                                                                                         ]
+                                                                             }
+                                                              },
+                                                   "limit":  1,
+                                                   "sort":  "-requested_at"
+                                               }
+                                 },
+                     "resolve":  "71e3c66a-fd41-4bf4-adb8-467a5dce4f9c",
+                     "reject":  null,
+                     "flow":  "92443fe9-1bb9-4898-b97f-7f9f4a5e2f31",
+                     "date_created":  "2026-04-11T12:39:50.180Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "bc68372b-4d8f-43fa-8ee8-9b7907d1798c",
+                     "name":  "Read Data",
+                     "key":  "scan_info",
+                     "type":  "item-read",
+                     "position_x":  21,
+                     "position_y":  19,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "wellness_scans",
+                                     "key":  "{{$trigger.keys[0]}}"
+                                 },
+                     "resolve":  "310fea03-1b35-475e-8e6c-d1964f905ea1",
+                     "reject":  null,
+                     "flow":  "92443fe9-1bb9-4898-b97f-7f9f4a5e2f31",
+                     "date_created":  "2026-04-14T17:18:57.690Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "71e3c66a-fd41-4bf4-adb8-467a5dce4f9c",
+                     "name":  "Request Found",
+                     "key":  "request_found",
+                     "type":  "condition",
+                     "position_x":  56,
+                     "position_y":  19,
+                     "options":  {
+                                     "filter":  {
+                                                    "read_open_scan_request":  {
+                                                                                   "_neq":  "[]"
+                                                                               }
+                                                }
+                                 },
+                     "resolve":  "c6720287-d1fb-446d-a387-27ac1a8d5f4c",
+                     "reject":  null,
+                     "flow":  "92443fe9-1bb9-4898-b97f-7f9f4a5e2f31",
+                     "date_created":  "2026-04-11T12:39:50.151Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "c6720287-d1fb-446d-a387-27ac1a8d5f4c",
+                     "name":  "Update Data",
+                     "key":  "item_update_6oets",
+                     "type":  "item-update",
+                     "position_x":  71,
+                     "position_y":  19,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  true,
+                                     "collection":  "scan_requests",
+                                     "key":  "{{read_open_scan_request[0].id}}",
+                                     "payload":  {
+                                                     "status":  "completed",
+                                                     "completed_scan":  "{{scan_info.id}}",
+                                                     "completed_at":  "{{scan_info.date_updated}}"
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "92443fe9-1bb9-4898-b97f-7f9f4a5e2f31",
+                     "date_created":  "2026-04-11T12:39:50.142Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "adc2a2fd-3ab2-474d-af5a-156e932e9616",
+                     "name":  "Create Data",
+                     "key":  "item_create_v5pq3",
+                     "type":  "item-create",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$trigger",
+                                     "emitEvents":  false,
+                                     "collection":  "activity_events",
+                                     "payload":  {
+                                                     "actor":  "{{$trigger.payload.user}}",
+                                                     "target_user":  "{{$trigger.payload.user}}",
+                                                     "action":  "consent_accepted",
+                                                     "entity_type":  "company",
+                                                     "entity_id":  "{{$trigger.payload.business_profile}}",
+                                                     "business_profile":  "{{$trigger.payload.business_profile}}",
+                                                     "payload":  {
+                                                                     "consent_version":  "{{$trigger.payload.consent_version}}",
+                                                                     "source":  "{{$trigger.payload.source}}"
+                                                                 }
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "9de929f7-26f0-43a4-86da-e0638c7ca48b",
+                     "date_created":  "2026-04-11T11:19:21.973Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "7c5248b4-a55f-4d7a-af69-db4044b67155",
+                     "name":  "Create Data",
+                     "key":  "item_create_49vjo",
+                     "type":  "item-create",
+                     "position_x":  47,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "notifications",
+                                     "payload":  {
+                                                     "user":  "{{ $last.requested_for }}",
+                                                     "title":  "New Update Request",
+                                                     "body":  "You update a received request",
+                                                     "type":  "request",
+                                                     "status":  "unread",
+                                                     "link_type":  "request",
+                                                     "link_id":  "{{ $trigger.keys[0] }}"
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "a9efafe7-ce9d-4263-bebc-3fea6d1effe4",
+                     "date_created":  "2026-02-03T15:06:48.170Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "c2dacf27-c00d-498d-8db8-e57a650ce985",
+                     "name":  "Read Data",
+                     "key":  "item_read_a99ei",
+                     "type":  "item-read",
+                     "position_x":  4,
+                     "position_y":  19,
+                     "options":  {
+                                     "permissions":  "$trigger",
+                                     "emitEvents":  false,
+                                     "collection":  "requests",
+                                     "key":  "{{ $trigger.keys[0] }}"
+                                 },
+                     "resolve":  "fb0028ea-c259-4376-937b-ea3f406759c2",
+                     "reject":  null,
+                     "flow":  "a9efafe7-ce9d-4263-bebc-3fea6d1effe4",
+                     "date_created":  "2026-02-03T23:56:59.745Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "fb0028ea-c259-4376-937b-ea3f406759c2",
+                     "name":  "Create Data",
+                     "key":  "item_create_4zx2b",
+                     "type":  "item-create",
+                     "position_x":  20,
+                     "position_y":  19,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "activity_events",
+                                     "payload":  {
+                                                     "actor":  "{{ $last.requested_for }}",
+                                                     "target_user":  "{{ $last.requested_for }}",
+                                                     "action":  "request_updated",
+                                                     "entity_type":  "request",
+                                                     "entity_id":  "{{ $trigger.keys[0] }}"
+                                                 }
+                                 },
+                     "resolve":  "d103d798-8925-405a-a679-ad4dad5293f9",
+                     "reject":  null,
+                     "flow":  "a9efafe7-ce9d-4263-bebc-3fea6d1effe4",
+                     "date_created":  "2026-02-03T22:13:45.077Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "d103d798-8925-405a-a679-ad4dad5293f9",
+                     "name":  "Read Data",
+                     "key":  "item_read_zuafz",
+                     "type":  "item-read",
+                     "position_x":  38,
+                     "position_y":  19,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "requests",
+                                     "key":  "{{ $trigger.keys[0] }}"
+                                 },
+                     "resolve":  "7c5248b4-a55f-4d7a-af69-db4044b67155",
+                     "reject":  null,
+                     "flow":  "a9efafe7-ce9d-4263-bebc-3fea6d1effe4",
+                     "date_created":  "2026-02-04T00:12:20.363Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "e2dafb3e-c02f-4574-bfbd-8722c1de279f",
+                     "name":  "Read Data",
+                     "key":  "scan_record",
+                     "type":  "item-read",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "wellness_scans",
+                                     "query":  {
+                                                   "id":  {
+                                                              "_eq":  "{{$trigger.payload.scan_id}}"
+                                                          }
+                                               }
+                                 },
+                     "resolve":  "cdd7194b-ffe8-4a72-9add-6707ce26372d",
+                     "reject":  null,
+                     "flow":  "ab56cfa0-fbff-40c0-8e25-94883b822d70",
+                     "date_created":  "2026-04-11T12:42:30.462Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "a26248a0-1d80-41af-b827-f506c9b694f0",
+                     "name":  "Create Data",
+                     "key":  "item_create_x7szg",
+                     "type":  "item-create",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "activity_events",
+                                     "payload":  {
+                                                     "actor":  "{{scan_record[0].user}}",
+                                                     "target_user":  "{{scan_record[0].user}}",
+                                                     "action":  "scan_result_created",
+                                                     "entity_type":  "scan_result",
+                                                     "entity_id":  "{{$trigger.key}}",
+                                                     "business_profile":  "{{scan_record[0].business_profile}}",
+                                                     "department":  "{{scan_record[0].department}}",
+                                                     "payload":  {
+                                                                     "risk_level":  "{{$trigger.payload.risk_level}}",
+                                                                     "readiness_score":  "{{$trigger.payload.readiness_score}}",
+                                                                     "confidence":  "{{$trigger.payload.confidence}}"
+                                                                 }
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "ab56cfa0-fbff-40c0-8e25-94883b822d70",
+                     "date_created":  "2026-04-11T13:03:04.418Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "cdd7194b-ffe8-4a72-9add-6707ce26372d",
+                     "name":  "Run Script",
+                     "key":  "run_script_ab12",
+                     "type":  "exec",
+                     "position_x":  25,
+                     "position_y":  23,
+                     "options":  {
+                                     "code":  "module.exports = async function () {\n  return {\n    last_scan_at: new Date().toISOString().slice(0, 19)\n  };\n};"
+                                 },
+                     "resolve":  "af9e2c81-e191-4050-8d5b-75560463dc2f",
+                     "reject":  null,
+                     "flow":  "ab56cfa0-fbff-40c0-8e25-94883b822d70",
+                     "date_created":  "2026-04-16T00:37:54.954Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "af9e2c81-e191-4050-8d5b-75560463dc2f",
+                     "name":  "Update Data",
+                     "key":  "item_update_cno5h",
+                     "type":  "item-update",
+                     "position_x":  43,
+                     "position_y":  23,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  true,
+                                     "collection":  "business_profile_members",
+                                     "key":  "{{scan_record[0].member}}",
+                                     "payload":  {
+                                                     "last_scan_at":  "{{ run_script_ab12.last_scan_at }}",
+                                                     "last_readiness_score":  "{{ $trigger.payload.readiness_score }}",
+                                                     "last_risk_level":  "{{ $trigger.payload.risk_level }}"
+                                                 }
+                                 },
+                     "resolve":  "a26248a0-1d80-41af-b827-f506c9b694f0",
+                     "reject":  null,
+                     "flow":  "ab56cfa0-fbff-40c0-8e25-94883b822d70",
+                     "date_created":  "2026-04-16T00:41:57.345Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "b97642a7-c9f5-4d63-9ac3-8b2068621951",
+                     "name":  "Read Data",
+                     "key":  "target_member_record",
+                     "type":  "item-read",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "business_profile_members",
+                                     "query":  {
+                                                   "id":  {
+                                                              "_eq":  "{{$trigger.payload.target_member}}"
+                                                          }
+                                               }
+                                 },
+                     "resolve":  "d508f37b-09eb-4b78-b685-67877737de3c",
+                     "reject":  null,
+                     "flow":  "c1ea5607-f639-4867-b10b-18bcc666e8a3",
+                     "date_created":  "2026-04-11T16:37:18.004Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "d508f37b-09eb-4b78-b685-67877737de3c",
+                     "name":  "Create Data",
+                     "key":  "item_create_ofq7y",
+                     "type":  "item-create",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "notifications",
+                                     "payload":  {
+                                                     "user":  "{{target_member_record[0].user}}",
+                                                     "business_profile":  "{{$trigger.payload.business_profile}}",
+                                                     "title":  "Pre-shift scan requested",
+                                                     "body":  "A new readiness scan has been requested.",
+                                                     "type":  "scan_request",
+                                                     "status":  "unread",
+                                                     "link_type":  "scan_request",
+                                                     "link_id":  "{{$trigger.key}}"
+                                                 }
+                                 },
+                     "resolve":  "f4269705-0802-44f4-9876-bd5852129406",
+                     "reject":  null,
+                     "flow":  "c1ea5607-f639-4867-b10b-18bcc666e8a3",
+                     "date_created":  "2026-04-11T16:37:17.978Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "f4269705-0802-44f4-9876-bd5852129406",
+                     "name":  "Create Data",
+                     "key":  "item_create_didlk",
+                     "type":  "item-create",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "activity_events",
+                                     "payload":  {
+                                                     "actor":  "{{$trigger.payload.requested_by_user}}",
+                                                     "target_user":  "{{target_member_record[0].user}}",
+                                                     "action":  "scan_request_created",
+                                                     "entity_type":  "scan_request",
+                                                     "entity_id":  "{{$trigger.key}}",
+                                                     "business_profile":  "{{$trigger.payload.business_profile}}",
+                                                     "department":  "{{$trigger.payload.department}}"
+                                                 }
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "c1ea5607-f639-4867-b10b-18bcc666e8a3",
+                     "date_created":  "2026-04-11T16:37:17.969Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "35ba502c-3afd-49a1-9afe-db74eb50a5f2",
+                     "name":  "Read Data",
+                     "key":  "media_to_purge",
+                     "type":  "item-read",
+                     "position_x":  19,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "scan_media",
+                                     "query":  {
+                                                   "filter":  {
+                                                                  "_and":  [
+                                                                               {
+                                                                                   "purge_after_at":  {
+                                                                                                          "_lte":  "$NOW"
+                                                                                                      }
+                                                                               },
+                                                                               {
+                                                                                   "is_deleted":  {
+                                                                                                      "_eq":  false
+                                                                                                  }
+                                                                               }
+                                                                           ]
+                                                              },
+                                                   "limit":  100
+                                               }
+                                 },
+                     "resolve":  "741d2802-d67e-4195-94ec-547a7ea8332b",
+                     "reject":  null,
+                     "flow":  "f716b6e1-0523-4b44-a959-a99ee34dc1ad",
+                     "date_created":  "2026-04-11T16:46:35.068Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "741d2802-d67e-4195-94ec-547a7ea8332b",
+                     "name":  "Condition",
+                     "key":  "condition_wtk7v",
+                     "type":  "condition",
+                     "position_x":  37,
+                     "position_y":  1,
+                     "options":  {
+                                     "filter":  {
+                                                    "media_to_purge":  {
+                                                                           "_empty":  false
+                                                                       }
+                                                }
+                                 },
+                     "resolve":  "210a2e7a-d07f-4f58-93de-bc6d64305f64",
+                     "reject":  null,
+                     "flow":  "f716b6e1-0523-4b44-a959-a99ee34dc1ad",
+                     "date_created":  "2026-04-11T16:46:35.039Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "210a2e7a-d07f-4f58-93de-bc6d64305f64",
+                     "name":  "Update Data",
+                     "key":  "item_update_l25oo",
+                     "type":  "item-update",
+                     "position_x":  55,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "scan_media",
+                                     "key":  "{{ media_to_purge.map(item =\u003e item.id) }}",
+                                     "payload":  {
+                                                     "is_deleted":  true,
+                                                     "purged_at":  "$NOW"
+                                                 }
+                                 },
+                     "resolve":  "d1d00a33-80e7-4050-8ce1-d0883975243b",
+                     "reject":  null,
+                     "flow":  "f716b6e1-0523-4b44-a959-a99ee34dc1ad",
+                     "date_created":  "2026-04-11T16:46:34.963Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 },
+                 {
+                     "id":  "d1d00a33-80e7-4050-8ce1-d0883975243b",
+                     "name":  "Delete Data",
+                     "key":  "item_delete_ibqu7",
+                     "type":  "item-delete",
+                     "position_x":  73,
+                     "position_y":  1,
+                     "options":  {
+                                     "permissions":  "$full",
+                                     "emitEvents":  false,
+                                     "collection":  "directus_files",
+                                     "key":  "{{ media_to_purge.map(item =\u003e item.file_id) }}"
+                                 },
+                     "resolve":  null,
+                     "reject":  null,
+                     "flow":  "f716b6e1-0523-4b44-a959-a99ee34dc1ad",
+                     "date_created":  "2026-04-11T16:46:34.952Z",
+                     "user_created":  "72aa9319-dc30-4d39-9f38-b4b5b0f0e948"
+                 }
+             ]
+}

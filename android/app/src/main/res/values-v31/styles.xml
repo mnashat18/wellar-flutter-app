@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Wellar.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/wellar_splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/wellar_splash_blank</item>
+        <item name="windowSplashScreenAnimationDuration">500</item>
+        <item name="postSplashScreenTheme">@style/NormalTheme</item>
+    </style>
+</resources>

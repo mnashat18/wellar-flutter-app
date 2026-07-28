@@ -1,0 +1,147 @@
+WELLAR MOBILE — P0 FULL RELEASE REPAIR (NO APP RUN)
+
+Work only in:
+D:\flutter\waller_app
+
+Goal:
+Fix every source-confirmed P0 issue before the next manual flutter run. Treat the current source and dirty diff as the source of truth. Do not assume previous changes are correct.
+
+Do not:
+- edit AI server, Directus schema/permissions/collections/Flows/SQL/EasyPanel
+- edit notification sending backend/provider behavior
+- change camera/audio durations, scan scoring, or API contracts
+- reset, restore, stash, commit, push, merge, rebase, delete, move, or overwrite existing user changes
+- run flutter run/build/test/analyze, pub, Gradle, ADB, deployment, network requests, or Git write/history commands
+
+You may run only:
+rg
+Get-Content
+git status --short
+git diff --name-only
+git diff -- <specific file>
+git diff --check
+
+1) SESSION + REFRESH TOKEN
+Repair Session.setAuth() and callers.
+
+Required semantics:
+- distinguish omitted field = preserve existing value
+- explicit clear = delete corresponding secure-storage key
+- replacement = write new value
+- never leave stale refresh_token, user_id, user_email, user_name, or role_name in secure storage
+- never erase a valid refresh token because a caller updates only access token/profile fields
+- memory state and secure storage must stay consistent
+- logout clears every persisted session key
+- never log access/refresh tokens
+
+2) SWITCH ORGANIZATION
+Repair the complete switch flow.
+
+Current defect:
+After POST /wellar/workspaces/switch succeeds, the app requires refreshAuthToken() to succeed and incorrectly reports that the switch failed.
+
+Required behavior:
+- canonical successful workspace-switch response is authoritative
+- inspect its actual response contract
+- if it includes replacement credentials, persist them atomically through repaired Session logic
+- if it does not include replacement credentials, do not require refreshAuthToken() for success
+- an optional/best-effort refresh must never erase a good session or turn a real success into a false failure
+- update active business profile from canonical response
+- invalidate workspace-dependent caches only after switch success
+- refresh visible state after success
+- re-sync push only after new workspace is confirmed; push failure must not undo switch success
+- use a clear user-facing error only when the workspace-switch request itself fails
+
+3) REMOVE LEGACY WORKSPACE FALLBACK
+- find all production/bootstrap/login/restore/debug callers of resolveActiveWorkspace(), legacy business_profile_members lookups, and validRows.first organization selection
+- remove or fence their production reachability
+- canonical workspace flow must be the only production source of truth
+- never auto-switch user to first membership
+- organization invitations must remain independent of active workspace state
+
+4) FCM / PUSH REGISTRATION
+Audit and repair current PushNotificationService, ProtectedPushSubscriptionApi, PushSyncController and startup/login/resume/workspace-switch/token-refresh callers.
+
+Required behavior:
+- sync only after authenticated user and confirmed active business profile
+- startup, login, foreground resume, successful workspace switch, and onTokenRefresh use one idempotent sync path
+- last_seen_at refreshes even if token is unchanged
+- no raw FCM token in logs
+- do not deliberately create duplicate row for same user + business profile + device
+- no unchanged/signature guard may block last_seen_at refresh
+- remove or consolidate unused duplicate controller/mechanism
+- Directus GET/POST/PATCH errors log only:
+  [PUSH_SYNC] trigger=...
+  [PUSH_SYNC] token_available=true|false
+  [PUSH_SYNC] request_started=true
+  [PUSH_SYNC] response_status=<status|none>
+  [PUSH_SYNC] subscription_result=created|updated|unchanged|failed
+  [PUSH_SYNC] last_seen_updated=true|false
+  [PUSH_SYNC] failure_reason=<non-sensitive>
+- push failure must not break startup/login/switch
+- do not invent endpoint or Directus permissions
+- report precisely what still needs one final live Directus/FCM proof
+
+5) AUTH STARTUP + FIRST SCREEN
+- keep only one reachable signed-out path after SplashScreen
+- first screen must be a focused professional app-auth entry, not a marketing-style PublicHomeScreen
+- use existing authentication capabilities only
+- one canonical post-auth contract for password and Google:
+  session persistence -> verified workspace resolution -> route
+- remove/fence reachable onboarding or legacy route that bypasses canonical flow
+- preserve language controller; do not hardcode English/LTR in root if localization exists
+
+6) SCAN TERMINAL OUTCOME
+Inspect and repair full flow:
+capture -> upload -> finalize -> POST /process -> polling -> completed/retake/failed/timeout -> terminal result.
+
+Required behavior:
+- no permanent "Still processing"
+- completed server result always reaches result screen
+- server retake_required/invalid capture reaches RETAKE NEEDED
+- failure/no result in time reaches RETAKE NEEDED with retry/back, not infinite loading
+- use one named max post-focus wait constant: 45 seconds unless a stricter existing product constant already exists
+- timeout cannot overwrite a real result that arrived first
+- cancel timers/polling on terminal state, dispose, and navigation
+- processing page has only:
+  title: Preparing your result
+  one concise message
+  one indicator
+  Back to dashboard action
+  no duplicate labels/chips or RenderFlex overflow
+- preserve Focus task, capture, upload, durations, and server contracts
+
+7) RESULT UX
+Final state behavior:
+- STABLE: primary Back to dashboard; optional secondary Retake assessment
+- LOW FOCUS: primary Back to dashboard; secondary Retake assessment; keep short-break guidance
+- HIGH RISK: primary Back to dashboard; no retake CTA; "Do not continue safety-sensitive work. Supervisor review is required."
+- RETAKE NEEDED: primary Retake assessment; secondary Back to dashboard; no raw backend/model/baseline/support/technical text
+- ensure backend high_risk renders HIGH RISK
+- remove employee-visible technical/support clutter, including "Closed by default"
+- Why this result: maximum 3 plain-language bullets
+- no medical diagnosis or automatic leave instruction
+
+8) STATIC REGRESSION REVIEW
+Before final report:
+- search for removed methods still called, including _buildCaptureJourney
+- search duplicate old/new workspace, auth, push, and scan paths
+- search stale direct route bypasses
+- inspect every reachable result-state mapping
+- inspect combined dirty diff for conflicts from prior changes
+- do not run Flutter compile tools
+
+FINAL REPORT ONLY:
+A. Files changed
+B. Session repair: old failure, new semantics, keys cleared on logout
+C. Switch Organization repair: old failure, new success path, behavior when refresh fails after successful switch
+D. Legacy workspace cleanup: callers removed/fenced, confirmation no first-membership auto-selection
+E. FCM status: exact triggers, collection request behavior, duplicate behavior, what source fixes, exact final live proof still needed
+F. Startup/auth flow: signed-out route, password/Google post-auth route, legacy routes no longer reachable
+G. Scan terminal outcome: all terminal states, max wait, cancellation behavior, confirmation endless processing is impossible from current source
+H. Result UX: final CTA matrix, high-risk/retake confirmation
+I. Static regression findings: unresolved P0 only / real blocker only
+J. Verification: git diff --check, confirmation no Flutter/Gradle/ADB/build/test/analyze command was run
+
+End exactly with:
+P0 FULL FLUTTER RELEASE REPAIR COMPLETE
