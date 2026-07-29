@@ -1,99 +1,139 @@
-# Wellar Mobile (`waller_app`)
+# Wellar Flutter App 📱
 
-Wellar Mobile is the Flutter client for Wellar — the on-device experience for
-employees, managers, HR, and owners of a Wellar business profile. It captures
-scans, surfaces durable in-app notifications, and gives each role a focused
-shell over the Wellar backend.
+Flutter Android application developed as part of the **Wellar AI SaaS platform**.
 
-This repository contains only the Flutter mobile app. It does not house the
-web application, the Directus backend, the AI processing server, or any
-Firebase / store console configuration.
+This repository contains the mobile application responsible for user workflows, authentication, API communication, notifications, and mobile-specific experiences.
 
-## Prerequisites
+The application is connected with the Wellar AI ecosystem through REST APIs and shared backend services.
 
-- Flutter SDK compatible with the pinned Dart version in `pubspec.yaml`.
-- Android Studio + Android SDK (API 34+ recommended for `compileSdk = 36`).
-- Xcode 15+ and macOS for iOS release builds.
-- A Firebase project already configured for Wellar. Do not create a new one.
+---
 
-## Install dependencies
+## My Role
 
+I designed and developed the Flutter mobile application as part of the complete Wellar AI platform.
+
+Responsibilities:
+
+- Built the Flutter Android application from scratch
+- Developed mobile user interfaces and workflows
+- Integrated REST APIs with backend services
+- Implemented authentication flows
+- Added Firebase Cloud Messaging (FCM) notifications
+- Connected mobile features with the Wellar AI platform
+- Prepared Android release builds and testing workflows
+
+---
+
+## Overview
+
+Wellar AI includes a complete multi-platform system:
+
+- Angular web application
+- Flutter mobile application
+- Directus/PostgreSQL backend
+- Python FastAPI AI service
+
+This repository represents the mobile application layer.
+
+---
+
+## Tech Stack
+
+### Mobile Development
+
+- Flutter
+- Dart
+- Android
+- Material Design
+- Responsive Mobile UI
+
+### Integration
+
+- REST APIs
+- Directus Backend
+- Authentication Services
+- Firebase Cloud Messaging (FCM)
+
+### Development Tools
+
+- Android Studio
+- Git/GitHub
+- Release APK Builds
+
+---
+
+## Features
+
+### Authentication
+
+- User login workflows
+- Secure authentication integration
+- Session management
+
+### Mobile Experience
+
+- Role-based mobile interfaces
+- API-driven workflows
+- Push notifications
+- Camera-based workflows
+- Audio-related workflows
+- Responsive mobile layouts
+
+### Platform Integration
+
+- Communication with backend services
+- Real-time data synchronization
+- Shared workflows with the web platform
+
+---
+
+## Architecture
+
+```text
+Flutter Mobile Application
+            |
+            |
+        REST APIs
+            |
+            |
+Directus Backend
+            |
+            |
+Wellar AI Platform
+            |
+            |
+AI Processing Services
 ```
+---
+###Development:
+
+Install dependencies:
 flutter pub get
-```
 
-## Debug configuration
-
-Debug builds default to the shared development endpoints declared in
-`lib/config/app_config.dart`. No secrets are required for a debug run.
-
-```
+Run the application:
 flutter run
-```
 
-## Store-release configuration
+Build Android APK:
+flutter build apk --release
+---
 
-Store-release builds must be driven by a JSON configuration file that populates
-the compile-time `String.fromEnvironment` / `bool.fromEnvironment` values.
+###Project Purpose:
+This mobile application was developed as part of a complete SaaS product, providing users with mobile access to Wellar AI workflows and intelligent analysis features.
 
-1. Copy `config/store_release.example.json` to `config/store_release.json` (or
-   an equivalent path outside the repo).
-2. Fill in the release values.
-3. Build with `--dart-define-from-file`:
+---
 
-```
-flutter build appbundle --release --dart-define-from-file=config/store_release.json
-flutter build ipa       --release --dart-define-from-file=config/store_release.json
-```
+###Author:
+Mohamed Nashat Ghonim
 
-The example file is committed. The real file must never be committed.
-`ENABLE_PUSH_SUBSCRIPTION_WRITES` must be `true` in store-release builds.
+Frontend Engineer | Angular Developer
 
-## Secrets policy
+GitHub:
+https://github.com/mnashat18
 
-Nothing sensitive belongs in this repo. That includes keystores, keystore
-passwords, `key.properties`, APNs `.p8` keys, service accounts,
-`google-services.json`, `GoogleService-Info.plist`, OAuth client secrets, and
-any real store-release JSON. All of the above are excluded by `.gitignore`.
+LinkedIn:
+https://www.linkedin.com/in/mohamed-nashat-ghonim
 
-## Frozen identifiers
 
-The following identifiers are frozen for this handoff and must not be changed
-during the release:
 
-- Android namespace: `com.example.waller_app`
-- Android `applicationId`: `com.example.waller_app`
-- iOS `PRODUCT_BUNDLE_IDENTIFIER`: `com.example.wallerApp`
 
-Renaming the packages, folders, targets, Firebase applications, MainActivity,
-or URL schemes purely to change how the identifiers read is out of scope for
-the store handoff.
 
-## Responsibility split
-
-Wellar Mobile is one client. The other pieces of the platform stay with their
-respective owners:
-
-- Web application — separate repo, out of scope.
-- Directus backend, roles, permissions, and workspace endpoints — out of
-  scope.
-- Google mobile exchange endpoint — hosted service, out of scope.
-- AI processing server — hosted service, out of scope.
-- Firebase Console, Play Console, App Store Connect — external systems.
-
-**Organization switching is Web-only.** The mobile app surfaces an
-informational notice on Profile → Switch organization directing the user to
-the web app. Mobile does not attempt to move a member between organizations.
-
-## Release documentation
-
-- `docs/STORE_RELEASE_HANDOFF.md` — end-to-end checklist for whoever cuts the
-  release build.
-- `docs/ANDROID_RELEASE.md` — Play Store release steps.
-- `docs/IOS_RELEASE.md` — App Store release steps.
-- `docs/FIREBASE_AND_FCM.md` — Firebase + push notification wiring.
-- `docs/PRIVACY_DATA_INVENTORY.md` — data collected and processed by Mobile.
-- `docs/ACCOUNT_DELETION.md` — the current account deletion flow and its
-  external dependency.
-- `docs/KNOWN_ISSUES.md` — what is done in source vs. what must still be
-  supplied outside the repo.
