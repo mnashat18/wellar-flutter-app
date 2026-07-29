@@ -105,7 +105,7 @@ Wellar AI Platform
 AI Processing Services
 ```
 ---
-###Development:
+## Development:
 
 Install dependencies:
 flutter pub get
@@ -115,14 +115,15 @@ flutter run
 
 Build Android APK:
 flutter build apk --release
+
 ---
 
-###Project Purpose:
+## Project Purpose:
 This mobile application was developed as part of a complete SaaS product, providing users with mobile access to Wellar AI workflows and intelligent analysis features.
 
 ---
 
-###Author:
+## Author:
 Mohamed Nashat Ghonim
 
 Frontend Engineer | Angular Developer
