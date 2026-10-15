@@ -27,22 +27,22 @@ class ReadinessDistributionCard extends StatelessWidget {
     _DistributionRow(
       label: 'Stable',
       keyName: 'Stable',
-      accent: Color(0xFF6EE7A8),
+      accent: WellarTheme.success,
     ),
     _DistributionRow(
       label: 'Low Focus',
       keyName: 'Low Focus',
-      accent: Color(0xFF7DBBFF),
+      accent: WellarTheme.info,
     ),
     _DistributionRow(
       label: 'Elevated Fatigue',
       keyName: 'Elevated Fatigue',
-      accent: Color(0xFFFFC46B),
+      accent: WellarTheme.warning,
     ),
     _DistributionRow(
       label: 'High Risk',
       keyName: 'High Risk',
-      accent: Color(0xFFFF7A8F),
+      accent: WellarTheme.danger,
     ),
   ];
 

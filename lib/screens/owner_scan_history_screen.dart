@@ -1,6 +1,6 @@
 /*
-/*
 import 'package:flutter/material.dart';
+import '../i18n/tr.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/history_entry.dart';
@@ -46,7 +46,7 @@ class OwnerScanHistoryScreen extends ConsumerWidget {
                 ),
                 error: (error, _) => WellarErrorState(
                   title: 'Failed to load scan history',
-                  body: error.toString(),
+                  body: Tr.localized(context, 'generic_load_error'),
                   onRetry: () => ref.invalidate(historyTimelineProvider),
                 ),
                 data: (entries) {

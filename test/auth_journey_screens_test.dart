@@ -71,7 +71,7 @@ void main() {
     expect(find.byType(LoginScreen), findsOneWidget);
   });
 
-  testWidgets('auth intent join path opens workspace access screen', (
+  testWidgets('unauthenticated join path requires sign in before workspace access', (
     WidgetTester tester,
   ) async {
     await _prepareSession();
@@ -81,8 +81,69 @@ void main() {
 
     await tester.tap(find.text('Join an organisation'));
     await tester.pumpAndSettle();
-    expect(find.byType(WorkspaceAccessScreen), findsOneWidget);
-  });
+    // WorkspaceAccessScreen has an authenticated-user guard and redirects an
+    // anonymous visitor to sign in before showing invite/workspace controls.
+    expect(find.byType(WorkspaceAccessScreen), findsNothing);
+    expect(find.byType(LoginScreen), findsOneWidget);
+  }, timeout: const Timeout(Duration(seconds: 10)));
+
+  testWidgets('registration enables submit on the final password character', (
+    WidgetTester tester,
+  ) async {
+    await _prepareSession();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appLanguageControllerProvider.overrideWith(
+            (ref) => AppLanguageController(
+              initialLanguage: AppLanguage.english,
+              loaded: true,
+            ),
+          ),
+        ],
+        child: const MaterialApp(home: RegisterScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final fields = find.byType(TextField);
+    expect(fields, findsNWidgets(5));
+    await tester.ensureVisible(fields.at(0));
+    await tester.enterText(fields.at(0), 'Riley');
+    await tester.ensureVisible(fields.at(1));
+    await tester.enterText(fields.at(1), 'Wellar');
+    await tester.ensureVisible(fields.at(2));
+    await tester.enterText(fields.at(2), 'riley@example.com');
+    await tester.ensureVisible(fields.at(3));
+    await tester.enterText(fields.at(3), 'Password123');
+    final legalCheckbox = find.byType(CheckboxListTile);
+    await tester.ensureVisible(legalCheckbox);
+    await tester.tap(legalCheckbox);
+    await tester.pump();
+
+    await tester.ensureVisible(fields.at(4));
+    await tester.enterText(fields.at(4), 'Password12');
+    await tester.pump();
+
+    final submitButton = find.ancestor(
+      of: find.text('Create account'),
+      matching: find.byType(InkWell),
+    );
+    expect(submitButton, findsOneWidget);
+    expect(tester.widget<InkWell>(submitButton).onTap, isNull);
+    expect(tester.widget<TextField>(fields.at(4)).focusNode?.hasFocus, isTrue);
+
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: 'Password123',
+        selection: TextSelection.collapsed(offset: 11),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.widget<TextField>(fields.at(4)).focusNode?.hasFocus, isTrue);
+    expect(tester.widget<InkWell>(submitButton).onTap, isNotNull);
+  }, timeout: const Timeout(Duration(seconds: 15)));
 
   testWidgets('welcome screen auto-continues to the next screen', (
     WidgetTester tester,

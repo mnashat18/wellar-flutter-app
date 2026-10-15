@@ -70,18 +70,25 @@ class _EmployeeRequestsScreenState
               return WellarErrorState(
                 title: Tr.t(lang, 'access_unavailable'),
                 body: Tr.t(lang, 'assigned_requests_unavailable'),
-                onRetry: () => setState(
-                  () => _future = EmployeeRequestService.instance
-                      .fetchAssignedRequests(),
-                ),
+                onRetry: () {
+                  final next = EmployeeRequestService.instance
+                      .fetchAssignedRequests();
+                  setState(() {
+                    _future = next;
+                  });
+                },
               );
             }
             final items = _applyFilter(snap.data ?? const []);
             return RefreshIndicator(
-              onRefresh: () async => setState(
-                () => _future = EmployeeRequestService.instance
-                    .fetchAssignedRequests(),
-              ),
+              onRefresh: () async {
+                final next = EmployeeRequestService.instance
+                    .fetchAssignedRequests();
+                setState(() {
+                  _future = next;
+                });
+                await next;
+              },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
@@ -89,9 +96,9 @@ class _EmployeeRequestsScreenState
                     title: Tr.t(lang, 'assigned_requests_title'),
                     subtitle: 'Current readiness requests for your account',
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   _filters(lang),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   if (items.isEmpty)
                     WellarEmptyState(
                       icon: Icons.assignment_outlined,

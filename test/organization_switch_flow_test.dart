@@ -31,6 +31,30 @@ Future<void> _prepareSession() async {
   OrganizationService.instance.clearActiveWorkspaceContext();
 }
 
+Dio _fakeRefreshClient(List<String> requests) {
+  final dio = Dio();
+  dio.interceptors.add(
+    InterceptorsWrapper(
+      onRequest: (options, handler) {
+        requests.add('${options.method} ${options.path}');
+        handler.resolve(
+          Response<dynamic>(
+            requestOptions: options,
+            statusCode: 200,
+            data: const <String, dynamic>{
+              'data': <String, dynamic>{
+                'access_token': 'refreshed-access',
+                'refresh_token': 'refreshed-refresh',
+              },
+            },
+          ),
+        );
+      },
+    ),
+  );
+  return dio;
+}
+
 Map<String, dynamic> _userMeResponse({
   required String userId,
   required String email,
@@ -111,6 +135,25 @@ Map<String, dynamic> _membership({
   };
 }
 
+WorkspaceMembershipChoice _workspaceChoice({
+  required String id,
+  required String companyId,
+  required String companyName,
+  required String role,
+}) => WorkspaceMembershipChoice(
+  membershipId: id,
+  businessProfileId: companyId,
+  companyName: companyName,
+  memberRole: role,
+  departmentId: null,
+  departmentName: null,
+  businessProfileStatus: 'true',
+  businessPlanCode: 'business',
+  businessBillingStatus: 'active',
+  status: 'active',
+  isCurrent: false,
+);
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -121,6 +164,7 @@ void main() {
 
     tearDown(() async {
       client.interceptors.remove(interceptor);
+      DirectusClient.instance.overrideRefreshClientFactoryForTest(null);
       await Session.instance.clear();
       OrganizationService.instance.clearProfileCache();
       OrganizationService.instance.clearActiveWorkspaceContext();
@@ -137,6 +181,9 @@ void main() {
       );
 
       final requests = <String>[];
+      DirectusClient.instance.overrideRefreshClientFactoryForTest(
+        () => _fakeRefreshClient(requests),
+      );
       interceptor = InterceptorsWrapper(
         onRequest: (options, handler) async {
           requests.add('${options.method} ${options.path}');
@@ -203,6 +250,23 @@ void main() {
                 ),
               );
               return;
+            case '/items/business_profile_members':
+              handler.resolve(
+                Response<dynamic>(
+                  requestOptions: options,
+                  statusCode: 200,
+                  data: const <String, dynamic>{
+                    'data': <dynamic>[
+                      <String, dynamic>{
+                        'id': 'membership-2',
+                        'status': 'active',
+                        'business_profile': 'company-2',
+                      },
+                    ],
+                  },
+                ),
+              );
+              return;
           }
           handler.reject(
             DioException(
@@ -222,6 +286,12 @@ void main() {
       final context = await OrganizationService.instance.syncWorkspaceSession(
         membershipId: 'membership-2',
         trigger: 'test_switch',
+        expectedMembership: _workspaceChoice(
+          id: 'membership-2',
+          companyId: 'company-2',
+          companyName: 'Company Two',
+          role: 'owner',
+        ),
       );
 
       expect(
@@ -230,7 +300,10 @@ void main() {
           'POST /wellar/workspaces/switch',
           'POST /auth/refresh',
           'GET /users/me',
+          'GET /users/me',
           'GET /wellar/workspaces/context',
+          'GET /items/business_profile_members',
+          'GET /wellar/workforce',
         ]),
       );
       expect(context.membershipId, 'membership-2');
@@ -255,7 +328,11 @@ void main() {
       );
 
       final requests = <String>[];
+      DirectusClient.instance.overrideRefreshClientFactoryForTest(
+        () => _fakeRefreshClient(requests),
+      );
       final firstContextGate = Completer<void>();
+      final firstContextStarted = Completer<void>();
       var contextRequestCount = 0;
 
       interceptor = InterceptorsWrapper(
@@ -302,6 +379,9 @@ void main() {
               contextRequestCount++;
               final requestIndex = contextRequestCount;
               if (requestIndex == 1) {
+                if (!firstContextStarted.isCompleted) {
+                  firstContextStarted.complete();
+                }
                 await firstContextGate.future;
               }
               final membershipId =
@@ -353,24 +433,35 @@ void main() {
       final first = OrganizationService.instance.syncWorkspaceSession(
         membershipId: 'membership-1',
         trigger: 'bootstrap',
+        expectedMembership: _workspaceChoice(
+          id: 'membership-1',
+          companyId: 'company-1',
+          companyName: 'Company One',
+          role: 'employee',
+        ),
       );
-      await Future<void>.delayed(Duration.zero);
+      await firstContextStarted.future.timeout(const Duration(seconds: 5));
       final second = OrganizationService.instance.syncWorkspaceSession(
         membershipId: 'membership-2',
         trigger: 'user_switch',
+        expectedMembership: _workspaceChoice(
+          id: 'membership-2',
+          companyId: 'company-2',
+          companyName: 'Company Two',
+          role: 'owner',
+        ),
       );
-      await Future<void>.delayed(const Duration(milliseconds: 10));
       firstContextGate.complete();
 
-      final secondContext = await second;
-      final firstContext = await first;
+      final secondContext = await second.timeout(const Duration(seconds: 10));
+      final firstContext = await first.timeout(const Duration(seconds: 10));
       final cached = await OrganizationService.instance
           .fetchActiveWorkspaceContext();
 
       expect(secondContext.membershipId, 'membership-2');
       expect(firstContext.membershipId, 'membership-1');
       expect(cached?.membershipId, 'membership-2');
-    });
+    }, timeout: const Timeout(Duration(seconds: 15)));
 
     test('failed switch leaves prior context intact', () async {
       await _prepareSession();

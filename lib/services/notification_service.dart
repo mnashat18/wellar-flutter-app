@@ -1,9 +1,23 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
+import '../utils/safe_debug_log.dart';
 import '../models/notification_item.dart';
 import '../state/session.dart';
 import 'directus_client.dart';
 import 'organization_service.dart';
+
+enum NotificationReadResult { markedRead, alreadyGone }
+
+class NotificationMarkAllReadResult {
+  final Set<String> succeededIds;
+  final Set<String> skippedIds;
+  final Set<String> failedIds;
+
+  const NotificationMarkAllReadResult({
+    required this.succeededIds,
+    required this.skippedIds,
+    required this.failedIds,
+  });
+}
 
 class NotificationService {
   NotificationService._();
@@ -18,7 +32,7 @@ class NotificationService {
     final trace = OrganizationService.instance.activeSwitchTrace ?? 'none';
     final profileId = workspace?.businessProfileId.trim() ?? '';
     final cappedLimit = limit.clamp(1, 50).toInt();
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_REQUEST] feature=notifications operation=fetch_notifications method=GET endpoint_or_collection=/items/notifications membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=$profileId department=${workspace?.departmentId?.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} context_source=${OrganizationService.instance.activeWorkspaceContextSource} workspace_revision=${OrganizationService.instance.workspaceRevision} filter_summary=business_profile=$profileId;limit=$cappedLimit started=true trace=$trace',
     );
     final records = await _fetchNotificationRecords(
@@ -29,7 +43,7 @@ class NotificationService {
         .map(NotificationItem.fromJson)
         .map(_normalizeNotification)
         .toList();
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_RESPONSE] feature=notifications operation=fetch_notifications http_status=200 result_count=${notifications.length} duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=$profileId workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true returned_business_profile_ids=${records.map((row) => row['business_profile']?.toString().trim() ?? '').where((v) => v.isNotEmpty).toSet().toList()} returned_membership_ids=${records.map((row) => row['target_member']?.toString().trim() ?? '').where((v) => v.isNotEmpty).toSet().toList()} empty_result=${notifications.isEmpty} trace=$trace',
     );
     return notifications;
@@ -64,9 +78,7 @@ class NotificationService {
       return data
           .whereType<Map>()
           .map(
-            (row) => row.map(
-              (key, value) => MapEntry(key.toString(), value),
-            ),
+            (row) => row.map((key, value) => MapEntry(key.toString(), value)),
           )
           .toList(growable: false);
     } on DioException catch (error) {
@@ -105,10 +117,12 @@ class NotificationService {
       if (rowId.isEmpty || rowId == normalizedNotificationId) continue;
 
       final rowType = row['type']?.toString().trim().toLowerCase() ?? '';
-      final rowLinkType = row['link_type']?.toString().trim().toLowerCase() ?? '';
+      final rowLinkType =
+          row['link_type']?.toString().trim().toLowerCase() ?? '';
       final rowLinkId = row['link_id']?.toString().trim() ?? '';
       final rowStatus = row['status']?.toString().trim().toLowerCase() ?? '';
-      final rowBusinessProfile = row['business_profile']?.toString().trim() ?? '';
+      final rowBusinessProfile =
+          row['business_profile']?.toString().trim() ?? '';
 
       if (rowType != 'scan_request' ||
           rowLinkType != 'scan_request' ||
@@ -129,11 +143,12 @@ class NotificationService {
     }
   }
 
-  Future<void> markRead(String id) async {
-    if (id.startsWith('local:')) return;
-    if (id.startsWith('alert:')) return;
+  Future<NotificationReadResult> markRead(String id) async {
+    if (id.startsWith('local:') || id.startsWith('alert:')) {
+      return NotificationReadResult.alreadyGone;
+    }
     final now = DateTime.now().toUtc().toIso8601String();
-    debugPrint(
+    safeDebugLog(
       '[NOTIFICATION_MARK_READ_START] has_id=${id.trim().isNotEmpty}',
     );
     try {
@@ -141,20 +156,38 @@ class NotificationService {
         '/items/notifications/$id',
         data: {'status': 'read', 'read_at': now},
       );
-      debugPrint('[NOTIFICATION_MARK_READ_SUCCESS] success=true');
+      safeDebugLog('[NOTIFICATION_MARK_READ_SUCCESS] success=true');
+      return NotificationReadResult.markedRead;
     } on DioException catch (error) {
       final status = error.response?.statusCode ?? 0;
-      debugPrint(
+      safeDebugLog(
         '[NOTIFICATIONS] mark_read status=$status error_type=${error.type}',
       );
-      if (status == 403 || status == 404 || status == 405) return;
+      if (status == 403 || status == 404 || status == 405) {
+        return NotificationReadResult.alreadyGone;
+      }
       rethrow;
     }
   }
 
-  Future<void> markAllRead() async {
+  Future<NotificationMarkAllReadResult> markAllRead(
+    List<NotificationItem> items,
+  ) async {
+    final ids = items.map((item) => item.id).toSet();
+    final skippedIds = ids
+        .where((id) => id.startsWith('local:') || id.startsWith('alert:'))
+        .toSet();
+    final eligibleIds = ids.difference(skippedIds);
     final userId = Session.instance.userId;
-    if (userId == null || userId.isEmpty) return;
+    if (userId == null || userId.isEmpty) {
+      return NotificationMarkAllReadResult(
+        succeededIds: const {},
+        skippedIds: skippedIds,
+        failedIds: eligibleIds,
+      );
+    }
+
+    var shouldUseFallback = false;
     try {
       await _client.patch(
         '/items/notifications',
@@ -167,18 +200,52 @@ class NotificationService {
           'read_at': DateTime.now().toUtc().toIso8601String(),
         },
       );
-      debugPrint('[NOTIFICATIONS] mark_read status=200 body=bulk');
+      safeDebugLog('[NOTIFICATIONS] mark_read status=200 body=bulk');
     } on DioException catch (error) {
       final status = error.response?.statusCode ?? 0;
-      debugPrint(
+      safeDebugLog(
         '[NOTIFICATIONS] mark_read status=$status error_type=${error.type}',
       );
-      if (status != 403 && status != 405) {
-        rethrow;
+      if (status == 403 || status == 404 || status == 405) {
+        shouldUseFallback = true;
+      } else {
+        return NotificationMarkAllReadResult(
+          succeededIds: const {},
+          skippedIds: skippedIds,
+          failedIds: eligibleIds,
+        );
       }
     }
 
-    await _ensureAllRead();
+    if (!shouldUseFallback) {
+      return NotificationMarkAllReadResult(
+        succeededIds: eligibleIds,
+        skippedIds: skippedIds,
+        failedIds: const {},
+      );
+    }
+
+    final succeededIds = <String>{};
+    final failedIds = <String>{};
+    for (final item in items) {
+      if (skippedIds.contains(item.id)) continue;
+      try {
+        final result = await markRead(item.id);
+        if (result == NotificationReadResult.markedRead) {
+          succeededIds.add(item.id);
+        } else {
+          skippedIds.add(item.id);
+        }
+      } catch (_) {
+        failedIds.add(item.id);
+      }
+    }
+
+    return NotificationMarkAllReadResult(
+      succeededIds: succeededIds,
+      skippedIds: skippedIds,
+      failedIds: failedIds,
+    );
   }
 
   Future<bool> hasNotificationForLinkId(String linkId) async {
@@ -214,14 +281,15 @@ class NotificationService {
   }) async {
     final targetUserId = userId ?? Session.instance.userId;
     if (targetUserId == null || targetUserId.isEmpty) return false;
-    final workspace = await OrganizationService.instance.fetchActiveWorkspaceContext();
+    final workspace = await OrganizationService.instance
+        .fetchActiveWorkspaceContext();
     final trace = OrganizationService.instance.activeSwitchTrace ?? 'none';
     final profileId = businessProfileId?.trim().isNotEmpty == true
         ? businessProfileId!.trim()
         : workspace?.businessProfileId.trim() ?? '';
     if (profileId.isEmpty) return false;
     try {
-      debugPrint(
+      safeDebugLog(
         '[SCOPED_DATA_REQUEST] feature=notifications operation=create_notification method=POST endpoint_or_collection=/items/notifications membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=$profileId department=${workspace?.departmentId?.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} context_source=${OrganizationService.instance.activeWorkspaceContextSource} workspace_revision=${OrganizationService.instance.workspaceRevision} filter_summary=business_profile=$profileId;status=$status;type=$type started=true trace=$trace',
       );
       await _client.post(
@@ -239,30 +307,20 @@ class NotificationService {
           'read_at': null,
         },
       );
-      debugPrint(
+      safeDebugLog(
         '[SCOPED_DATA_RESPONSE] feature=notifications operation=create_notification http_status=200 result_count=1 duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=$profileId workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true returned_business_profile_ids=[$profileId] returned_membership_ids=[] empty_result=false trace=$trace',
       );
       return true;
     } on DioException catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[NOTIFICATIONS_CREATE_FAILED] status=${e.response?.statusCode} error_type=${e.type}',
       );
       return false;
     } catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[NOTIFICATIONS_CREATE_FAILED] status=- error_type=${e.runtimeType}',
       );
       return false;
-    }
-  }
-
-  Future<void> _ensureAllRead() async {
-    final items = await fetchNotifications(limit: 200);
-    for (final item in items) {
-      if (!item.isUnread) continue;
-      try {
-        await markRead(item.id);
-      } catch (_) {}
     }
   }
 

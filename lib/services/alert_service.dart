@@ -1,5 +1,5 @@
+import '../utils/safe_debug_log.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../models/alert_item.dart';
 import '../state/session.dart';
@@ -64,16 +64,16 @@ class AlertService {
     } else if (role == 'manager' && departmentId.isNotEmpty) {
       query['filter[department][_eq]'] = departmentId;
     }
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_REQUEST] feature=notifications operation=alerts_fetch method=GET endpoint_or_collection=/items/alerts membership_id=$membershipId business_profile=$profileId department=$departmentId membership_role=$role context_source=${OrganizationService.instance.activeWorkspaceContextSource} workspace_revision=${OrganizationService.instance.workspaceRevision} filter_summary=business_profile=$profileId;department=$departmentId;limit=$limit started=true trace=$trace',
     );
 
-    debugPrint('[ALERTS_CONTEXT] business_profile=$profileId');
-    debugPrint('[ALERTS_CONTEXT] membership_id=$membershipId');
-    debugPrint('[ALERTS_CONTEXT] role=$role');
-    debugPrint('[ALERTS] role=$role');
-    debugPrint('[ALERTS] fields=${_fields.join(',')}');
-    debugPrint('[ALERTS] query=$query');
+    safeDebugLog('[ALERTS_CONTEXT] business_profile=$profileId');
+    safeDebugLog('[ALERTS_CONTEXT] membership_id=$membershipId');
+    safeDebugLog('[ALERTS_CONTEXT] role=$role');
+    safeDebugLog('[ALERTS] role=$role');
+    safeDebugLog('[ALERTS] fields=${_fields.join(',')}');
+    safeDebugLog('[ALERTS] query=$query');
     try {
       final response = await _client.get(
         '/items/alerts',
@@ -83,20 +83,24 @@ class AlertService {
       final rows = data is List
           ? data.whereType<Map<String, dynamic>>().toList()
           : <Map<String, dynamic>>[];
-      debugPrint(
+      safeDebugLog(
         '[ALERTS] status=${response.statusCode} body_count=${rows.length} fields=${_fields.join(",")}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCOPED_DATA_RESPONSE] feature=notifications operation=alerts_fetch http_status=${response.statusCode ?? 0} result_count=${rows.length} duration_ms=0 membership_id=$membershipId business_profile=$profileId workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true returned_business_profile_ids=${rows.map((row) => row['business_profile']?.toString().trim() ?? '').where((v) => v.isNotEmpty).toSet().toList()} returned_membership_ids=${rows.map((row) => row['target_member']?.toString().trim() ?? '').where((v) => v.isNotEmpty).toSet().toList()} empty_result=${rows.isEmpty} trace=$trace',
       );
       return rows.map(AlertItem.fromJson).toList();
     } on DioException catch (e) {
       final status = e.response?.statusCode ?? 0;
-      debugPrint(
+      safeDebugLog(
         '[ALERTS] status=$status body=${e.response?.data} fields=${_fields.join(",")}',
       );
-      debugPrint(
-        '[SCOPED_DATA_ERROR] feature=notifications operation=alerts_fetch http_status=$status error_type=${e.type} failure_code=${status == 403 ? 'scoped_data_403' : status == 401 ? 'scoped_data_401' : 'scoped_data_network_error'} duration_ms=0 membership_id=$membershipId business_profile=$profileId membership_role=$role workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true trace=$trace',
+      safeDebugLog(
+        '[SCOPED_DATA_ERROR] feature=notifications operation=alerts_fetch http_status=$status error_type=${e.type} failure_code=${status == 403
+            ? 'scoped_data_403'
+            : status == 401
+            ? 'scoped_data_401'
+            : 'scoped_data_network_error'} duration_ms=0 membership_id=$membershipId business_profile=$profileId membership_role=$role workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true trace=$trace',
       );
       if (status == 403 || status == 404 || status == 400) return const [];
       rethrow;

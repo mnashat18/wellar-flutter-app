@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../i18n/tr.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pdf/pdf.dart';
@@ -161,17 +162,20 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
                   const SizedBox(height: 80),
                   StatusCard(
                     title: 'Failed to load history',
-                    message: error.toString(),
+                    message: Tr.localized(context, 'generic_load_error'),
                     icon: Icons.warning_amber_rounded,
                     iconColor: AppColors.highRisk,
                     actionText: 'Retry',
-                    onAction: () {},
+                    onAction: () => ref.invalidate(historyProvider),
                   ),
                 ],
               ),
               data: (history) => RefreshIndicator(
                 color: AppColors.primarySoft,
-                onRefresh: () async {},
+                onRefresh: () async {
+                  ref.invalidate(historyProvider);
+                  await ref.read(historyProvider.future);
+                },
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
@@ -480,11 +484,11 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
           backgroundColor: AppColors.stable,
         ),
       );
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Failed to request export: $e'),
+          content: Text(Tr.localized(context, 'generic_action_error')),
           backgroundColor: AppColors.highRisk,
         ),
       );
@@ -518,18 +522,12 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
     } on UnauthenticatedException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: AppColors.highRisk,
-        ),
+        SnackBar(content: Text(e.message), backgroundColor: AppColors.highRisk),
       );
     } on ReportFileOpenException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.message),
-          backgroundColor: AppColors.highRisk,
-        ),
+        SnackBar(content: Text(e.message), backgroundColor: AppColors.highRisk),
       );
     } catch (_) {
       if (!mounted) return;

@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../i18n/tr.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/request_item.dart';
@@ -202,10 +203,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           const AnimatedSpaceBackground(),
           SafeArea(
             child: hasError
-                ? _buildErrorState(
-                    historyAsync,
-                    exportsAsync,
-                  )
+                ? _buildErrorState(historyAsync, exportsAsync)
                 : isLoading
                 ? const SkeletonList()
                 : FadeTransition(
@@ -238,10 +236,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     );
   }
 
-  Widget _buildErrorState(
-    AsyncValue a,
-    AsyncValue b,
-  ) {
+  Widget _buildErrorState(AsyncValue a, AsyncValue b) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
@@ -249,14 +244,14 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         const SizedBox(height: 80),
         StatusCard(
           title: 'Analytics unavailable',
-          message:
-              a.error?.toString() ??
-              b.error?.toString() ??
-              'Unknown error',
+          message: Tr.localized(context, 'generic_load_error'),
           icon: Icons.warning_amber_rounded,
           iconColor: AppColors.highRisk,
           actionText: 'Retry',
-          onAction: () {},
+          onAction: () {
+            ref.invalidate(historyProvider);
+            ref.invalidate(exportsProvider);
+          },
         ),
       ],
     );
@@ -660,9 +655,9 @@ class _PerformanceHero extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           Expanded(
-              child: Text(
-                'Performance Index blends departure-readiness confidence '
-                'and supervisor response quality.',
+            child: Text(
+              'Performance Index blends departure-readiness confidence '
+              'and supervisor response quality.',
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,

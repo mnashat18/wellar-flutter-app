@@ -1,5 +1,5 @@
+import '../utils/safe_debug_log.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../models/request_item.dart';
 import '../models/user_summary.dart';
@@ -7,6 +7,7 @@ import '../state/session.dart';
 import 'directus_client.dart';
 import 'member_identity_service.dart';
 import 'organization_service.dart';
+import 'wellar_workforce_service.dart';
 
 class RequestPermissionException implements Exception {
   final String message;
@@ -14,6 +15,14 @@ class RequestPermissionException implements Exception {
 
   @override
   String toString() => message;
+}
+
+enum ScanRequestFetchFailureKind { access, session, server, network, unknown }
+
+class ScanRequestFetchException implements Exception {
+  final ScanRequestFetchFailureKind kind;
+
+  const ScanRequestFetchException(this.kind);
 }
 
 class RequestRoleUnavailableException implements Exception {
@@ -143,12 +152,14 @@ class RequestService {
         .fetchActiveWorkspaceContext();
     if (workspace == null) return const [];
     if (workspace.memberRole == 'user') return const [];
-    debugPrint(
+    safeDebugLog(
       '[ROLE_DEBUG] has_current_user=${workspace.currentUserId.trim().isNotEmpty}',
     );
-    debugPrint('[ROLE_DEBUG] has_incoming_user=${normalizedUserId.isNotEmpty}');
-    debugPrint('[ROLE_DEBUG] directusRoleName=${workspace.directusRoleName}');
-    debugPrint(
+    safeDebugLog(
+      '[ROLE_DEBUG] has_incoming_user=${normalizedUserId.isNotEmpty}',
+    );
+    safeDebugLog('[ROLE_DEBUG] directusRoleName=${workspace.directusRoleName}');
+    safeDebugLog(
       '[ROLE_DEBUG] finalEffectiveRole=${workspace.finalEffectiveRole}',
     );
     final activeProfileId = workspace.businessProfileId.trim();
@@ -162,13 +173,13 @@ class RequestService {
     if (statusFilter != null && statusFilter.trim().isNotEmpty) {
       query['filter[status][_eq]'] = statusFilter.trim();
     }
-    debugPrint(
+    safeDebugLog(
       '[SCAN_REQUESTS] canonical_assignee_field=target_member has_membership_id=${membershipId.isNotEmpty} scoped_profile=${activeProfileId.isNotEmpty}',
     );
-    debugPrint(
+    safeDebugLog(
       '[MOBILE_REQUESTS] has_member_id=${membershipId.isNotEmpty} scoped_profile=${activeProfileId.isNotEmpty}',
     );
-    debugPrint(
+    safeDebugLog(
       '[MOBILE_REQUESTS] scoped_profile=true scoped_member=true has_status_filter=${statusFilter != null && statusFilter.trim().isNotEmpty}',
     );
     try {
@@ -181,7 +192,7 @@ class RequestService {
       // business_profile+target_member query is rejected, retry ONCE with
       // target_member only. Never drop target_member — a workspace-wide
       // fallback would return other members' requests to an employee.
-      debugPrint('[SCAN_REQUESTS] fallback=target_member_only');
+      safeDebugLog('[SCAN_REQUESTS] fallback=target_member_only');
       final targetOnly = <String, dynamic>{
         'filter[target_member][_eq]': membershipId,
         if (statusFilter != null && statusFilter.trim().isNotEmpty)
@@ -295,7 +306,7 @@ class RequestService {
     );
     _cachedFieldSupport = support;
     _cachedFieldSupportWorkspaceSignature = workspaceSignature;
-    debugPrint(
+    safeDebugLog(
       '[SCAN_REQUESTS] field_support required_min_readiness=${support.requiredMinReadiness.name} note=${support.note.name} note_field=${support.noteFieldName}',
     );
     return support;
@@ -402,17 +413,19 @@ class RequestService {
           createdRequest?.businessProfileId?.trim().isNotEmpty == true;
       final hasTargetMember =
           createdRequest?.requestedForId?.trim().isNotEmpty == true;
-      debugPrint(
+      safeDebugLog(
         '[SCAN_REQUEST_CREATE_RESULT] has_request_id=${createdRequestId.isNotEmpty} has_business_profile=$hasBusinessProfile has_target_member=$hasTargetMember status=${response.statusCode ?? 0}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_REQUEST_POST_VERIFY] request_id_present=${createdRequestId.isNotEmpty} readable_after_create=${createdRequest != null} active_profile_match=${createdRequest?.businessProfileId?.trim() == normalizedBusinessProfileId}',
       );
-      debugPrint('[SCAN_REQUEST_CREATED] route=wellar_endpoint status=${response.statusCode}');
+      safeDebugLog(
+        '[SCAN_REQUEST_CREATED] route=wellar_endpoint status=${response.statusCode}',
+      );
       return createdRequest;
     } on DioException catch (e, st) {
       final status = e.response?.statusCode ?? 0;
-      debugPrint(
+      safeDebugLog(
         '[SCAN_REQUEST_CREATE_FAILED] method=POST endpoint=/wellar/scan-requests status=$status has_target_membership=${normalizedTargetMemberId.isNotEmpty} has_business_profile=${normalizedBusinessProfileId.isNotEmpty} error_code=${_failureCodeForStatus(status)} safe_message=${_extractMessage(e)}',
       );
       await _logError(
@@ -461,7 +474,20 @@ class RequestService {
         e: e,
         stackTrace: st,
       );
-      return null;
+      final status = e.response?.statusCode;
+      final ScanRequestFetchFailureKind kind;
+      if (status == 401) {
+        kind = ScanRequestFetchFailureKind.session;
+      } else if (status == 403) {
+        kind = ScanRequestFetchFailureKind.access;
+      } else if (status != null && status >= 500) {
+        kind = ScanRequestFetchFailureKind.server;
+      } else if (_isNetworkException(e)) {
+        kind = ScanRequestFetchFailureKind.network;
+      } else {
+        kind = ScanRequestFetchFailureKind.unknown;
+      }
+      throw ScanRequestFetchException(kind);
     }
   }
 
@@ -534,7 +560,7 @@ class RequestService {
         path: '/items/scan_requests/$requestId',
         payload: payload,
       );
-      debugPrint(
+      safeDebugLog(
         '[REQUEST_SCAN_FLOW] completed_scan update payload_keys=${payload.keys.toList()} has_scan_id=${scanId?.trim().isNotEmpty == true}',
       );
       await _client.patch('/items/scan_requests/$requestId', data: payload);
@@ -651,7 +677,7 @@ class RequestService {
       'fields': _scanRequestFieldAttempts.first['fields'],
       ...query,
     };
-    debugPrint(
+    safeDebugLog(
       '[SCAN_REQUESTS_SCHEMA_SAFE_FIELDS] fields=$_scanRequestSafeFields sort=${qp['sort']}',
     );
     try {
@@ -669,7 +695,7 @@ class RequestService {
       try {
         list = await _hydrateScanRequests(rows);
       } catch (e) {
-        debugPrint('[SCAN_REQUESTS_PARSE_ERROR] $e');
+        safeDebugLog('[SCAN_REQUESTS_PARSE_ERROR] $e');
         throw const RequestPermissionException(
           'Unable to load scan requests. Try again.',
         );
@@ -684,21 +710,21 @@ class RequestService {
         _logStaleResult();
         return const [];
       }
-      debugPrint(
+      safeDebugLog(
         '[SCAN_REQUESTS_DEBUG] endpoint=/items/scan_requests fields_present=${qp['fields'] != null} filter_keys=${query.keys.toList()} status=${response.statusCode} body_count=${list.length} effectiveRole=${workspace?.finalEffectiveRole} scoped_profile=${workspace?.businessProfileId.trim().isNotEmpty == true}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_REQUESTS_QUERY_SUCCESS] status=${response.statusCode} count=${list.length} sort=${qp['sort']} fields=${qp['fields']}',
       );
-      debugPrint(
+      safeDebugLog(
         '[MOBILE_REQUESTS] status=${response.statusCode} body_count=${list.length}',
       );
       if (list.isEmpty) {
-        debugPrint('[MOBILE_REQUESTS] empty');
+        safeDebugLog('[MOBILE_REQUESTS] empty');
       } else {
-        debugPrint('[MOBILE_REQUESTS] success');
+        safeDebugLog('[MOBILE_REQUESTS] success');
       }
-      debugPrint('[SCAN_REQUESTS] response count=${list.length}');
+      safeDebugLog('[SCAN_REQUESTS] response count=${list.length}');
       return list;
     } on DioException catch (e, st) {
       await _logError(
@@ -708,18 +734,18 @@ class RequestService {
         query: qp,
         stackTrace: st,
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_REQUESTS_QUERY_FAILED] status=${e.response?.statusCode} query_keys=${qp.keys.toList()} error_type=${e.type}',
       );
       final status = e.response?.statusCode ?? 0;
       if (status == 403) {
-        debugPrint('[MOBILE_REQUESTS] error=403');
+        safeDebugLog('[MOBILE_REQUESTS] error=403');
         throw const RequestPermissionException(
           'Assigned requests are unavailable right now.',
         );
       }
       if (status == 401) {
-        debugPrint('[MOBILE_REQUESTS] error=401');
+        safeDebugLog('[MOBILE_REQUESTS] error=401');
         throw const RequestPermissionException(
           'Session expired. Please login.',
         );
@@ -825,7 +851,7 @@ class RequestService {
           query: currentQuery,
         );
         if (fields != (query['fields']?.toString() ?? '')) {
-          debugPrint(
+          safeDebugLog(
             '[SCAN_REQUESTS] trying_query fields=$fields sort=${currentQuery['sort']}',
           );
         }
@@ -850,7 +876,7 @@ class RequestService {
           stackTrace: st,
         );
         final status = e.response?.statusCode ?? 0;
-        debugPrint(
+        safeDebugLog(
           '[SCAN_REQUESTS] fields_failed status=$status fields_present=${fields != null} error_type=${e.type}',
         );
         if (status != 400 && status != 403 && status != 422) rethrow;
@@ -960,7 +986,7 @@ class RequestService {
           stackTrace: st,
         );
         final status = e.response?.statusCode ?? 0;
-        debugPrint(
+        safeDebugLog(
           '[SCAN_REQUESTS] request_by_id_fields_failed status=$status fields_present=${fields.toString().isNotEmpty} error_type=${e.type}',
         );
         if (status != 400 && status != 403 && status != 422) rethrow;
@@ -1044,6 +1070,36 @@ class RequestService {
         .fetchActiveWorkspaceContext();
     final businessProfileId = workspace?.businessProfileId.trim() ?? '';
     if (businessProfileId.isNotEmpty) {
+      // Employees already receive the request fields allowed by their
+      // scan_requests policy. The workforce endpoint is not available to them,
+      // and enrichment is optional for rendering an assigned request.
+      if (workspace?.memberRole.trim().toLowerCase() == 'employee') {
+        safeDebugLog(
+          '[REQUEST_ENRICHMENT] role=employee skipped=true reason=workforce_not_available',
+        );
+        return const {};
+      }
+
+      final workforce = await WellarWorkforceService.instance
+          .fetchWorkforceFromWellar();
+      if (workforce.isSuccessful) {
+        if (_isWorkspaceStale(startRevision, startSignature)) {
+          _logStaleResult();
+          return const {};
+        }
+        return {
+          for (final row in workforce.memberRows)
+            if (ids.contains(_extractId(row['member_id'] ?? row['id'])))
+              _extractId(row['member_id'] ?? row['id']): _requestMemberRow(row),
+        };
+      }
+      if (!workforce.networkError) {
+        safeDebugLog(
+          '[REQUEST_ENRICHMENT] workforce_failed status=${workforce.httpStatus}',
+        );
+        throw workforce.asFailure();
+      }
+
       try {
         final startRevision = OrganizationService.instance.workspaceRevision;
         final startSignature = OrganizationService.instance.workspaceSignature;
@@ -1064,59 +1120,45 @@ class RequestService {
               row['id'].toString().trim(): row,
         };
       } on DioException catch (e) {
-        debugPrint(
+        safeDebugLog(
           '[MemberDisplay] expanded member lookup failed status=${e.response?.statusCode} error_type=${e.type} required_permissions=business_profile_members.read departments.read member_identity_endpoint',
         );
         return const {};
       }
     }
 
-    final query = <String, dynamic>{
-      'limit': ids.length.clamp(1, 500),
-      'fields': MemberIdentityService.memberFields,
-      'filter[id][_in]': ids.join(','),
-    };
+    return const {};
+  }
 
-    try {
-      await _logRequest(
-        method: 'GET',
-        path: '/items/business_profile_members',
-        query: query,
-      );
-      final response = await _client.get(
-        '/items/business_profile_members',
-        queryParameters: query,
-      );
-      await _logResponse(
-        method: 'GET',
-        path: '/items/business_profile_members',
-        status: response.statusCode,
-        body: response.data,
-      );
-      final data = response.data['data'];
-      if (data is! List) return const {};
-      if (_isWorkspaceStale(startRevision, startSignature)) {
-        _logStaleResult();
-        return const {};
-      }
-      return {
-        for (final row in data.whereType<Map<String, dynamic>>())
-          if ((row['id']?.toString().trim() ?? '').isNotEmpty)
-            row['id'].toString().trim(): row,
-      };
-    } on DioException catch (e, st) {
-      await _logError(
-        method: 'GET',
-        path: '/items/business_profile_members',
-        e: e,
-        query: query,
-        stackTrace: st,
-      );
-      debugPrint(
-        '[MemberDisplay] member relation lookup failed status=${e.response?.statusCode} error_type=${e.type} required_permissions=business_profile_members.read departments.read member_identity_endpoint',
-      );
-      return const {};
-    }
+  bool _isNetworkException(DioException error) =>
+      error.response == null &&
+      (error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.sendTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.connectionError);
+
+  Map<String, dynamic> _requestMemberRow(Map<String, dynamic> row) {
+    final userId = row['user_id']?.toString() ?? '';
+    final departmentId = row['department_id']?.toString() ?? '';
+    final departmentName = row['department_name']?.toString() ?? '';
+    return {
+      'id': row['member_id'] ?? row['id'],
+      'member_role': row['member_role'],
+      'status': row['status'],
+      'department': departmentId.isEmpty
+          ? null
+          : {'id': departmentId, 'name': departmentName},
+      'user': userId.isEmpty
+          ? null
+          : {
+              'id': userId,
+              'email': row['email'],
+              'full_name': row['display_name'],
+            },
+      'last_scan_at': row['last_scan_at'],
+      'last_readiness_score': row['last_readiness_score'],
+      'last_risk_level': row['last_risk_level'],
+    };
   }
 
   bool _isCancelled(Map<String, dynamic> row) {
@@ -1180,13 +1222,13 @@ class RequestService {
     final feature = _scopedFeature(path);
     final operation = _scopedOperation(method, path);
     final filterSummary = _scopedFilterSummary(query);
-    debugPrint(
+    safeDebugLog(
       '[REQUESTS_API_REQ] method=$method path=$logPath has_query=${query != null && query.isNotEmpty} fields_present=${fields != null} payload_keys=${payload?.keys.toList()} effectiveRole=${workspace?.finalEffectiveRole} directusRole=${workspace?.directusRoleName} membershipRole=${workspace?.memberRole} scoped_profile=$scopedProfile scoped_department=$scopedDepartment',
     );
-    debugPrint(
+    safeDebugLog(
       '[API_REQ] method=$method path=$logPath query_keys=${query?.keys.toList()} payload_keys=${payload?.keys.toList()} has_active_member=$hasActiveMember active_member_role=${workspace?.memberRole} directus_role=${workspace?.directusRoleName} effective_role=${workspace?.finalEffectiveRole} scoped_profile=$scopedProfile',
     );
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_REQUEST] feature=$feature operation=$operation method=$method endpoint_or_collection=$logPath membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${workspace?.businessProfileId.trim() ?? ''} department=${workspace?.departmentId?.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} context_source=${OrganizationService.instance.activeWorkspaceContextSource} workspace_revision=${OrganizationService.instance.workspaceRevision} filter_summary=$filterSummary started=true trace=$trace',
     );
   }
@@ -1209,13 +1251,13 @@ class RequestService {
     final operation = _scopedOperation(method, path);
     final resultCount = _responseCount(body);
     final ids = _responseIds(body);
-    debugPrint(
+    safeDebugLog(
       '[REQUESTS_API_RES] method=$method path=$logPath status=$status body_type=${body.runtimeType} effectiveRole=${workspace?.finalEffectiveRole} directusRole=${workspace?.directusRoleName} membershipRole=${workspace?.memberRole} scoped_profile=$scopedProfile scoped_department=$scopedDepartment',
     );
-    debugPrint(
+    safeDebugLog(
       '[API_RES] method=$method path=$logPath status=$status body_type=${body.runtimeType} has_active_member=$hasActiveMember active_member_role=${workspace?.memberRole} directus_role=${workspace?.directusRoleName} effective_role=${workspace?.finalEffectiveRole} scoped_profile=$scopedProfile',
     );
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_RESPONSE] feature=$feature operation=$operation http_status=$status result_count=$resultCount duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${workspace?.businessProfileId.trim() ?? ''} workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true returned_business_profile_ids=${ids.businessProfileIds} returned_membership_ids=${ids.membershipIds} empty_result=${resultCount == 0} trace=$trace',
     );
   }
@@ -1240,26 +1282,26 @@ class RequestService {
     final operation = _scopedOperation(method, path);
     final filterSummary = _scopedFilterSummary(query);
     final failureCode = _failureCodeForStatus(e.response?.statusCode ?? 0);
-    debugPrint(
+    safeDebugLog(
       '[REQUESTS_API_ERR] method=$method path=$logPath status=${e.response?.statusCode} error_type=${e.type} has_query=${query != null && query.isNotEmpty} query_keys=${query?.keys.toList()} stack_present=${stackTrace != null} effectiveRole=${workspace?.finalEffectiveRole} directusRole=${workspace?.directusRoleName} membershipRole=${workspace?.memberRole} scoped_profile=$scopedProfile scoped_department=$scopedDepartment',
     );
-    debugPrint(
+    safeDebugLog(
       '[API_ERR] method=$method path=$logPath query_keys=${query?.keys.toList()} status=${e.response?.statusCode} error_type=${e.type} has_active_member=$hasActiveMember active_member_role=${workspace?.memberRole} directus_role=${workspace?.directusRoleName} effective_role=${workspace?.finalEffectiveRole} selected_shell=$selectedShell scoped_profile=$scopedProfile',
     );
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_ERROR] feature=$feature operation=$operation http_status=${e.response?.statusCode ?? 0} error_type=${e.type} failure_code=$failureCode duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${workspace?.businessProfileId.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true trace=$trace',
     );
     if (filterSummary.isNotEmpty) {
-      debugPrint(
+      safeDebugLog(
         '[SCOPED_DATA_REQUEST] feature=$feature operation=$operation method=$method endpoint_or_collection=$logPath membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${workspace?.businessProfileId.trim() ?? ''} department=${workspace?.departmentId?.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} context_source=${OrganizationService.instance.activeWorkspaceContextSource} workspace_revision=${OrganizationService.instance.workspaceRevision} filter_summary=$filterSummary started=false trace=$trace',
       );
     }
     if (path == '/items/scan_requests') {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_REQUESTS_DEBUG] endpoint=$logPath query_keys=${query?.keys.toList()} status=${e.response?.statusCode} error_type=${e.type} has_active_member=$hasActiveMember activeMemberRole=${workspace?.memberRole} directusRole=${workspace?.directusRoleName} effectiveRole=${workspace?.finalEffectiveRole} scoped_profile=$scopedProfile',
       );
       if ((e.response?.statusCode ?? 0) == 403) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_REQUESTS_DEBUG] permission_hint collection=scan_requests requested_fields_present=${query?['fields'] != null} missing_permissions_candidates=scan_requests.read,business_profile_members.read,departments.read,member_identity_endpoint',
         );
       }
@@ -1294,7 +1336,7 @@ class RequestService {
   }
 
   void _logStaleResult() {
-    debugPrint(
+    safeDebugLog(
       '[WORKSPACE_GUARD] stale_result_ignored=true service=RequestService',
     );
   }

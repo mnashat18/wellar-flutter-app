@@ -1,0 +1,26 @@
+[
+  {
+    "path": "lib/config/app_config.dart",
+    "sha256": "3fbc3b9f9a3535e260b2dd4623177371fe9964aded2f4f0828f19337973bbae1"
+  },
+  {
+    "path": "lib/services/wellar_v2_client.dart",
+    "sha256": "5b8459fc44b77d458b0ba3d684c2c98ac9eb0903de689c3a0b50414ec193cd7a"
+  },
+  {
+    "path": "lib/screens/scan_flow_impl_normalized.dart",
+    "sha256": "f500f27a8fc333da259e9c6ed8e62983c382da7bce3dbc969479d0498bde7807"
+  },
+  {
+    "path": "lib/screens/wellar_v2_processing_screen.dart",
+    "sha256": "7e1804bc505608773195bbd6bc4e9b5613f1a8a2910e1fcb594db54554559c8d"
+  },
+  {
+    "path": "lib/screens/wellar_v2_result_screen.dart",
+    "sha256": "0174424953f4754ffc43d3bd7ffc862de6b98986fae2fe48948dd4d4b1868eed"
+  },
+  {
+    "path": "lib/models/wellar_v2_result.dart",
+    "sha256": "e86be133bfa4fe69b8f31b89849349d83b7037750d5699df5d60c2ce756df39e"
+  }
+]

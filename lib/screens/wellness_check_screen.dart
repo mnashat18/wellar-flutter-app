@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../utils/page_transition.dart';
+import '../utils/safe_debug_log.dart';
 import 'scan/scan_premium_components.dart';
 import 'scan_flow_impl_normalized.dart';
 
@@ -41,21 +42,24 @@ class WellnessCheckScreen extends StatelessWidget {
             const _ModuleCard(
               icon: Icons.face_retouching_natural_outlined,
               title: '1. Camera check',
-              description: 'Keep your face centered while we record a short clip.',
+              description:
+                  'Keep your face centered while we record a short clip.',
               accent: ScanTheme.primaryBlue,
             ),
             const SizedBox(height: 12),
             const _ModuleCard(
               icon: Icons.graphic_eq_rounded,
               title: '2. Voice check',
-              description: 'Speak clearly so we can review voice clarity and signal quality.',
+              description:
+                  'Speak clearly so we can review voice clarity and signal quality.',
               accent: ScanTheme.cyan,
             ),
             const SizedBox(height: 12),
             const _ModuleCard(
               icon: Icons.grid_view_rounded,
               title: '3. Focus task',
-              description: 'Complete a quick reaction task while the assessment finishes preparing.',
+              description:
+                  'Complete a quick reaction task while the assessment finishes preparing.',
               accent: ScanTheme.teal,
             ),
             const SizedBox(height: 16),
@@ -68,7 +72,9 @@ class WellnessCheckScreen extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: ScanTheme.cyan.withOpacity(0.16),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: ScanTheme.cyan.withOpacity(0.28)),
+                      border: Border.all(
+                        color: ScanTheme.cyan.withOpacity(0.28),
+                      ),
                     ),
                     child: const Icon(
                       Icons.shield_outlined,
@@ -112,6 +118,7 @@ class WellnessCheckScreen extends StatelessWidget {
             label: 'Start readiness check',
             icon: Icons.arrow_forward_rounded,
             onPressed: () {
+              safeDebugLog('[SCAN_READINESS_START_TAP]');
               Navigator.push(
                 context,
                 fadeSlideRoute(const ScanFlowScreen()),
@@ -141,7 +148,10 @@ class _OverviewHero extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: ScanTheme.primaryBlue.withOpacity(0.16),
                   borderRadius: BorderRadius.circular(999),

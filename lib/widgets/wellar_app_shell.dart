@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app_animated_background.dart';
+import 'connectivity_status_banner.dart';
 
-class WellarAppShell extends StatelessWidget {
+class WellarAppShell extends ConsumerWidget {
   final Widget child;
   final Widget? bottomNavigationBar;
   final bool animateBackground;
@@ -15,7 +17,7 @@ class WellarAppShell extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBody: true,
@@ -23,7 +25,17 @@ class WellarAppShell extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           AppAnimatedBackground(enableAnimation: animateBackground),
-          Positioned.fill(child: child),
+          Positioned.fill(
+            child: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  const ConnectivityStatusBanner(),
+                  Expanded(child: child),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
       bottomNavigationBar: bottomNavigationBar,

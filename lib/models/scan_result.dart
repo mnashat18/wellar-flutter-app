@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../utils/safe_debug_log.dart';
 
 class ScanResult {
   final String id;
@@ -53,7 +54,7 @@ class ScanResult {
   factory ScanResult.fromJson(Map<String, dynamic> json) {
     try {
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_PARSE] start id=${json['id']?.toString() ?? '-'} scan_id=${json['scan_id']?.toString() ?? '-'}',
         );
       }
@@ -65,8 +66,14 @@ class ScanResult {
           json['risk_level']?.toString() ??
           json['riskLevel']?.toString() ??
           json['state']?.toString() ??
-          json['readiness_state']?.toString() ??
-          json['overall_state']?.toString();
+          json['readiness_state']?.toString();
+      final overallState =
+          json['overall_state']?.toString() ??
+          json['overallState']?.toString() ??
+          json['readiness_label']?.toString() ??
+          json['readinessLabel']?.toString() ??
+          riskLevel ??
+          'Review needed';
       final result = ScanResult(
         id: json['id'].toString(),
         scanId: scanId,
@@ -74,11 +81,7 @@ class ScanResult {
             ? DateTime.tryParse(json['date_created'].toString())
             : null,
         riskLevel: riskLevel,
-        overallState:
-            riskLevel ??
-            json['readiness_label']?.toString() ??
-            json['readinessLabel']?.toString() ??
-            'Review needed',
+        overallState: overallState,
         readinessScore: _toDouble(
           json['readiness_score'] ?? json['readinessScore'],
         ),
@@ -116,17 +119,17 @@ class ScanResult {
         ),
       );
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_PARSE] success id=${result.id} scan_id=${result.scanId} risk_level=${result.riskLevel ?? '-'} readiness_score=${result.readinessScore?.toString() ?? '-'}',
         );
       }
       return result;
     } catch (e, s) {
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_PARSE] error id=${json['id']?.toString() ?? '-'} scan_id=${json['scan_id']?.toString() ?? '-'} error=$e',
         );
-        debugPrint('[SCAN_PARSE] stack $s');
+        safeDebugLog('[SCAN_PARSE] stack $s');
       }
       rethrow;
     }

@@ -1,3 +1,4 @@
+import '../utils/safe_debug_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,6 +12,7 @@ import '../state/app_providers.dart';
 import '../state/session.dart';
 import '../theme/app_theme.dart';
 import '../utils/page_transition.dart';
+import '../utils/app_feedback.dart';
 import '../utils/request_status_normalizer.dart';
 import '../widgets/animated_wellar_card.dart';
 import '../widgets/animated_wellar_screen.dart';
@@ -23,6 +25,7 @@ import '../widgets/wellar_header.dart';
 import '../widgets/wellar_metric_card.dart';
 import '../widgets/wellar_skeleton_shimmer.dart';
 import '../widgets/page_header_actions.dart';
+import '../widgets/status_chip.dart';
 import 'scan_request_details_screen.dart';
 import 'wellness_check_screen.dart';
 
@@ -56,10 +59,7 @@ class _AdminScanRequestsScreenState
   void initState() {
     super.initState();
     _future = _loadRequestsData();
-    _refreshSubscription = ref.listenManual<int>(refreshTickProvider, (
-      _,
-      __,
-    ) {
+    _refreshSubscription = ref.listenManual<int>(refreshTickProvider, (_, __) {
       if (!mounted) return;
       setState(() {
         _future = _loadRequestsData();
@@ -94,7 +94,7 @@ class _AdminScanRequestsScreenState
             if (snap.hasError) {
               final roleUnavailable =
                   snap.error is RequestRoleUnavailableException;
-              debugPrint(
+              safeDebugLog(
                 '[OWNER_REQUESTS_UI] future_error error=${snap.error} roleUnavailable=$roleUnavailable',
               );
               return WellarErrorState(
@@ -114,7 +114,7 @@ class _AdminScanRequestsScreenState
             final pending = counts[NormalizedRequestStatus.pending] ?? 0;
             final completed = counts[NormalizedRequestStatus.completed] ?? 0;
             final overdue = counts[NormalizedRequestStatus.overdue] ?? 0;
-            debugPrint(
+            safeDebugLog(
               '[REQUESTS_PAGE_COUNTS] pending=$pending completed=$completed overdue=$overdue',
             );
             return RefreshIndicator(
@@ -233,9 +233,8 @@ class _AdminScanRequestsScreenState
                   else
                     ...items.asMap().entries.map((entry) {
                       final item = entry.value;
-                      final assessment = data?.assessmentsByScanId[
-                        item.scanId?.trim() ?? ''
-                      ];
+                      final assessment =
+                          data?.assessmentsByScanId[item.scanId?.trim() ?? ''];
                       return AnimatedWellarCard(
                         delay: Duration(milliseconds: 40 + (entry.key * 25)),
                         child: Padding(
@@ -264,7 +263,8 @@ class _AdminScanRequestsScreenState
   }
 
   Future<_OwnerRequestsData> _loadRequestsData() async {
-    final requests = await AdminRequestService.instance.fetchWorkspaceRequests();
+    final requests = await AdminRequestService.instance
+        .fetchWorkspaceRequests();
     final scanIds = requests
         .map((item) => item.scanId?.trim() ?? '')
         .where((scanId) => scanId.isNotEmpty)
@@ -465,6 +465,10 @@ class _AdminScanRequestsScreenState
   }
 
   Future<void> _openCreateDialog() async {
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
+      return;
+    }
     final lang = ref.read(appLanguageControllerProvider).language;
     final created = await showDialog<bool>(
       context: context,
@@ -480,28 +484,7 @@ class _AdminScanRequestsScreenState
 
   Widget _requestStatusPill(RequestItem item) {
     final normalized = RequestStatusNormalizer.normalize(item);
-    final Color color = normalized == NormalizedRequestStatus.completed
-        ? const Color(0xFF72E3A6)
-        : normalized == NormalizedRequestStatus.overdue
-        ? const Color(0xFFFF9E7A)
-        : const Color(0xFFF1C16B);
-    final String label = normalized.label;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.16),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: 0.42)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
+    return StatusChip(normalized.label);
   }
 
   Widget _resultBadge(String label) {
@@ -528,9 +511,9 @@ class _AdminScanRequestsScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0x661E2C4A),
+        color: WellarTheme.surfaceSoft.withValues(alpha: 0.40),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF2B3D5A)),
+        border: Border.all(color: WellarTheme.border),
       ),
       child: Text(
         'Score $score',
@@ -547,16 +530,16 @@ class _AdminScanRequestsScreenState
     final normalized = label.trim().toLowerCase();
     switch (normalized) {
       case 'stable':
-        return const Color(0xFF72D8A0);
+        return WellarTheme.success;
       case 'low focus':
       case 'low_focus':
-        return const Color(0xFF6DAFEA);
+        return WellarTheme.info;
       case 'elevated fatigue':
       case 'elevated_fatigue':
-        return const Color(0xFFF4BE68);
+        return WellarTheme.warning;
       case 'high risk':
       case 'high_risk':
-        return const Color(0xFFE38654);
+        return WellarTheme.danger;
       default:
         return WellarTheme.textMuted;
     }
@@ -566,9 +549,9 @@ class _AdminScanRequestsScreenState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: const Color(0x6621314B),
+        color: WellarTheme.surfaceSoft.withValues(alpha: 0.40),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF2B3D5A)),
+        border: Border.all(color: WellarTheme.border),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -716,7 +699,7 @@ class _CreateRequestDialogState extends ConsumerState<_CreateRequestDialog> {
       _allMembers = await AdminRequestService.instance.fetchWorkspaceMembers();
       _syncSelections();
     } catch (error) {
-      _loadError = _describeError(error);
+      _loadError = _describeError(error, translationKey: 'generic_load_error');
     } finally {
       if (mounted) {
         setState(() {
@@ -740,6 +723,10 @@ class _CreateRequestDialogState extends ConsumerState<_CreateRequestDialog> {
 
   Future<void> _submit() async {
     if (!_canSubmit) return;
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
+      return;
+    }
     setState(() {
       _submitting = true;
       _submitError = null;
@@ -755,7 +742,12 @@ class _CreateRequestDialogState extends ConsumerState<_CreateRequestDialog> {
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
-      setState(() => _submitError = _describeError(error));
+      setState(
+        () => _submitError = _describeError(
+          error,
+          translationKey: 'generic_action_error',
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
@@ -771,218 +763,202 @@ class _CreateRequestDialogState extends ConsumerState<_CreateRequestDialog> {
     }
   }
 
-  String _describeError(Object error) {
+  String _describeError(Object error, {required String translationKey}) {
     if (error is RequestCreateException) return error.message;
-    final raw = error.toString().trim();
-    if (raw.startsWith('Exception: ')) {
-      return raw.substring('Exception: '.length).trim();
-    }
-    if (raw.isNotEmpty) return raw;
     final lang = ref.read(appLanguageControllerProvider).language;
-    return Tr.t(lang, 'request_could_not_be_created');
+    return Tr.t(lang, translationKey);
   }
 
   @override
   Widget build(BuildContext context) {
     final lang = ref.watch(appLanguageControllerProvider).language;
-    final media = MediaQuery.of(context);
     final visibleMembers = _visibleMembers;
-    return AnimatedPadding(
-      duration: WellarTheme.fast,
-      curve: Curves.easeOutCubic,
-      padding: EdgeInsets.fromLTRB(16, 24, 16, media.viewInsets.bottom + 24),
-      child: Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.zero,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: 560,
-            maxHeight: media.size.height * 0.86,
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: WellarTheme.pagePadding,
+        vertical: WellarTheme.pagePadding,
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 560),
+        child: WellarCard(
+          padding: const EdgeInsets.fromLTRB(
+            WellarTheme.pagePadding,
+            WellarTheme.pagePadding,
+            WellarTheme.pagePadding,
+            WellarTheme.cardPadding,
           ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(28),
-              border: Border.all(color: const Color(0xFF263858)),
-              gradient: const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0xFF101B30), Color(0xFF0B1324)],
-              ),
-              boxShadow: const [
-                BoxShadow(
-                  color: Color(0x66000000),
-                  blurRadius: 36,
-                  offset: Offset(0, 18),
-                ),
-              ],
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
-              child: Column(
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Expanded(child: SizedBox.shrink()),
-                      Expanded(
-                        flex: 8,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              Tr.t(lang, 'create_readiness_request_title'),
-                              style: const TextStyle(
-                                color: WellarTheme.text,
-                                fontSize: 20,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              Tr.t(lang, 'create_readiness_request_subtitle'),
-                              style: const TextStyle(
-                                color: WellarTheme.textMuted,
-                                fontSize: 13,
-                                height: 1.35,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: _submitting
-                            ? null
-                            : () => Navigator.of(context).maybePop(),
-                        icon: const Icon(
-                          Icons.close_rounded,
-                          color: WellarTheme.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Expanded(
-                    child: _loading
-                        ? const Center(
-                            child: CircularProgressIndicator(
-                              color: WellarTheme.primary,
-                              strokeWidth: 2.2,
-                            ),
-                          )
-                        : _loadError != null
-                        ? WellarErrorState(
-                            title: Tr.t(lang, 'access_unavailable'),
-                            body: _loadError!,
-                            onRetry: _load,
-                          )
-                        : SingleChildScrollView(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  Tr.t(lang, 'target'),
-                                  style: const TextStyle(
-                                    color: WellarTheme.text,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                TextField(
-                                  controller: _searchController,
-                                  onChanged: (_) => setState(_syncSelections),
-                                  decoration: InputDecoration(
-                                    prefixIcon: const Icon(Icons.search),
-                                    hintText: Tr.t(
-                                      lang,
-                                      'search_by_name_email',
-                                    ),
-                                  ),
-                                ),
-                                if (_hasSelfMember) ...[
-                                  const SizedBox(height: 8),
-                                  SwitchListTile.adaptive(
-                                    contentPadding: EdgeInsets.zero,
-                                    value: _includeMyself,
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _includeMyself = value;
-                                        _syncSelections();
-                                      });
-                                    },
-                                    title: Text(
-                                      Tr.t(lang, 'include_myself'),
-                                      style: const TextStyle(
-                                        color: WellarTheme.text,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(height: 8),
-                                _memberList(lang, visibleMembers),
-                                const SizedBox(height: 18),
-                                Text(
-                                  Tr.t(lang, 'request_details'),
-                                  style: const TextStyle(
-                                    color: WellarTheme.text,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                _dateField(lang),
-                                if (_submitError != null) ...[
-                                  const SizedBox(height: 14),
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.all(12),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0x33FF8A80),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: const Color(0x66FF8A80),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      _submitError!,
-                                      style: const TextStyle(
-                                        color: Color(0xFFFFD6D2),
-                                        fontSize: 12.5,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            Tr.t(lang, 'create_readiness_request_title'),
+                            style: const TextStyle(
+                              color: WellarTheme.text,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: WellarButton.secondary(
-                          text: Tr.t(lang, 'cancel'),
-                          onPressed: _submitting
-                              ? null
-                              : () => Navigator.of(context).maybePop(),
-                        ),
+                          const SizedBox(height: 6),
+                          Text(
+                            Tr.t(lang, 'create_readiness_request_subtitle'),
+                            style: const TextStyle(
+                              color: WellarTheme.textMuted,
+                              fontSize: 13,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: WellarButton.primary(
-                          text: _submitting
-                              ? Tr.t(lang, 'sending')
-                              : Tr.t(lang, 'send_request'),
-                          onPressed: _canSubmit ? _submit : null,
-                        ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: _submitting
+                          ? null
+                          : () => Navigator.of(context).maybePop(),
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: WellarTheme.textMuted,
                       ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: WellarTheme.sectionGap),
+                if (_loading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(
+                      vertical: WellarTheme.sectionGap,
+                    ),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: WellarTheme.primary,
+                        strokeWidth: 2.2,
+                      ),
+                    ),
+                  )
+                else if (_loadError != null)
+                  WellarErrorState(
+                    title: Tr.t(lang, 'access_unavailable'),
+                    body: _loadError!,
+                    onRetry: _load,
+                  )
+                else ...[
+                              Text(
+                                Tr.t(lang, 'target'),
+                                style: const TextStyle(
+                                  color: WellarTheme.text,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              TextField(
+                                controller: _searchController,
+                                onChanged: (_) => setState(_syncSelections),
+                                decoration: InputDecoration(
+                                  prefixIcon: const Icon(Icons.search),
+                                  hintText: Tr.t(lang, 'search_by_name_email'),
+                                ),
+                              ),
+                              if (_hasSelfMember) ...[
+                                const SizedBox(height: 8),
+                                SwitchListTile.adaptive(
+                                  contentPadding: EdgeInsets.zero,
+                                  value: _includeMyself,
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _includeMyself = value;
+                                      _syncSelections();
+                                    });
+                                  },
+                                  title: Text(
+                                    Tr.t(lang, 'include_myself'),
+                                    style: const TextStyle(
+                                      color: WellarTheme.text,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 8),
+                              _memberList(lang, visibleMembers),
+                              const SizedBox(height: WellarTheme.sectionGap),
+                              Text(
+                                Tr.t(lang, 'request_details'),
+                                style: const TextStyle(
+                                  color: WellarTheme.text,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              _dateField(lang),
+                              if (_submitError != null) ...[
+                                const SizedBox(height: WellarTheme.sectionGap),
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: WellarTheme.danger.withValues(
+                                      alpha: 0.20,
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      WellarTheme.cardRadius,
+                                    ),
+                                    border: Border.all(
+                                      color: WellarTheme.danger.withValues(
+                                        alpha: 0.40,
+                                      ),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    _submitError!,
+                                    style: const TextStyle(
+                                      color: WellarTheme.text,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                ],
                     ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: WellarTheme.sectionGap),
+              Row(
+                children: [
+                  Expanded(
+                    child: WellarButton.secondary(
+                      text: Tr.t(lang, 'cancel'),
+                      onPressed: _submitting
+                          ? null
+                          : () => Navigator.of(context).maybePop(),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: WellarButton.primary(
+                      text: _submitting
+                          ? Tr.t(lang, 'sending')
+                          : Tr.t(lang, 'send_request'),
+                      onPressed: _canSubmit ? _submit : null,
+                    ),
                   ),
                 ],
               ),
-            ),
+            ],
           ),
         ),
       ),
@@ -1004,33 +980,22 @@ class _CreateRequestDialogState extends ConsumerState<_CreateRequestDialog> {
         body: Tr.t(lang, 'search_by_name_email'),
       );
     }
-    return SizedBox(
-      height: 250,
-      child: ListView.separated(
-        itemCount: members.length,
-        separatorBuilder: (context, index) => const SizedBox(height: 10),
-        itemBuilder: (context, index) {
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: members.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
           final member = members[index];
           final selected = _selectedMember?.memberId == member.memberId;
           return InkWell(
             onTap: _submitting
                 ? null
                 : () => setState(() => _selectedMember = member),
-            borderRadius: BorderRadius.circular(18),
-            child: AnimatedContainer(
-              duration: WellarTheme.fast,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                color: selected
-                    ? const Color(0x331FD1BE)
-                    : const Color(0x88131F36),
-                border: Border.all(
-                  color: selected
-                      ? const Color(0xFF38D7C7)
-                      : const Color(0xFF253754),
-                ),
-              ),
+            borderRadius: BorderRadius.circular(WellarTheme.cardRadius),
+            child: WellarCard(
+              highlighted: selected,
+              padding: const EdgeInsets.all(WellarTheme.cardPadding),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1076,8 +1041,7 @@ class _CreateRequestDialogState extends ConsumerState<_CreateRequestDialog> {
               ),
             ),
           );
-        },
-      ),
+      },
     );
   }
 
@@ -1092,9 +1056,9 @@ class _CreateRequestDialogState extends ConsumerState<_CreateRequestDialog> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
         decoration: BoxDecoration(
-          color: const Color(0x88131F36),
+          color: WellarTheme.surface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF253754)),
+          border: Border.all(color: WellarTheme.border),
         ),
         child: Row(
           children: [
@@ -1142,9 +1106,9 @@ class _CreateRequestDialogState extends ConsumerState<_CreateRequestDialog> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0x6621314B),
+        color: WellarTheme.surfaceSoft.withValues(alpha: 0.40),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF2B3D5A)),
+        border: Border.all(color: WellarTheme.border),
       ),
       child: Text(
         label,
@@ -1166,12 +1130,12 @@ class _CreateRequestDialogState extends ConsumerState<_CreateRequestDialog> {
         shape: BoxShape.circle,
         color: selected ? WellarTheme.primary : Colors.transparent,
         border: Border.all(
-          color: selected ? WellarTheme.primary : const Color(0xFF41587D),
+          color: selected ? WellarTheme.primary : WellarTheme.border,
           width: 1.5,
         ),
       ),
       child: selected
-          ? const Icon(Icons.check, size: 14, color: Colors.black)
+          ? const Icon(Icons.check, size: 14, color: WellarTheme.bg)
           : null,
     );
   }

@@ -1,3 +1,4 @@
+import '../utils/safe_debug_log.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -49,7 +50,7 @@ class _HrWorkforceScreenState extends ConsumerState<HrWorkforceScreen> {
       if (!mounted) return;
       final nextRole = _workspaceRole(next);
       if (nextRole != 'hr') {
-        debugPrint(
+        safeDebugLog(
           '[STALE_ROLE_WIDGET_BLOCKED] widget=HrWorkforceScreen expected=hr actual=$nextRole',
         );
         setState(() {
@@ -84,7 +85,7 @@ class _HrWorkforceScreenState extends ConsumerState<HrWorkforceScreen> {
     final workspace = ref.watch(activeWorkspaceContextProvider);
     final activeRole = _workspaceRole(workspace);
     if (activeRole != 'hr') {
-      debugPrint(
+      safeDebugLog(
         '[STALE_ROLE_WIDGET_BLOCKED] widget=HrWorkforceScreen expected=hr actual=$activeRole',
       );
       return Scaffold(
@@ -93,9 +94,12 @@ class _HrWorkforceScreenState extends ConsumerState<HrWorkforceScreen> {
           child: WellarErrorState(
             title: Tr.t(lang, 'access_unavailable'),
             body: Tr.t(lang, 'role_unavailable_info'),
-            onRetry: () => setState(
-              () => _future = _loadWorkforceDirectory(forceRefresh: true),
-            ),
+            onRetry: () {
+              final next = _loadWorkforceDirectory(forceRefresh: true);
+              setState(() {
+                _future = next;
+              });
+            },
           ),
         ),
       );
@@ -140,11 +144,14 @@ class _HrWorkforceScreenState extends ConsumerState<HrWorkforceScreen> {
                     ? Tr.t(lang, 'workforce_unavailable')
                     : Tr.t(lang, 'unable_load_workforce'),
                 actionLabel: Tr.t(lang, 'retry'),
-                onAction: () => setState(
-                  () => _future = HrOpsService.instance.fetchWorkforceDirectory(
+                onAction: () {
+                  final next = HrOpsService.instance.fetchWorkforceDirectory(
                     forceRefresh: true,
-                  ),
-                ),
+                  );
+                  setState(() {
+                    _future = next;
+                  });
+                },
               );
             }
 
@@ -164,22 +171,26 @@ class _HrWorkforceScreenState extends ConsumerState<HrWorkforceScreen> {
                         'unknown')
                     .trim();
             final departmentId = (workspace?.departmentId ?? '').trim();
-            debugPrint(
+            safeDebugLog(
               '[WORKFORCE_SOURCE] screen=HrWorkforce role=$role business_profile=$businessProfileId membership_id=$membershipId department=${departmentId.isEmpty ? "none" : departmentId}',
             );
-            debugPrint(
+            safeDebugLog(
               '[HR_WORKFORCE_RENDER] loaded_count=${data.members.length} visible_count=${filtered.length}',
             );
             if (_query.isNotEmpty) {
-              debugPrint(
+              safeDebugLog(
                 '[WORKFORCE_FILTER] query=$_query visible_count=${filtered.length}',
               );
             }
 
             return RefreshIndicator(
-              onRefresh: () async => setState(
-                () => _future = _loadWorkforceDirectory(forceRefresh: true),
-              ),
+              onRefresh: () async {
+                final next = _loadWorkforceDirectory(forceRefresh: true);
+                setState(() {
+                  _future = next;
+                });
+                await next;
+              },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [

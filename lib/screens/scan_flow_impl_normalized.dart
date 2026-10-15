@@ -11,17 +11,24 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 
+import '../i18n/tr.dart';
 import '../services/request_service.dart';
 import '../services/scan_finalize_service.dart';
 import '../services/scan_service.dart';
+import '../services/wellar_v2_client.dart';
 import '../state/app_providers.dart';
+import '../state/session.dart';
 import '../services/organization_service.dart';
 import '../models/scan_result.dart';
 import '../utils/page_transition.dart';
+import '../utils/app_feedback.dart';
+import '../utils/dashboard_navigation.dart';
+import '../utils/safe_debug_log.dart';
 import '../utils/scan_result_polling_policy.dart';
 import '../utils/video_compress.dart';
 import 'scan/scan_premium_components.dart';
 import 'scan_details_screen.dart';
+import 'wellar_v2_processing_screen.dart';
 
 enum ScanFlowStep { intro, consent, permissions, video, audio, focus }
 
@@ -193,7 +200,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
 
   void _devLog(String tag, String message) {
     if (!kDebugMode) return;
-    debugPrint('[$tag] ${_redactDecisionLog(message)}');
+    safeDebugLog('[$tag] ${_redactDecisionLog(message)}');
   }
 
   String _redactDecisionLog(String message) {
@@ -237,10 +244,10 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
   }
 
   Future<void> _bootstrap() async {
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] start flow has_request_id=${widget.requestId?.trim().isNotEmpty == true} force_completion=${widget.forceCompletion}',
     );
-    debugPrint(
+    safeDebugLog(
       '[ScanVideo] capture config preset=${_capturePreset.name} target_resolution=$_targetResolution target_fps=$_targetFrameRate target_bitrate=$_targetBitrate format=H264 MP4',
     );
     _statusPulseTimer = Timer.periodic(const Duration(milliseconds: 700), (_) {
@@ -251,7 +258,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
     });
     if (!mounted) return;
     setState(() => _initializing = false);
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] current flow step=${_step.name} stage=${_stage.name}',
     );
   }
@@ -284,7 +291,11 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         stepLabel: _stageMeta.headerLabel,
         step: _stageMeta.step,
         totalSteps: _stageMeta.totalSteps,
-        onBack: _postFocusTerminalState == _PostFocusTerminalState.pending
+        onBack:
+            _fatalError ||
+                _captureSessionInvalidated ||
+                _finalizeFailed ||
+                _postFocusTerminalState != _PostFocusTerminalState.none
             ? _backToHomeOrShell
             : _backAction,
         body: _initializing
@@ -321,9 +332,9 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
             _fatalMessage ??
             'The readiness assessment could not be initialized right now. Please try again.',
         primaryLabel: 'Close',
-        primaryAction: () => Navigator.maybePop(context),
+        primaryAction: () => goToDashboard(context),
         secondaryLabel: 'Back',
-        secondaryAction: () => Navigator.maybePop(context),
+        secondaryAction: () => goToDashboard(context),
       ),
     );
   }
@@ -338,7 +349,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         primaryLabel: 'Try again',
         primaryAction: _retryFinalizeAfterFailure,
         secondaryLabel: 'Back',
-        secondaryAction: () => Navigator.maybePop(context),
+        secondaryAction: () => goToDashboard(context),
       ),
     );
   }
@@ -473,7 +484,9 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       ScanFlowStep.intro => Column(
         children: [
           ScanPrimaryButton(
-            label: 'Start readiness check',
+            label: WellarV2Feature.enabledFor(Session.instance.userId)
+                ? 'Start V2 scan'
+                : 'Start readiness check',
             icon: Icons.play_arrow_rounded,
             onPressed: () => _setStep(ScanFlowStep.consent),
           ),
@@ -487,11 +500,13 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       ScanFlowStep.consent => Column(
         children: [
           ScanPrimaryButton(
-            label: 'I agree and start',
+            label: WellarV2Feature.enabledFor(Session.instance.userId)
+                ? 'Agree and start V2 scan'
+                : 'I agree and start',
             icon: Icons.verified_outlined,
             onPressed: () {
               _consentAccepted = true;
-              debugPrint('[SCAN_FLOW] consent accepted');
+              safeDebugLog('[SCAN_FLOW] consent accepted');
               _setStep(ScanFlowStep.permissions);
             },
           ),
@@ -670,7 +685,9 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
           const SizedBox(height: 10),
           Center(
             child: Text(
-              'A quick readiness check using camera, voice, and focus signals.',
+              WellarV2Feature.enabledFor(Session.instance.userId)
+                  ? 'A Wellar AI V2 scan. No validated fatigue or vigilance prediction is available.'
+                  : 'A quick readiness check using camera, voice, and focus signals.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
                 color: ScanTheme.textSecondary,
@@ -772,7 +789,9 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'This assessment uses your camera, microphone, and short task activity to generate an operational readiness result. It is not a diagnosis.',
+                  WellarV2Feature.enabledFor(Session.instance.userId)
+                      ? 'By agreeing, you consent to processing your captured JPEG image, MP4 video, and WAV audio directly by Wellar AI V2. Research use is off. V2 scan history is separate from Directus. No validated fatigue, sleepiness, vigilance, risk, or readiness score is available.'
+                      : 'This assessment uses your camera, microphone, and short task activity to generate an operational readiness result. It is not a diagnosis.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.inter(
                     color: ScanTheme.textSecondary,
@@ -789,9 +808,13 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
                   icon: Icons.mic_none_rounded,
                   text: 'Microphone access for voice clarity',
                 ),
-                const _TrustBullet(
-                  icon: Icons.admin_panel_settings_outlined,
-                  text: 'Results are controlled by workspace permissions',
+                _TrustBullet(
+                  icon: WellarV2Feature.enabledFor(Session.instance.userId)
+                      ? Icons.science_outlined
+                      : Icons.admin_panel_settings_outlined,
+                  text: WellarV2Feature.enabledFor(Session.instance.userId)
+                      ? 'V2 output is separate from Directus history and reports'
+                      : 'Results are controlled by workspace permissions',
                 ),
                 const _TrustBullet(
                   icon: Icons.close_rounded,
@@ -1342,7 +1365,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
   }
 
   Future<void> _preparePermissions() async {
-    debugPrint('[SCAN_FLOW] permission check start');
+    safeDebugLog('[SCAN_FLOW] permission check start');
     try {
       await _initCamera();
       _cameraPermissionReady = true;
@@ -1359,16 +1382,16 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
     _permissionsReady = _cameraPermissionReady && _microphonePermissionReady;
     setState(() {});
     if (_permissionsReady) {
-      debugPrint('[SCAN_FLOW] permission check success');
+      safeDebugLog('[SCAN_FLOW] permission check success');
       _setStep(ScanFlowStep.video);
     }
   }
 
   Future<void> _initCamera() async {
     if (_cameraController?.value.isInitialized == true) return;
-    debugPrint('[SCAN_CAMERA] enumerate cameras start');
+    safeDebugLog('[SCAN_CAMERA] enumerate cameras start');
     final cameras = await availableCameras();
-    debugPrint(
+    safeDebugLog(
       '[SCAN_CAMERA] enumerate cameras success count=${cameras.length}',
     );
     final camera = cameras.firstWhere(
@@ -1381,7 +1404,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.jpeg,
     );
-    debugPrint(
+    safeDebugLog(
       '[SCAN_CAMERA] initialize lens=${camera.lensDirection.name} preset=${_capturePreset.name}',
     );
     await controller.initialize();
@@ -1390,11 +1413,11 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       final minZoom = await controller.getMinZoomLevel();
       final zoomLevel = math.max(1.0, minZoom);
       await controller.setZoomLevel(zoomLevel);
-      debugPrint(
+      safeDebugLog(
         '[SCAN_CAMERA] zoom reset zoom_level=$zoomLevel min_zoom=$minZoom',
       );
     } catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_CAMERA] zoom reset skipped error_type=${e.runtimeType}',
       );
     }
@@ -1404,8 +1427,8 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
 
   Future<void> _recordVideo() async {
     if (_cameraController == null || _videoRecording) return;
-    debugPrint('[SCAN_VIDEO] recording start scan_step=video');
-    debugPrint(
+    safeDebugLog('[SCAN_VIDEO] recording start scan_step=video');
+    safeDebugLog(
       '[SCAN_VIDEO] settings preset=${_capturePreset.name} preferred_resolution=$_targetResolution preferred_fps=$_targetFrameRate preferred_bitrate=$_targetBitrate',
     );
     try {
@@ -1438,7 +1461,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         if (_videoSecondsLeft <= 1) {
           timer.cancel();
           if (kDebugMode) {
-            debugPrint(
+            safeDebugLog(
               '[SCAN_VIDEO_AUTO_COMPLETE] seconds=$_videoSeconds transitioned=true',
             );
           }
@@ -1448,8 +1471,8 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         }
       });
     } catch (e, s) {
-      debugPrint('[SCAN_VIDEO] recording failed error_type=${e.runtimeType}');
-      debugPrint('[SCAN_VIDEO] stack_present=${s.toString().isNotEmpty}');
+      safeDebugLog('[SCAN_VIDEO] recording failed error_type=${e.runtimeType}');
+      safeDebugLog('[SCAN_VIDEO] stack_present=${s.toString().isNotEmpty}');
       if (mounted) {
         setState(() {
           _videoRecording = false;
@@ -1484,7 +1507,8 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       if (!mounted) return;
       final completedAt = DateTime.now();
       _videoCompletedAt = completedAt;
-      debugPrint('[CAPTURE_FLOW] video_completed=true');
+      safeDebugLog('[CAPTURE_FLOW] video_completed=true');
+      safeDebugLog('[SCAN_VIDEO_CAPTURE_COMPLETE]');
       _videoPreparationFuture = _processVideoAfterCapture(
         rawFile,
         preparationVersion: preparationVersion,
@@ -1492,8 +1516,8 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       _openAudioStepAfterVideoStop();
       _armCaptureGapTimer();
     } catch (e, s) {
-      debugPrint('[SCAN_VIDEO] stop failed error_type=${e.runtimeType}');
-      debugPrint('[SCAN_VIDEO] stack_present=${s.toString().isNotEmpty}');
+      safeDebugLog('[SCAN_VIDEO] stop failed error_type=${e.runtimeType}');
+      safeDebugLog('[SCAN_VIDEO] stack_present=${s.toString().isNotEmpty}');
       if (mounted) {
         setState(() {
           _videoRecording = false;
@@ -1516,7 +1540,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
     if (!mounted || _step != ScanFlowStep.video || _videoAutoAdvanced) return;
     _videoAutoAdvanced = true;
     _audioStepOpenedAt = DateTime.now();
-    debugPrint('[CAPTURE_FLOW] audio_step_opened=true');
+    safeDebugLog('[CAPTURE_FLOW] audio_step_opened=true');
     _setStep(ScanFlowStep.audio);
   }
 
@@ -1526,16 +1550,16 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
   }) async {
     try {
       final originalSize = await _safeLength(rawFile);
-      debugPrint(
+      safeDebugLog(
         '[SCAN_VIDEO] original file path_present=${rawFile.path.trim().isNotEmpty}',
       );
-      debugPrint('[SCAN_VIDEO] original file size=$originalSize');
+      safeDebugLog('[SCAN_VIDEO] original file size=$originalSize');
       final processed = await _maybeCompressVideo(rawFile);
       final processedSize = await _safeLength(processed);
-      debugPrint(
+      safeDebugLog(
         '[SCAN_VIDEO] processed file path_present=${processed.path.trim().isNotEmpty}',
       );
-      debugPrint('[SCAN_VIDEO] processed file size=$processedSize');
+      safeDebugLog('[SCAN_VIDEO] processed file size=$processedSize');
       final thumbBytes = await _generateThumbnail(processed);
       if (thumbBytes == null || thumbBytes.isEmpty) {
         throw StateError('thumbnail_missing');
@@ -1548,10 +1572,11 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         _videoPreparationFailed = false;
         _videoFailureMessage = null;
       });
+      safeDebugLog('[SCAN_VIDEO_PREPARATION_COMPLETE]');
       _startMediaPrefinalizeIfReady();
     } catch (e, s) {
-      debugPrint('[SCAN_VIDEO] process failed error_type=${e.runtimeType}');
-      debugPrint('[SCAN_VIDEO] stack_present=${s.toString().isNotEmpty}');
+      safeDebugLog('[SCAN_VIDEO] process failed error_type=${e.runtimeType}');
+      safeDebugLog('[SCAN_VIDEO] stack_present=${s.toString().isNotEmpty}');
       if (mounted && preparationVersion == _videoPreparationVersion) {
         setState(() {
           _videoRecording = false;
@@ -1571,7 +1596,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
   }
 
   Future<XFile> _maybeCompressVideo(XFile file) async {
-    debugPrint(
+    safeDebugLog(
       '[SCAN_VIDEO] compression request resolution=$_targetResolution fps=$_targetFrameRate bitrate=$_targetBitrate preserve_orientation=true avoid_retranscode=true',
     );
     return compressVideo(file);
@@ -1584,12 +1609,12 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         imageFormat: thumb.ImageFormat.JPEG,
         quality: 70,
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_VIDEO] thumbnail generated bytes=${bytes.length} has_scan_id=${_scanId?.trim().isNotEmpty == true}',
       );
       return bytes;
     } catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_VIDEO] thumbnail generation failed error_type=${e.runtimeType}',
       );
       return null;
@@ -1633,20 +1658,28 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
     }
     try {
       _audioFailureMessage = null;
+      final v2Mode = WellarV2Feature.enabledFor(Session.instance.userId);
+      final encoder = v2Mode ? AudioEncoder.wav : AudioEncoder.aacLc;
+      if (v2Mode && !await _recorder.isEncoderSupported(encoder)) {
+        _showError(
+          'This device cannot record the PCM WAV format required by local V2. No V2 scan was submitted; use a compatible development device or cancel.',
+        );
+        return;
+      }
       final dir = await getTemporaryDirectory();
       final path =
-          '${dir.path}/scan_voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+          '${dir.path}/scan_voice_${DateTime.now().millisecondsSinceEpoch}.${v2Mode ? 'wav' : 'm4a'}';
       await _recorder.start(
-        const RecordConfig(
-          encoder: AudioEncoder.aacLc,
+        RecordConfig(
+          encoder: encoder,
           sampleRate: 44100,
           bitRate: 128000,
           numChannels: 1,
         ),
         path: path,
       );
-      debugPrint(
-        '[SCAN_AUDIO] settings encoder=aacLc sample_rate=44100 bitrate=128000 channels=1',
+      safeDebugLog(
+        '[SCAN_AUDIO] settings encoder=${v2Mode ? 'wav' : 'aacLc'} sample_rate=44100 channels=1',
       );
       HapticFeedback.mediumImpact();
       setState(() {
@@ -1657,7 +1690,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         _audioFailureMessage = null;
         _audioStartedAt = DateTime.now();
       });
-      debugPrint(
+      safeDebugLog(
         '[CAPTURE_FLOW] video_to_audio_gap_ms=${_audioStartedAt!.difference(_videoCompletedAt ?? _audioStartedAt!).inMilliseconds}',
       );
       _cancelCaptureGapTimer();
@@ -1677,7 +1710,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
           unawaited(_handleAudioAutoComplete());
         }
       });
-      debugPrint(
+      safeDebugLog(
         '[SCAN_AUDIO] recording start path_present=${path.trim().isNotEmpty}',
       );
     } catch (e) {
@@ -1712,9 +1745,10 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         _audioFile = XFile(path);
         _audioFailureMessage = null;
       });
-      debugPrint(
+      safeDebugLog(
         '[SCAN_AUDIO] recording stop path_present=${path.trim().isNotEmpty}',
       );
+      safeDebugLog('[SCAN_AUDIO_CAPTURE_COMPLETE]');
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -1736,7 +1770,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
     _audioAutoAdvanced = true;
     if (!_audioRecording || _audioFile != null) {
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_AUDIO_AUTO_COMPLETE] seconds=$_audioSeconds transitioned=false',
         );
       }
@@ -1748,7 +1782,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         !_captureSessionInvalidated &&
         _audioFailureMessage == null;
     if (kDebugMode) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_AUDIO_AUTO_COMPLETE] seconds=$_audioSeconds transitioned=$captureReady',
       );
     }
@@ -1760,10 +1794,10 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
   Future<bool> _ensureAudioPermission() async {
     try {
       final hasPermission = await _recorder.hasPermission();
-      debugPrint('[SCAN_AUDIO] microphone permission=$hasPermission');
+      safeDebugLog('[SCAN_AUDIO] microphone permission=$hasPermission');
       return hasPermission;
     } catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_AUDIO] microphone permission check failed error_type=${e.runtimeType}',
       );
       return false;
@@ -1771,35 +1805,54 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
   }
 
   void _startMediaPrefinalizeIfReady() {
-    if (_prefinalizedMediaFuture != null) return;
-    if (_captureSessionInvalidated || _audioStartedAt == null) return;
+    if (WellarV2Feature.enabledFor(Session.instance.userId)) {
+      safeDebugLog('[WELLAR_V2] legacy_prefinalize_skipped=true');
+      return;
+    }
+    if (_prefinalizedMediaFuture != null) {
+      safeDebugLog('[SCAN_PREFINALIZE_SKIPPED_ALREADY_STARTED]');
+      return;
+    }
+    if (_captureSessionInvalidated) {
+      safeDebugLog('[SCAN_PREFINALIZE_SKIPPED_SESSION_INVALID]');
+      return;
+    }
+    if (_audioStartedAt == null) {
+      safeDebugLog('[SCAN_PREFINALIZE_SKIPPED_AUDIO_NOT_STARTED]');
+      return;
+    }
     final videoFile = _videoFile;
     final thumbnailBytes = _thumbnailBytes;
     if (videoFile == null || thumbnailBytes == null || thumbnailBytes.isEmpty) {
+      safeDebugLog('[SCAN_PREFINALIZE_SKIPPED_MEDIA_NOT_READY]');
       return;
     }
 
     final stagingKey =
         'pending_${DateTime.now().microsecondsSinceEpoch}_${math.Random().nextInt(100000)}';
+    safeDebugLog('[SCAN_PREFINALIZE_DISPATCH]');
     _prefinalizedMediaFuture = ScanFinalizeService.instance
         .startMediaPrefinalize(
           stagingKey: stagingKey,
           videoFile: videoFile,
           thumbnailBytes: thumbnailBytes,
         );
-    debugPrint(
+    safeDebugLog(
       '[SCAN_PREFINALIZE] scheduled ts=${DateTime.now().toIso8601String()} has_staging_key=${stagingKey.trim().isNotEmpty}',
     );
   }
 
   Future<void> _finishScan() async {
+    safeDebugLog('[SCAN_SUBMIT_HANDLER_ENTER]');
     if (_submitting || _audioFile == null) {
+      safeDebugLog('[SCAN_SUBMIT_SKIPPED_ALREADY_SUBMITTING_OR_NO_AUDIO]');
       if (_audioFile == null) {
         _showError('Scan data is incomplete. Please retry.');
       }
       return;
     }
     if (!_isVideoToAudioGapValid()) {
+      safeDebugLog('[SCAN_SUBMIT_SKIPPED_CAPTURE_GAP_INVALID]');
       await _invalidateCaptureSession(
         reason: 'step_gap_timeout',
         message:
@@ -1811,12 +1864,14 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
     _finalizeFailed = false;
     _finalizeFailureMessage = null;
     try {
+      safeDebugLog('[SCAN_VIDEO_FINALIZE_WAIT_START]');
       await _awaitPreparedVideoForFinalize();
+      safeDebugLog('[SCAN_VIDEO_FINALIZE_WAIT_DONE]');
     } catch (e, s) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_VIDEO] finalize wait failed error_type=${e.runtimeType}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_VIDEO] finalize wait stack_present=${s.toString().isNotEmpty}',
       );
       _submitting = false;
@@ -1835,13 +1890,43 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
     if (_videoFile == null ||
         _thumbnailBytes == null ||
         _thumbnailBytes!.isEmpty) {
+      safeDebugLog('[SCAN_SUBMIT_SKIPPED_MEDIA_NOT_READY]');
       _submitting = false;
       _showError('Scan data is incomplete. Please retry.');
       return;
     }
+    if (WellarV2Feature.enabledFor(Session.instance.userId)) {
+      if (!mounted) return;
+      final configError = WellarV2Feature.configurationError;
+      if (configError != null) {
+        _submitting = false;
+        _showError(configError);
+        setState(() {});
+        return; // An explicitly selected V2 path never falls back to legacy.
+      }
+      if (!_consentAccepted) {
+        _submitting = false;
+        _showError('Please accept media processing consent before continuing.');
+        setState(() {});
+        return;
+      }
+      final video = _videoFile!;
+      final audio = _audioFile!;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => WellarV2ProcessingScreen(
+            videoFile: video,
+            audioFile: audio,
+            imageBytes: Uint8List.fromList(_thumbnailBytes!),
+          ),
+        ),
+      );
+      return;
+    }
+    safeDebugLog('[SCAN_UPLOAD_PIPELINE_READY]');
     try {
       if (_scanId == null) {
-        debugPrint('[SCAN_BOOT] step=1 create_wellness_scan start');
+        safeDebugLog('[SCAN_BOOT] step=1 create_wellness_scan start');
         _scanId = await ScanService.instance.createWellnessScan(
           consentGranted: _consentAccepted,
           scanRequestId: widget.requestId,
@@ -1852,13 +1937,13 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
             'capture_bitrate_preferred': _targetBitrate,
           },
         );
-        debugPrint(
+        safeDebugLog(
           '[SCAN_BOOT] step=1 create_wellness_scan success has_scan_id=${_scanId?.trim().isNotEmpty == true}',
         );
       }
     } catch (e, s) {
-      debugPrint('[SCAN_SUBMIT_FAILED] error_type=${e.runtimeType}');
-      debugPrint(
+      safeDebugLog('[SCAN_SUBMIT_FAILED] error_type=${e.runtimeType}');
+      safeDebugLog(
         '[SCAN_SUBMIT_FAILED] stack_present=${s.toString().isNotEmpty}',
       );
       _submitting = false;
@@ -1866,11 +1951,12 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       setState(() {});
       return;
     }
-    debugPrint(
+    safeDebugLog(
       '[VOICE] continue_pressed has_scan_id=${_scanId?.trim().isNotEmpty == true}',
     );
     setState(() {});
     try {
+      safeDebugLog('[SCAN_FINALIZE_WORKFLOW_DISPATCH]');
       final finalizeFuture = _startWorkflowIfNeeded();
       unawaited(finalizeFuture);
       if (!mounted) return;
@@ -1880,10 +1966,10 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       if (!mounted) return;
       _startFocusTask();
     } catch (e, s) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FLOW_ORDER_ERROR] ts=${DateTime.now().toIso8601String()} has_scan_id=${_scanId?.trim().isNotEmpty == true} audioUploaded=${_audioFile != null} videoUploaded=${_videoFile != null} thumbnailUploaded=${_thumbnailBytes != null && _thumbnailBytes!.isNotEmpty} scanMediaCreated=false mediaReadyPatched=false processCallStarted=false processAccepted=false error_type=${e.runtimeType}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FLOW_ORDER_ERROR] stack_present=${s.toString().isNotEmpty}',
       );
       if (!mounted) return;
@@ -1904,14 +1990,15 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
   }
 
   Future<_WorkflowTerminalResult> _startWorkflowIfNeeded() {
+    safeDebugLog('[SCAN_WORKFLOW_START_ENTER]');
     if (_workflowFuture != null) {
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] duplicate trigger ignored has_scan_id=${_scanId?.trim().isNotEmpty == true} reason=workflow_future_exists',
       );
       return _workflowFuture!;
     }
     if (_workflowStarted) {
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] duplicate trigger ignored has_scan_id=${_scanId?.trim().isNotEmpty == true} reason=workflow_already_started',
       );
       return _workflowFuture!;
@@ -1941,7 +2028,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
           },
         );
         _workflowSettled = true;
-        debugPrint(
+        safeDebugLog(
           '[SCAN_FLOW_ORDER_ASSERT] ts=${DateTime.now().toIso8601String()} has_scan_id=${_scanId?.trim().isNotEmpty == true} audioUploaded=true videoUploaded=true thumbnailUploaded=true scanMediaCreated=true mediaReadyPatched=true processCallStarted=true processAccepted=true',
         );
         return _WorkflowTerminalResult.success(result);
@@ -1949,10 +2036,10 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         _backgroundFinalizeFailure = error;
         _backgroundFinalizeFailureStack = stackTrace;
         _workflowSettled = true;
-        debugPrint(
+        safeDebugLog(
           '[SCAN_FINALIZE] background_finalize_failed_deferred has_scan_id=${_scanId?.trim().isNotEmpty == true} error_type=${error.runtimeType}',
         );
-        debugPrint(
+        safeDebugLog(
           '[SCAN_FINALIZE] background_finalize_failed_stack_present=${stackTrace.toString().isNotEmpty}',
         );
         return _WorkflowTerminalResult.failure(error, stackTrace);
@@ -1968,11 +2055,11 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         scanId: _scanId!,
         failureReason: 'scan_prepare_failed',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] finalize_failure_patch success has_scan_id=${_scanId?.trim().isNotEmpty == true} failure_reason=scan_prepare_failed',
       );
     } catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] finalize_failure_patch fail has_scan_id=${_scanId?.trim().isNotEmpty == true} error_type=${e.runtimeType}',
       );
     }
@@ -1983,24 +2070,24 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
     final waitMs = _focusShellVisibleAt == null
         ? 0
         : DateTime.now().difference(_focusShellVisibleAt!).inMilliseconds;
-    debugPrint(
+    safeDebugLog(
       '[FOCUS_GAME_WAITING_FOR_PROCESS] has_scan_id=${_scanId?.trim().isNotEmpty == true} elapsed_ms=$waitMs',
     );
     if (waitMs > 2000) {
-      debugPrint(
+      safeDebugLog(
         '[FOCUS_GAME_START_DELAY] has_scan_id=${_scanId?.trim().isNotEmpty == true} elapsed_ms=$waitMs current_finalize_step=$_currentFinalizeStep',
       );
     }
-    debugPrint(
+    safeDebugLog(
       '[SCAN_FLOW] focus_task_start ts=${DateTime.now().toIso8601String()} has_scan_id=${_scanId?.trim().isNotEmpty == true}',
     );
-    debugPrint(
+    safeDebugLog(
       '[SCAN_FLOW] focus_task_game_start ts=${DateTime.now().toIso8601String()} has_scan_id=${_scanId?.trim().isNotEmpty == true}',
     );
-    debugPrint(
+    safeDebugLog(
       '[SCAN_FINALIZE] focus_task_start ts=${DateTime.now().toIso8601String()} has_scan_id=${_scanId?.trim().isNotEmpty == true}',
     );
-    debugPrint(
+    safeDebugLog(
       '[FOCUS_TASK] start ts=${DateTime.now().toIso8601String()} has_scan_id=${_scanId?.trim().isNotEmpty == true}',
     );
     setState(() {
@@ -2052,9 +2139,9 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       'POST_FOCUS',
       'focus_done ts=$timestamp has_scan_id=${scanId != 'pending'} current_route=${_currentRouteName()} finalize_future_state=$workflowState',
     );
-    debugPrint('[FOCUS_TASK] complete has_scan_id=${scanId != 'pending'}');
-    debugPrint('[ScanFlow] focus_done has_scan_id=${scanId != 'pending'}');
-    debugPrint('[RESULT] focus_done has_scan_id=${scanId != 'pending'}');
+    safeDebugLog('[FOCUS_TASK] complete has_scan_id=${scanId != 'pending'}');
+    safeDebugLog('[ScanFlow] focus_done has_scan_id=${scanId != 'pending'}');
+    safeDebugLog('[RESULT] focus_done has_scan_id=${scanId != 'pending'}');
     setState(() {
       _focusActive = false;
       _focusDone = true;
@@ -2071,7 +2158,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
     final resolutionVersion = ++_postFocusResolutionVersion;
     final deadline = DateTime.now().add(_maxPostFocusWait);
     if (workflowFuture == null) {
-      debugPrint(
+      safeDebugLog(
         '[FOCUS_TASK] finalize_failed has_scan_id=${_scanId?.trim().isNotEmpty == true} error=no_workflow_future',
       );
       await _markScanFailedAfterFinalizeError(StateError('no_workflow_future'));
@@ -2085,15 +2172,15 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       'POST_FOCUS',
       'finalize_wait_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId != 'pending'} current_route=${_currentRouteName()} finalize_future_state=${_workflowSettled ? 'settled' : 'pending'}',
     );
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] finalize_wait_start has_scan_id=${scanId != 'pending'}',
     );
 
     if (!_workflowSettled) {
-      debugPrint(
+      safeDebugLog(
         '[FOCUS_TASK] awaiting_finalize has_scan_id=${scanId != 'pending'}',
       );
-      debugPrint(
+      safeDebugLog(
         '[RESULT] finalize_wait_start has_scan_id=${scanId != 'pending'}',
       );
       _preparingProcess = true;
@@ -2109,10 +2196,10 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         final error = terminal.error ?? _backgroundFinalizeFailure;
         final stackTrace =
             terminal.stackTrace ?? _backgroundFinalizeFailureStack;
-        debugPrint(
+        safeDebugLog(
           '[FOCUS_TASK] finalize_failed has_scan_id=${_scanId?.trim().isNotEmpty == true} error_type=${error.runtimeType}',
         );
-        debugPrint(
+        safeDebugLog(
           '[FOCUS_TASK] finalize_failed_stack_present=${stackTrace?.toString().isNotEmpty == true}',
         );
         if (!mounted) return;
@@ -2125,13 +2212,13 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         'POST_FOCUS',
         'finalize_wait_done ts=${DateTime.now().toIso8601String()} has_scan_id=${result.scanId.trim().isNotEmpty} current_route=${_currentRouteName()} finalize_future_state=settled',
       );
-      debugPrint(
+      safeDebugLog(
         '[FOCUS_TASK] finalize_success has_scan_id=${result.scanId.trim().isNotEmpty}',
       );
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] finalize_wait_done has_scan_id=${result.scanId.trim().isNotEmpty}',
       );
-      debugPrint(
+      safeDebugLog(
         '[RESULT] finalize_wait_done has_scan_id=${result.scanId.trim().isNotEmpty}',
       );
       if (!mounted || resolutionVersion != _postFocusResolutionVersion) return;
@@ -2142,7 +2229,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         resolutionVersion: resolutionVersion,
       );
     } on TimeoutException {
-      debugPrint(
+      safeDebugLog(
         '[FOCUS_TASK] finalize_still_running has_scan_id=${_scanId?.trim().isNotEmpty == true} wait_seconds=${_postFocusFinalizeWait.inSeconds}',
       );
       if (!mounted || resolutionVersion != _postFocusResolutionVersion) return;
@@ -2158,10 +2245,10 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         resolutionVersion: resolutionVersion,
       );
     } catch (e, s) {
-      debugPrint(
+      safeDebugLog(
         '[FOCUS_TASK] finalize_failed has_scan_id=${_scanId?.trim().isNotEmpty == true} error_type=${e.runtimeType}',
       );
-      debugPrint(
+      safeDebugLog(
         '[FOCUS_TASK] finalize_failed_stack_present=${s.toString().isNotEmpty}',
       );
       await _markScanFailedAfterFinalizeError(e);
@@ -2203,7 +2290,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       'POST_FOCUS',
       'post_focus_resolve_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} current_route=${_currentRouteName()} finalize_future_state=${_workflowSettled ? 'settled' : 'pending'}',
     );
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] post_focus_resolve_start has_scan_id=${scanId.trim().isNotEmpty}',
     );
     ActiveWorkspaceContext? workspace;
@@ -2211,10 +2298,10 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       workspace = await OrganizationService.instance
           .fetchActiveWorkspaceContext();
     } catch (e, s) {
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] post_focus_workspace_context_unavailable has_scan_id=${scanId.trim().isNotEmpty} error_type=${e.runtimeType}',
       );
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] post_focus_workspace_context_stack_present=${s.toString().isNotEmpty}',
       );
     }
@@ -2235,10 +2322,10 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
           scanId,
         );
       } catch (e, s) {
-        debugPrint(
+        safeDebugLog(
           '[ScanFlow] post_focus_resolve_result_error has_scan_id=${scanId.trim().isNotEmpty} attempt=$attempt error_type=${e.runtimeType}',
         );
-        debugPrint(
+        safeDebugLog(
           '[ScanFlow] post_focus_resolve_result_stack_present=${s.toString().isNotEmpty}',
         );
       }
@@ -2256,7 +2343,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
           'SCAN_DECISION',
           'decision=show_result reason=result_parsed scan_id=$scanId attempt=$attempt status=$status failure_reason=${failureReason ?? '-'} scan_results_count=$scanResultsCount result_id=${lookup!.result!.id} workspace_id=${workspaceId.isEmpty ? '-' : workspaceId} membership_id=${membershipId.isEmpty ? '-' : membershipId} effective_role=${effectiveRole.isEmpty ? '-' : effectiveRole} directus_role=${directusRole.isEmpty ? '-' : directusRole} ts=${DateTime.now().toIso8601String()}',
         );
-        debugPrint(
+        safeDebugLog(
           '[ScanFlow] post_focus_result_found has_scan_id=${scanId.trim().isNotEmpty}',
         );
         _openResultPollingScreen(lookup.result!);
@@ -2266,7 +2353,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       if (scanResultsCount > 0 &&
           (firstResultId != null && firstResultId.isNotEmpty)) {
         try {
-          debugPrint(
+          safeDebugLog(
             '[SCAN_RESULTS] direct_lookup_retry has_scan_id=${scanId.trim().isNotEmpty} has_result_id=${firstResultId.trim().isNotEmpty} attempt=$attempt',
           );
           final directResult = await ScanService.instance.fetchScanResultById(
@@ -2277,17 +2364,17 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
               'SCAN_DECISION',
               'decision=show_result reason=result_visible scan_id=$scanId attempt=$attempt status=$status failure_reason=${failureReason ?? '-'} scan_results_count=$scanResultsCount result_id=${directResult.id} source=direct_by_id workspace_id=${workspaceId.isEmpty ? '-' : workspaceId} membership_id=${membershipId.isEmpty ? '-' : membershipId} effective_role=${effectiveRole.isEmpty ? '-' : effectiveRole} directus_role=${directusRole.isEmpty ? '-' : directusRole} ts=${DateTime.now().toIso8601String()}',
             );
-            debugPrint(
+            safeDebugLog(
               '[ScanFlow] post_focus_result_found has_scan_id=${scanId.trim().isNotEmpty}',
             );
             _openResultPollingScreen(directResult);
             return;
           }
         } catch (e, s) {
-          debugPrint(
+          safeDebugLog(
             '[ScanFlow] post_focus_resolve_direct_result_error has_scan_id=${scanId.trim().isNotEmpty} attempt=$attempt has_result_id=${firstResultId.trim().isNotEmpty} error_type=${e.runtimeType}',
           );
-          debugPrint(
+          safeDebugLog(
             '[ScanFlow] post_focus_resolve_direct_result_stack_present=${s.toString().isNotEmpty}',
           );
         }
@@ -2309,7 +2396,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
           'SCAN_DECISION',
           'decision=show_failure reason=failed scan_id=$scanId attempt=$attempt status=$statusForLog failure_reason=${failureReasonForLog ?? '-'} scan_results_count=$scanResultsCount',
         );
-        debugPrint(
+        safeDebugLog(
           '[ScanFlow] post_focus_failed reason=${scanStatus?.failureReason}',
         );
         _showPostFocusFailure(scanStatus?.failureReason);
@@ -2351,7 +2438,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       'SCAN_DECISION',
       'decision=show_timeout reason=bounded_retry_exhausted scan_id=$scanId attempts=$attempt ts=${DateTime.now().toIso8601String()}',
     );
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] post_focus_timeout has_scan_id=${scanId.trim().isNotEmpty}',
     );
     _showPostFocusTimeout();
@@ -2364,10 +2451,10 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
     try {
       return await ScanService.instance.fetchWellnessScanStatus(scanId);
     } catch (e, s) {
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] post_focus_resolve_status_error has_scan_id=${scanId.trim().isNotEmpty} attempt=$attempt error_type=${e.runtimeType}',
       );
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] post_focus_resolve_status_stack_present=${s.toString().isNotEmpty}',
       );
       return null;
@@ -2397,7 +2484,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       consistencyAttempt++;
       if (firstResultId != null && firstResultId.isNotEmpty) {
         try {
-          debugPrint(
+          safeDebugLog(
             '[SCAN_RESULTS] completed_consistency_direct_lookup has_scan_id=${scanId.trim().isNotEmpty} has_result_id=${firstResultId.trim().isNotEmpty} attempt=$attempt.$consistencyAttempt',
           );
           final directResult = await ScanService.instance.fetchScanResultById(
@@ -2408,17 +2495,17 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
               'SCAN_DECISION',
               'decision=show_result reason=completed_result_visible scan_id=$scanId attempt=$attempt.$consistencyAttempt scan_results_count=$scanResultsCount result_id=${directResult.id} workspace_id=${workspaceId.isEmpty ? '-' : workspaceId} membership_id=${membershipId.isEmpty ? '-' : membershipId} effective_role=${effectiveRole.isEmpty ? '-' : effectiveRole} directus_role=${directusRole.isEmpty ? '-' : directusRole} ts=${DateTime.now().toIso8601String()}',
             );
-            debugPrint(
+            safeDebugLog(
               '[ScanFlow] post_focus_result_found has_scan_id=${scanId.trim().isNotEmpty}',
             );
             _openResultPollingScreen(directResult);
             return true;
           }
         } catch (e, s) {
-          debugPrint(
+          safeDebugLog(
             '[ScanFlow] post_focus_completed_direct_result_error has_scan_id=${scanId.trim().isNotEmpty} attempt=$attempt.$consistencyAttempt has_result_id=${firstResultId.trim().isNotEmpty} error_type=${e.runtimeType}',
           );
-          debugPrint(
+          safeDebugLog(
             '[ScanFlow] post_focus_completed_direct_result_stack_present=${s.toString().isNotEmpty}',
           );
         }
@@ -2435,7 +2522,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
             'SCAN_DECISION',
             'decision=show_result reason=completed_result_parsed scan_id=$scanId attempt=$attempt.$consistencyAttempt scan_results_count=${lookup.count} result_id=${result.id} workspace_id=${workspaceId.isEmpty ? '-' : workspaceId} membership_id=${membershipId.isEmpty ? '-' : membershipId} effective_role=${effectiveRole.isEmpty ? '-' : effectiveRole} directus_role=${directusRole.isEmpty ? '-' : directusRole} ts=${DateTime.now().toIso8601String()}',
           );
-          debugPrint(
+          safeDebugLog(
             '[ScanFlow] post_focus_result_found has_scan_id=${scanId.trim().isNotEmpty}',
           );
           _openResultPollingScreen(result);
@@ -2450,7 +2537,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
               'SCAN_DECISION',
               'decision=show_result reason=completed_result_visible scan_id=$scanId attempt=$attempt.$consistencyAttempt scan_results_count=${lookup.count} result_id=${directResult.id} workspace_id=${workspaceId.isEmpty ? '-' : workspaceId} membership_id=${membershipId.isEmpty ? '-' : membershipId} effective_role=${effectiveRole.isEmpty ? '-' : effectiveRole} directus_role=${directusRole.isEmpty ? '-' : directusRole} ts=${DateTime.now().toIso8601String()}',
             );
-            debugPrint(
+            safeDebugLog(
               '[ScanFlow] post_focus_result_found has_scan_id=${scanId.trim().isNotEmpty}',
             );
             _openResultPollingScreen(directResult);
@@ -2458,10 +2545,10 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
           }
         }
       } catch (e, s) {
-        debugPrint(
+        safeDebugLog(
           '[ScanFlow] post_focus_completed_lookup_error has_scan_id=${scanId.trim().isNotEmpty} attempt=$attempt.$consistencyAttempt error_type=${e.runtimeType}',
         );
-        debugPrint(
+        safeDebugLog(
           '[ScanFlow] post_focus_completed_lookup_stack_present=${s.toString().isNotEmpty}',
         );
       }
@@ -2485,12 +2572,13 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       'POST_FOCUS',
       'navigate_result_screen ts=${DateTime.now().toIso8601String()} has_scan_id=${_scanId?.trim().isNotEmpty == true} has_result_id=${result.id.trim().isNotEmpty} current_route=${_currentRouteName()}',
     );
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] final route/result has_scan_id=${_scanId?.trim().isNotEmpty == true}',
     );
     _scanFinished = true;
     _preparingProcess = false;
     final container = ProviderScope.containerOf(context, listen: false);
+    final messenger = ScaffoldMessenger.maybeOf(context);
     Navigator.pushReplacement(
       context,
       fadeSlideRoute(
@@ -2504,19 +2592,22 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         ),
       ),
     );
-    unawaited(_completeRequestAfterResultReady(container));
+    unawaited(
+      _completeRequestAfterResultReady(container, messenger: messenger),
+    );
   }
 
   Future<void> _completeRequestAfterResultReady(
-    ProviderContainer container,
-  ) async {
+    ProviderContainer container, {
+    required ScaffoldMessengerState? messenger,
+  }) async {
     if (widget.requestId == null || _scanId == null) return;
     try {
       final currentRequest = await RequestService.instance.fetchRequestById(
         widget.requestId!,
       );
       if (currentRequest == null) {
-        debugPrint(
+        safeDebugLog(
           '[REQUEST_SCAN_FLOW] completion skipped reason=request_missing has_request_id=${widget.requestId!.trim().isNotEmpty}',
         );
         return;
@@ -2525,7 +2616,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       if (currentStatus == 'cancelled' ||
           currentStatus == 'completed' ||
           currentRequest.scanId?.trim().isNotEmpty == true) {
-        debugPrint(
+        safeDebugLog(
           '[REQUEST_SCAN_FLOW] completion skipped reason=request_ineligible has_request_id=${widget.requestId!.trim().isNotEmpty} status=$currentStatus has_scan_id=${currentRequest.scanId?.trim().isNotEmpty == true}',
         );
         return;
@@ -2552,12 +2643,20 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       container.invalidate(exportsProvider);
       container.invalidate(activityEventsProvider);
     } catch (e, s) {
-      debugPrint(
+      safeDebugLog(
         '[REQUEST_SCAN_FLOW] completion update failed error_type=${e.runtimeType}',
       );
-      debugPrint(
+      safeDebugLog(
         '[REQUEST_SCAN_FLOW] stack_present=${s.toString().isNotEmpty}',
       );
+      if (messenger?.mounted == true) {
+        final language = container.read(appLanguageControllerProvider).language;
+        final message = Tr.t(language, 'request_scan_link_update_failed');
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!messenger!.mounted) return;
+          messenger.showSnackBar(SnackBar(content: Text(message)));
+        });
+      }
     }
   }
 
@@ -2624,7 +2723,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
       _postFocusTimeoutTitle = null;
       _postFocusTimeoutMessage = null;
     });
-    debugPrint(
+    safeDebugLog(
       '[SCAN_FINALIZE] retry_ready has_scan_id=${_scanId?.trim().isNotEmpty == true}',
     );
   }
@@ -2695,19 +2794,19 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
   void _backToHomeOrShell() {
     if (!mounted) return;
     _postFocusResolutionVersion++;
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    goToDashboard(context);
   }
 
   void _setStep(ScanFlowStep step) {
     if (!mounted) return;
     setState(() => _step = step);
-    debugPrint('[ScanFlow] current flow step=${step.name}');
+    safeDebugLog('[ScanFlow] current flow step=${step.name}');
     if (step == ScanFlowStep.focus) {
       _focusShellVisibleAt ??= DateTime.now();
-      debugPrint(
+      safeDebugLog(
         '[FOCUS_SHELL_VISIBLE] has_scan_id=${_scanId?.trim().isNotEmpty == true} ts=${_focusShellVisibleAt!.toIso8601String()}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FLOW] focus_task_screen_visible ts=${DateTime.now().toIso8601String()} has_scan_id=${_scanId?.trim().isNotEmpty == true}',
       );
     }
@@ -2778,7 +2877,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
     if (_captureSessionInvalidated && _captureInvalidationReason == reason) {
       return;
     }
-    debugPrint('[CAPTURE_FLOW] capture_invalidated_reason=$reason');
+    safeDebugLog('[CAPTURE_FLOW] capture_invalidated_reason=$reason');
     _cancelCaptureGapTimer();
     _videoTimer?.cancel();
     _audioTimer?.cancel();
@@ -2838,7 +2937,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
         primaryLabel: 'Retake scan',
         primaryAction: _restartScanFlow,
         secondaryLabel: 'Close',
-        secondaryAction: () => Navigator.maybePop(context),
+        secondaryAction: () => goToDashboard(context),
       ),
     );
   }
@@ -2884,9 +2983,15 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
 
   void _showError(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    if (ProviderScope.containerOf(
+          context,
+          listen: false,
+        ).read(connectivityStatusProvider).asData?.value ==
+        false) {
+      AppFeedback.showOffline(context);
+    } else {
+      AppFeedback.showError(context, message);
+    }
   }
 }
 

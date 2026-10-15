@@ -1,3 +1,4 @@
+import '../utils/safe_debug_log.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +13,7 @@ import '../widgets/animated_wellar_card.dart';
 import '../widgets/animated_wellar_screen.dart';
 import '../widgets/owner/owner_design_system.dart';
 import '../widgets/page_header_actions.dart';
+import '../widgets/wellar_error_state.dart';
 import '../widgets/workforce_member_card.dart';
 
 class OwnerWorkforceScreen extends ConsumerStatefulWidget {
@@ -38,35 +40,35 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
     super.initState();
     _workspaceIdentity = _identityOf(ref.read(activeWorkspaceContextProvider));
     _future = _loadWorkforceForCurrentRole();
-    _workspaceSubscription = ref.listenManual(
-      activeWorkspaceContextProvider,
-      (previous, next) {
-        final nextIdentity = _identityOf(next);
-        if (nextIdentity == _workspaceIdentity) return;
-        if (!mounted) return;
-        final nextRole = _workspaceRole(next);
-        if (nextRole != 'owner') {
-          debugPrint(
-            '[STALE_ROLE_WIDGET_BLOCKED] widget=OwnerWorkforceScreen expected=owner actual=$nextRole',
-          );
-          setState(() {
-            _workspaceIdentity = nextIdentity;
-            _roleFilter = 'all';
-            _departmentFilter = _allDepartmentsValue;
-            _query = '';
-            _future = _idleWorkforceFuture();
-          });
-          return;
-        }
+    _workspaceSubscription = ref.listenManual(activeWorkspaceContextProvider, (
+      previous,
+      next,
+    ) {
+      final nextIdentity = _identityOf(next);
+      if (nextIdentity == _workspaceIdentity) return;
+      if (!mounted) return;
+      final nextRole = _workspaceRole(next);
+      if (nextRole != 'owner') {
+        safeDebugLog(
+          '[STALE_ROLE_WIDGET_BLOCKED] widget=OwnerWorkforceScreen expected=owner actual=$nextRole',
+        );
         setState(() {
           _workspaceIdentity = nextIdentity;
           _roleFilter = 'all';
           _departmentFilter = _allDepartmentsValue;
           _query = '';
-          _future = _loadWorkforceForCurrentRole(forceRefresh: true);
+          _future = _idleWorkforceFuture();
         });
-      },
-    );
+        return;
+      }
+      setState(() {
+        _workspaceIdentity = nextIdentity;
+        _roleFilter = 'all';
+        _departmentFilter = _allDepartmentsValue;
+        _query = '';
+        _future = _loadWorkforceForCurrentRole(forceRefresh: true);
+      });
+    });
   }
 
   @override
@@ -77,23 +79,31 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = ref.watch(appLanguageControllerProvider).language;
     final workspace = ref.watch(activeWorkspaceContextProvider);
     final activeRole = _workspaceRole(workspace);
     if (activeRole != 'owner') {
-      debugPrint(
+      safeDebugLog(
         '[STALE_ROLE_WIDGET_BLOCKED] widget=OwnerWorkforceScreen expected=owner actual=$activeRole',
       );
-      return const Scaffold(
+      return Scaffold(
         backgroundColor: Colors.transparent,
         body: Center(
-          child: CircularProgressIndicator(
-            strokeWidth: 2.2,
-            color: WellarTheme.primary,
+          child: WellarErrorState(
+            title: Tr.t(lang, 'access_unavailable'),
+            body: Tr.t(lang, 'role_unavailable_info'),
+            onRetry: () {
+              final next = OwnerOpsService.instance.fetchWorkforceDirectory(
+                forceRefresh: true,
+              );
+              setState(() {
+                _future = next;
+              });
+            },
           ),
         ),
       );
     }
-    final lang = ref.watch(appLanguageControllerProvider).language;
     final unread = ref.watch(unreadNotificationsProvider);
     final roleFilters = <_RoleFilterOption>[
       _RoleFilterOption(key: 'all', label: Tr.t(lang, 'all')),
@@ -107,12 +117,19 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
       backgroundColor: Colors.transparent,
       body: AnimatedWellarScreen(
         showBackground: false,
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        padding: const EdgeInsets.fromLTRB(
+          WellarTheme.pagePadding,
+          12,
+          WellarTheme.pagePadding,
+          24,
+        ),
         child: FutureBuilder<OwnerWorkforceDirectoryData>(
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const OwnerSurfaceCard(
+                padding: EdgeInsets.all(WellarTheme.cardPadding),
+                radius: WellarTheme.cardRadius,
                 child: SizedBox(
                   height: 180,
                   child: Center(
@@ -135,12 +152,7 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
                     ? Tr.t(lang, 'workforce_unavailable')
                     : Tr.t(lang, 'unable_load_workforce'),
                 actionLabel: Tr.t(lang, 'retry'),
-                onAction: () => setState(
-                  () => _future =
-                      OwnerOpsService.instance.fetchWorkforceDirectory(
-                        forceRefresh: true,
-                      ),
-                ),
+                onAction: _retryWorkforceDirectory,
               );
             }
 
@@ -151,33 +163,29 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
                   member.departmentLabel ==
                   MemberIdentityService.noDepartmentLabel,
             );
-            final businessProfileId =
-                (workspace?.businessProfileId ?? '').trim();
-            final membershipId = (workspace?.membershipId ?? '').trim();
-            final role = (workspace?.finalEffectiveRole ??
-                    workspace?.memberRole ??
-                    'unknown')
+            final businessProfileId = (workspace?.businessProfileId ?? '')
                 .trim();
+            final membershipId = (workspace?.membershipId ?? '').trim();
+            final role =
+                (workspace?.finalEffectiveRole ??
+                        workspace?.memberRole ??
+                        'unknown')
+                    .trim();
             final departmentId = (workspace?.departmentId ?? '').trim();
-            debugPrint(
+            safeDebugLog(
               '[WORKFORCE_SOURCE] screen=OwnerWorkforce role=$role business_profile=$businessProfileId membership_id=$membershipId department=${departmentId.isEmpty ? "none" : departmentId}',
             );
-            debugPrint(
+            safeDebugLog(
               '[OWNER_WORKFORCE_RENDER] loaded_count=${data.members.length} visible_count=${filtered.length}',
             );
             if (_query.isNotEmpty) {
-              debugPrint(
+              safeDebugLog(
                 '[OWNER_WORKFORCE_FILTER] query=$_query visible_count=${filtered.length}',
               );
             }
 
             return RefreshIndicator(
-              onRefresh: () async => setState(
-                () => _future =
-                    OwnerOpsService.instance.fetchWorkforceDirectory(
-                      forceRefresh: true,
-                    ),
-              ),
+              onRefresh: _retryWorkforceDirectory,
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
@@ -190,8 +198,10 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
                       showAlertsTab: true,
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   OwnerSurfaceCard(
+                    padding: const EdgeInsets.all(WellarTheme.cardPadding),
+                    radius: WellarTheme.cardRadius,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -210,14 +220,14 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
                               color: WellarTheme.textMuted,
                             ),
                             filled: true,
-                            fillColor: const Color(0x16FFFFFF),
+                            fillColor: WellarTheme.text.withValues(alpha: 0.09),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
                               borderSide: BorderSide.none,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: WellarTheme.sectionGap),
                         Wrap(
                           spacing: 8,
                           runSpacing: 8,
@@ -232,10 +242,10 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
                           }).toList(),
                         ),
                         if (data.departments.isNotEmpty || hasUnassigned) ...[
-                          const SizedBox(height: 14),
+                          const SizedBox(height: WellarTheme.sectionGap),
                           DropdownButtonFormField<String>(
                             initialValue: _departmentFilter,
-                            dropdownColor: const Color(0xFF172235),
+                            dropdownColor: WellarTheme.surfaceSoft,
                             style: const TextStyle(color: WellarTheme.text),
                             decoration: InputDecoration(
                               labelText: '${Tr.t(lang, 'department')} filter',
@@ -270,7 +280,7 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
@@ -278,16 +288,16 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
                       _summaryChip(
                         Tr.t(lang, 'active_members'),
                         '${data.members.where((member) => member.isActive).length}',
-                        const Color(0xFF6EE7A8),
+                        WellarTheme.success,
                       ),
                       _summaryChip(
                         Tr.t(lang, 'departments'),
                         '${data.departments.length}',
-                        const Color(0xFF7DBBFF),
+                        WellarTheme.info,
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   if (filtered.isEmpty)
                     SmartEmptyState(
                       icon: Icons.people_alt_outlined,
@@ -340,7 +350,7 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
     final workspace = ref.read(activeWorkspaceContextProvider);
     final activeRole = _workspaceRole(workspace);
     if (activeRole != 'owner') {
-      debugPrint(
+      safeDebugLog(
         '[STALE_ROLE_WIDGET_BLOCKED] widget=OwnerWorkforceScreen expected=owner actual=$activeRole',
       );
       return _idleWorkforceFuture();
@@ -348,6 +358,25 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
     return OwnerOpsService.instance.fetchWorkforceDirectory(
       forceRefresh: forceRefresh,
     );
+  }
+
+  Future<void> _retryWorkforceDirectory() async {
+    try {
+      final data = await OwnerOpsService.instance.fetchWorkforceDirectory(
+        forceRefresh: true,
+      );
+      if (mounted) {
+        setState(() {
+          _future = Future.value(data);
+        });
+      }
+    } catch (error, stackTrace) {
+      if (mounted) {
+        setState(() {
+          _future = Future.error(error, stackTrace);
+        });
+      }
+    }
   }
 
   List<OwnerMemberView> _applyFilter(List<OwnerMemberView> data) {
@@ -414,10 +443,10 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
   }
 
   Color _memberAccent(OwnerMemberView item) {
-    if (item.latestReadiness == 'High Risk') return const Color(0xFFFF7A8F);
-    if (item.hasOpenAlert) return const Color(0xFF7DBBFF);
+    if (item.latestReadiness == 'High Risk') return WellarTheme.danger;
+    if (item.hasOpenAlert) return WellarTheme.warning;
     if (item.hasOverdueRequest || item.missingCheck) {
-      return const Color(0xFFFFC46B);
+      return WellarTheme.warning;
     }
     return WellarTheme.primary;
   }
@@ -439,10 +468,7 @@ class _OwnerWorkforceScreenState extends ConsumerState<OwnerWorkforceScreen> {
 
   Future<OwnerWorkforceDirectoryData> _idleWorkforceFuture() {
     return Future<OwnerWorkforceDirectoryData>.value(
-      const OwnerWorkforceDirectoryData(
-        members: [],
-        departments: [],
-      ),
+      const OwnerWorkforceDirectoryData(members: [], departments: []),
     );
   }
 }

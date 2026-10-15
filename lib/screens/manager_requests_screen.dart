@@ -91,10 +91,10 @@ class _ManagerRequestsScreenState extends State<ManagerRequestsScreen> {
                 return RefreshIndicator(
                   color: AppColors.primarySoft,
                   onRefresh: () async {
-                    setState(
-                      () => _future = RequestService.instance
-                          .fetchManagerRequests(),
-                    );
+                    final next = RequestService.instance.fetchManagerRequests();
+                    setState(() {
+                      _future = next;
+                    });
                   },
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),

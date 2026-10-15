@@ -1,3 +1,4 @@
+import '../utils/safe_debug_log.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -5,12 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../i18n/tr.dart';
 import '../services/auth_service.dart';
+import '../services/directus_client.dart';
 import '../services/organization_service.dart';
+import '../services/workspace_selection_service.dart';
 import '../services/push_notification_service.dart';
 import '../services/hr_ops_service.dart';
 import '../services/owner_ops_service.dart';
 import '../state/app_providers.dart';
 import '../utils/app_colors.dart';
+import '../utils/app_feedback.dart';
 import '../widgets/wellar_app_shell.dart';
 import '../widgets/wellar_bottom_nav.dart';
 import 'employee_home_screen.dart';
@@ -28,6 +32,7 @@ import 'manager_scan_requests_screen.dart';
 import 'public_entry_screen.dart';
 import 'wellness_check_screen.dart';
 import 'workspace_access_screen.dart';
+import 'workspace_picker_screen.dart';
 
 enum MobileRoleShell { owner, hr, manager, employee }
 
@@ -44,7 +49,7 @@ class RoleShellFactory {
       );
     }
     final keyValue = shellKey(context);
-    debugPrint('[ROLE_SHELL_KEY] key=$keyValue');
+    safeDebugLog('[ROLE_SHELL_KEY] key=$keyValue');
     switch (shell) {
       case MobileRoleShell.owner:
         return OwnerMobileShell(
@@ -52,10 +57,7 @@ class RoleShellFactory {
           context: context,
         );
       case MobileRoleShell.hr:
-        return HrMobileShell(
-          key: ValueKey<String>(keyValue),
-          context: context,
-        );
+        return HrMobileShell(key: ValueKey<String>(keyValue), context: context);
       case MobileRoleShell.manager:
         return ManagerMobileShell(
           key: ValueKey<String>(keyValue),
@@ -89,9 +91,21 @@ class RoleShellFactory {
       case MobileRoleShell.manager:
         return const ['Today', 'Scan', 'Workforce', 'Requests', 'Account'];
       case MobileRoleShell.hr:
-        return const ['Today', 'Workforce', 'Requests', 'Compliance', 'Reports'];
+        return const [
+          'Today',
+          'Workforce',
+          'Requests',
+          'Compliance',
+          'Reports',
+        ];
       case MobileRoleShell.owner:
-        return const ['Today', 'Workforce', 'Requests', 'Compliance', 'Reports'];
+        return const [
+          'Today',
+          'Workforce',
+          'Requests',
+          'Compliance',
+          'Reports',
+        ];
     }
   }
 
@@ -137,6 +151,7 @@ class RoleShellFactory {
 
 enum VerifiedRouteKind {
   roleShell,
+  workspaceSelection,
   workspaceAccess,
   workspaceAccessError,
   restrictedWorkspace,
@@ -148,8 +163,14 @@ class VerifiedRouteResult {
   final VerifiedRouteKind kind;
   final ActiveWorkspaceContext? context;
   final String? message;
+  final List<WorkspaceMembershipChoice> memberships;
 
-  const VerifiedRouteResult({required this.kind, this.context, this.message});
+  const VerifiedRouteResult({
+    required this.kind,
+    this.context,
+    this.message,
+    this.memberships = const [],
+  });
 }
 
 Future<VerifiedRouteResult> resolveVerifiedRouteResult({
@@ -170,23 +191,83 @@ Future<VerifiedRouteResult> resolveVerifiedRouteResult({
     }
   }
 
-  final canonicalWorkspace = await OrganizationService.instance
-      .resolveCanonicalActiveWorkspace(forceRefresh: true);
-  if (canonicalWorkspace.status == WorkspaceResolveStatus.ok &&
-      canonicalWorkspace.context != null) {
-    return _verifiedRouteFromContext(
-      canonicalWorkspace.context!,
-      validateSession: validateSession,
+  final canonical = await OrganizationService.instance
+      .fetchCanonicalWorkspaceContext(forceRefresh: true);
+  if (canonical.status != CanonicalWorkspaceContextStatus.ok ||
+      canonical.snapshot == null) {
+    final result = WorkspaceResolveResult(
+      status: switch (canonical.status) {
+        CanonicalWorkspaceContextStatus.unauthenticated =>
+          WorkspaceResolveStatus.unauthenticated,
+        CanonicalWorkspaceContextStatus.forbidden =>
+          WorkspaceResolveStatus.forbidden,
+        CanonicalWorkspaceContextStatus.error => WorkspaceResolveStatus.error,
+        CanonicalWorkspaceContextStatus.ok =>
+          WorkspaceResolveStatus.noMembership,
+      },
+      message: canonical.message,
     );
-  }
-  if (canonicalWorkspace.status == WorkspaceResolveStatus.unauthenticated ||
-      canonicalWorkspace.status == WorkspaceResolveStatus.forbidden ||
-      canonicalWorkspace.status == WorkspaceResolveStatus.error) {
-    return _workspaceResolveFailure(canonicalWorkspace);
+    if (canonical.status == CanonicalWorkspaceContextStatus.ok) {
+      OrganizationService.instance.clearActiveWorkspaceContext();
+      return const VerifiedRouteResult(kind: VerifiedRouteKind.workspaceAccess);
+    }
+    return _workspaceResolveFailure(result);
   }
 
-  OrganizationService.instance.clearActiveWorkspaceContext();
-  return const VerifiedRouteResult(kind: VerifiedRouteKind.workspaceAccess);
+  final snapshot = canonical.snapshot!;
+  final userId = snapshot.currentUserId.trim();
+  final storedMembershipId = await WorkspaceSelectionStore.instance.read(
+    userId,
+  );
+  final decision = WorkspaceSelectionPolicy.decide(
+    memberships: snapshot.memberships,
+    storedMembershipId: storedMembershipId,
+  );
+  if (decision.requiresPicker) {
+    OrganizationService.instance.clearActiveWorkspaceContext();
+    return VerifiedRouteResult(
+      kind: VerifiedRouteKind.workspaceSelection,
+      memberships: decision.memberships,
+    );
+  }
+  final selectedMembership = decision.selection;
+  if (selectedMembership == null) {
+    OrganizationService.instance.clearActiveWorkspaceContext();
+    if (storedMembershipId?.trim().isNotEmpty == true) {
+      await WorkspaceSelectionStore.instance.clearForUser(userId);
+    }
+    return const VerifiedRouteResult(kind: VerifiedRouteKind.workspaceAccess);
+  }
+  if (storedMembershipId?.trim().isNotEmpty == true &&
+      !decision.memberships.any(
+        (membership) => membership.membershipId == storedMembershipId!.trim(),
+      )) {
+    await WorkspaceSelectionStore.instance.clearForUser(userId);
+  }
+
+  final currentContext = snapshot.activeContext;
+  final ActiveWorkspaceContext selectedContext;
+  if (currentContext?.membershipId == selectedMembership.membershipId) {
+    selectedContext = currentContext!;
+    OrganizationService.instance.applyActiveWorkspaceContext(
+      selectedContext,
+      source: 'canonical_context_selected',
+    );
+  } else {
+    selectedContext = await OrganizationService.instance.syncWorkspaceSession(
+      membershipId: selectedMembership.membershipId,
+      trigger: 'deterministic_login_selection',
+      expectedMembership: selectedMembership,
+    );
+  }
+  await WorkspaceSelectionStore.instance.save(
+    userId: userId,
+    membershipId: selectedMembership.membershipId,
+  );
+  return _verifiedRouteFromContext(
+    selectedContext,
+    validateSession: validateSession,
+  );
 }
 
 VerifiedRouteResult _workspaceResolveFailure(WorkspaceResolveResult workspace) {
@@ -239,20 +320,28 @@ class _RoleShellRouterState extends ConsumerState<RoleShellRouter> {
   late Future<Widget> _future;
   ProviderSubscription<ActiveWorkspaceContext?>? _workspaceSubscription;
   String _currentWorkspaceIdentity = '';
+  bool _isLoggingOut = false;
 
   @override
   void initState() {
     super.initState();
+    _isLoggingOut = DirectusClient.instance.isLogoutInProgress;
     _currentWorkspaceIdentity = _workspaceIdentity(widget.initialContext);
-    if (widget.initialContext != null) {
+    if (!_isLoggingOut && widget.initialContext != null) {
       _scheduleSafeActiveWorkspaceSync(widget.initialContext!);
     }
-    _future = widget.initialContext == null
+    _future = _isLoggingOut
+        ? Future<Widget>.value(const PublicEntryScreen())
+        : widget.initialContext == null
         ? _resolveTarget()
         : Future<Widget>.value(_buildShell(widget.initialContext!));
     _workspaceSubscription = ref.listenManual<ActiveWorkspaceContext?>(
       activeWorkspaceContextProvider,
       (previous, next) {
+        if (_isLoggingOut || DirectusClient.instance.isLogoutInProgress) {
+          _isLoggingOut = true;
+          return;
+        }
         final nextIdentity = _workspaceIdentity(next);
         if (nextIdentity == _currentWorkspaceIdentity) return;
         if (!mounted) return;
@@ -269,6 +358,7 @@ class _RoleShellRouterState extends ConsumerState<RoleShellRouter> {
   @override
   void didUpdateWidget(covariant RoleShellRouter oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (_isLoggingOut || DirectusClient.instance.isLogoutInProgress) return;
     if (_workspaceIdentity(oldWidget.initialContext) !=
         _workspaceIdentity(widget.initialContext)) {
       if (widget.initialContext != null) {
@@ -301,7 +391,11 @@ class _RoleShellRouterState extends ConsumerState<RoleShellRouter> {
     final scheduledIdentity = RoleShellFactory.shellKey(context);
 
     Future<void>(() {
-      if (!mounted) return;
+      if (!mounted ||
+          _isLoggingOut ||
+          DirectusClient.instance.isLogoutInProgress) {
+        return;
+      }
 
       final currentRevision = OrganizationService.instance.workspaceRevision;
       final currentSignature = OrganizationService.instance.workspaceSignature;
@@ -311,7 +405,7 @@ class _RoleShellRouterState extends ConsumerState<RoleShellRouter> {
           : RoleShellFactory.shellKey(currentWorkspace);
       if (currentRevision != scheduledRevision ||
           currentSignature != scheduledSignature) {
-        debugPrint(
+        safeDebugLog(
           '[STALE_CONTEXT_WRITE_IGNORED] scheduled_identity=$scheduledIdentity current_identity=$currentIdentity scheduled_revision=$scheduledRevision current_revision=$currentRevision',
         );
         return;
@@ -322,7 +416,7 @@ class _RoleShellRouterState extends ConsumerState<RoleShellRouter> {
       }
 
       if (currentWorkspace != null && currentIdentity != scheduledIdentity) {
-        debugPrint(
+        safeDebugLog(
           '[STALE_CONTEXT_WRITE_IGNORED] scheduled_identity=$scheduledIdentity current_identity=$currentIdentity scheduled_revision=$scheduledRevision current_revision=$currentRevision',
         );
         return;
@@ -331,18 +425,32 @@ class _RoleShellRouterState extends ConsumerState<RoleShellRouter> {
       ref.read(activeWorkspaceContextProvider.notifier).state = context;
       _currentWorkspaceIdentity = scheduledIdentity;
 
-      debugPrint(
+      safeDebugLog(
         '[ACTIVE_WORKSPACE_PROVIDER_SYNC] identity=$scheduledIdentity membership_id=${context.membershipId} role=${context.finalEffectiveRole}',
       );
     });
   }
 
   Future<Widget> _resolveTarget() async {
+    if (_isLoggingOut || DirectusClient.instance.isLogoutInProgress) {
+      return const PublicEntryScreen();
+    }
     final result = await resolveVerifiedRouteResult();
+    if (!mounted ||
+        _isLoggingOut ||
+        DirectusClient.instance.isLogoutInProgress) {
+      return const PublicEntryScreen();
+    }
     switch (result.kind) {
       case VerifiedRouteKind.login:
         ref.read(activeWorkspaceContextProvider.notifier).state = null;
         return const PublicEntryScreen();
+      case VerifiedRouteKind.workspaceSelection:
+        ref.read(activeWorkspaceContextProvider.notifier).state = null;
+        return WorkspacePickerScreen(
+          memberships: result.memberships,
+          mandatory: true,
+        );
       case VerifiedRouteKind.workspaceAccessError:
         ref.read(activeWorkspaceContextProvider.notifier).state = null;
         return WorkspaceAccessScreen(
@@ -376,39 +484,45 @@ class _RoleShellRouterState extends ConsumerState<RoleShellRouter> {
   }
 
   Widget _buildShell(ActiveWorkspaceContext ctx) {
+    if (_isLoggingOut || DirectusClient.instance.isLogoutInProgress) {
+      return const PublicEntryScreen();
+    }
     final previousCachedRole = OrganizationService.instance.lastResolvedRole;
-    final previousCachedUserId = OrganizationService.instance.lastResolvedUserId;
+    final previousCachedUserId =
+        OrganizationService.instance.lastResolvedUserId;
     final previousRole = previousCachedRole?.trim().toLowerCase() ?? '';
     final currentRole = ctx.finalEffectiveRole.trim().toLowerCase();
     if (previousRole.isNotEmpty && previousRole != currentRole) {
-      debugPrint(
+      safeDebugLog(
         '[ROLE_SWITCH_CLEANUP] from_role=$previousRole to_role=$currentRole',
       );
       OwnerOpsService.instance.clearOrganizationScopedCaches();
       HrOpsService.instance.clearOrganizationScopedCaches();
-      debugPrint('[ROLE_SWITCH_CLEANUP] owner_providers_disposed=true');
-      debugPrint(
+      safeDebugLog('[ROLE_SWITCH_CLEANUP] owner_providers_disposed=true');
+      safeDebugLog(
         '[ROLE_SWITCH_CLEANUP] hr_providers_active=${currentRole == "hr"}',
       );
       ref.read(refreshTickProvider.notifier).state++;
-      debugPrint('[ROLE_SWITCH_CLEANUP] refresh_tick_incremented=true');
+      safeDebugLog('[ROLE_SWITCH_CLEANUP] refresh_tick_incremented=true');
     }
     final tabs = RoleShellFactory.tabsForRole(ctx.finalEffectiveRole);
     final selectedShell = _shellDebugName(
       RoleShellFactory._resolveShell(ctx.finalEffectiveRole),
     );
-    debugPrint('[ROLE_DEBUG] selectedShell=$selectedShell');
-    debugPrint(
+    safeDebugLog('[ROLE_DEBUG] selectedShell=$selectedShell');
+    safeDebugLog(
       '[ROUTER] shell=$selectedShell previousCachedRole=$previousCachedRole previousCachedUserId=$previousCachedUserId',
     );
-    debugPrint(
+    safeDebugLog(
       'ROLE_SHELL_BUILD: memberRole=${ctx.finalEffectiveRole} visibleTabs=${tabs.join(",")} selectedShell=$selectedShell previousCachedRole=$previousCachedRole previousCachedUserId=$previousCachedUserId',
     );
-    debugPrint(
+    safeDebugLog(
       '[ROLE_SHELL_PAGES] role=${ctx.finalEffectiveRole} pages=${RoleShellFactory._pageNamesForRole(ctx.finalEffectiveRole).join(",")}',
     );
     final shellKey = RoleShellFactory.shellKey(ctx);
-    debugPrint('[ROLE_SHELL_REBUILT] role=${ctx.finalEffectiveRole} membership_id=${ctx.membershipId} business_profile=${ctx.businessProfileId}');
+    safeDebugLog(
+      '[ROLE_SHELL_REBUILT] role=${ctx.finalEffectiveRole} membership_id=${ctx.membershipId} business_profile=${ctx.businessProfileId}',
+    );
     if (ctx.membershipId.trim().isNotEmpty ||
         ctx.businessProfileId.trim().isNotEmpty) {
       return KeyedSubtree(
@@ -602,15 +716,9 @@ class OwnerMobileShell extends _BaseRoleShell {
   @override
   List<Widget> buildPages() => [
     const OwnerHomeScreen(),
-    const OwnerHrOpsScreen(
-      role: 'owner',
-      initialTab: OwnerHrOpsTab.workforce,
-    ),
+    const OwnerHrOpsScreen(role: 'owner', initialTab: OwnerHrOpsTab.workforce),
     const AdminScanRequestsScreen(),
-    const OwnerHrOpsScreen(
-      role: 'owner',
-      initialTab: OwnerHrOpsTab.compliance,
-    ),
+    const OwnerHrOpsScreen(role: 'owner', initialTab: OwnerHrOpsTab.compliance),
     const OwnerReportsScreen(roleOverride: 'owner'),
   ];
 }
@@ -636,7 +744,8 @@ class LimitedRoleMobileShell extends _BaseRoleShell {
   List<Widget> buildPages() => const [
     _RolePagePlaceholder(
       title: 'Workspace access unavailable',
-      subtitle: 'Your workspace role is unavailable. Contact your administrator.',
+      subtitle:
+          'Your workspace role is unavailable. Contact your administrator.',
     ),
     ProfileScreen(),
   ];
@@ -685,10 +794,10 @@ class _BaseRoleShellState extends ConsumerState<_BaseRoleShell> {
     final previousIdentity = _shellIdentity(oldWidget.context);
     final nextIdentity = _shellIdentity(widget.context);
     if (previousIdentity == nextIdentity) return;
-    debugPrint(
+    safeDebugLog(
       '[ROLE_SHELL_TAB_RESET] reason=workspace_or_role_changed from=$previousIdentity to=$nextIdentity',
     );
-    debugPrint(
+    safeDebugLog(
       '[ROLE_SHELL_DISPOSED] old_role=${oldWidget.role} old_membership=${oldWidget.context.membershipId}',
     );
     setState(() {
@@ -701,7 +810,7 @@ class _BaseRoleShellState extends ConsumerState<_BaseRoleShell> {
 
   @override
   void dispose() {
-    debugPrint(
+    safeDebugLog(
       '[ROLE_SHELL_DISPOSED] old_role=${widget.role} old_membership=${widget.context.membershipId}',
     );
     super.dispose();
@@ -711,18 +820,29 @@ class _BaseRoleShellState extends ConsumerState<_BaseRoleShell> {
   Widget build(BuildContext context) {
     final lang = ref.watch(appLanguageControllerProvider).language;
     final pages = _materializePages();
-    debugPrint(
+    safeDebugLog(
       'ROLE_SHELL_BUILD: memberRole=${widget.context.memberRole} visibleTabs=${widget.tabs.join(",")} selectedShell=${widget.role} previousCachedRole=${OrganizationService.instance.lastResolvedRole} previousCachedUserId=${OrganizationService.instance.lastResolvedUserId}',
     );
     return WellarAppShell(
       bottomNavigationBar: WellarBottomNav(
         currentIndex: _index,
-        onTap: (value) => setState(() {
-          _index = value;
-          if (value >= 0 && value < _mountedTabs.length) {
-            _mountedTabs[value] = true;
+        onTap: (value) {
+          final opensScan =
+              value >= 0 &&
+              value < widget.tabs.length &&
+              widget.tabs[value].toLowerCase() == 'scan';
+          if (opensScan &&
+              ref.read(connectivityStatusProvider).asData?.value == false) {
+            AppFeedback.showOffline(context);
+            return;
           }
-        }),
+          setState(() {
+            _index = value;
+            if (value >= 0 && value < _mountedTabs.length) {
+              _mountedTabs[value] = true;
+            }
+          });
+        },
         items: _localizedItems(lang),
       ),
       child: IndexedStack(
@@ -759,10 +879,10 @@ class _BaseRoleShellState extends ConsumerState<_BaseRoleShell> {
 
   String _translateNavLabel(dynamic lang, String label) {
     final v = label.trim().toLowerCase();
-    if (v == 'today') return 'Today';
-    if (v == 'scan') return 'Scan';
-    if (v == 'results') return 'Results';
-    if (v == 'account') return 'Account';
+    if (v == 'today') return Tr.t(lang, 'today');
+    if (v == 'scan') return Tr.t(lang, 'scan');
+    if (v == 'results') return Tr.t(lang, 'results');
+    if (v == 'account') return Tr.t(lang, 'account');
     if (v == 'home') return Tr.t(lang, 'home');
     if (v == 'requests') return Tr.t(lang, 'requests');
     if (v == 'history') return Tr.t(lang, 'history');

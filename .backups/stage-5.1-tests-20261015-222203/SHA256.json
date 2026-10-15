@@ -1,0 +1,14 @@
+[
+  {
+    "path": "test/wellar_v2_client_test.dart",
+    "sha256": "1c203e881f011f2b3824d42b4ceb4bdd662788e1af66ae7c564524f63e61f4e5"
+  },
+  {
+    "path": "test/wellar_v2_live_http_test.dart",
+    "sha256": "cbe9c9e1e76d4dc9b98d3270aaf156ec372a8f1f58f25d7f31d93d2af713f64c"
+  },
+  {
+    "path": "test/v2_ui_smoke_main.dart",
+    "sha256": "a5777cfdda86f0744645fb094ef8904ccf296d69b775358080ffa73ea0e148f5"
+  }
+]

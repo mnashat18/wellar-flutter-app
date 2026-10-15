@@ -3,27 +3,26 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../config/app_config.dart';
 import '../i18n/tr.dart';
 import '../models/user_profile.dart';
 import '../services/auth_service.dart';
+import '../services/directus_client.dart';
 import '../services/organization_service.dart';
-import '../state/app_language_state.dart';
+import '../services/workspace_selection_service.dart';
 import '../state/app_providers.dart';
 import '../state/session.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_feedback.dart';
 import '../utils/page_transition.dart';
 import '../widgets/animated_wellar_card.dart';
 import '../widgets/animated_wellar_screen.dart';
 import '../widgets/status_chip.dart';
 import '../widgets/wellar_button.dart';
 import '../widgets/wellar_card.dart';
-import '../widgets/wellar_error_state.dart';
 import '../widgets/wellar_header.dart';
-import '../widgets/wellar_skeleton_shimmer.dart';
-import 'login_screen.dart';
+import 'public_entry_screen.dart';
+import 'workspace_picker_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -33,7 +32,6 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  bool _deleteInProgress = false;
   bool _logoutInProgress = false;
   late Future<CanonicalWorkspaceContextResult> _switchableOrganizationsFuture;
   ProviderSubscription? _workspaceSubscription;
@@ -261,23 +259,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         SizedBox(
                           width: double.infinity,
                           height: 46,
-                          child: _buildSwitchOrganizationControl(
-                            context,
-                          ),
+                          child: _buildSwitchOrganizationControl(context),
                         ),
                         const SizedBox(height: 8),
                         WellarButton.primary(
                           text: Tr.t(lang, 'logout'),
-                          onPressed: (_deleteInProgress || _logoutInProgress)
+                          onPressed: _logoutInProgress
                               ? null
-                              : () => _confirmLogout(context, ref),
-                        ),
-                        const SizedBox(height: 10),
-                        WellarButton.secondary(
-                          text: 'Delete account',
-                          onPressed: _deleteInProgress
-                              ? null
-                              : () => _openDeleteAccount(context),
+                              : () => _confirmLogout(ref),
                         ),
                       ],
                     ),
@@ -286,18 +275,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ],
             ),
           ),
-          if (_deleteInProgress)
-            Positioned.fill(
-              child: Container(
-                color: Colors.black.withValues(alpha: 0.5),
-                alignment: Alignment.center,
-                child: const SizedBox(
-                  width: 36,
-                  height: 36,
-                  child: CircularProgressIndicator(color: WellarTheme.primary),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -318,9 +295,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           return const SizedBox.expand();
         }
 
-        final visibleOrganizationCount = _countSelectableOrganizations(
-          result.snapshot!,
+        final memberships = WorkspaceSelectionPolicy.eligibleMemberships(
+          result.snapshot!.memberships,
         );
+        final visibleOrganizationCount = memberships.length;
         if (kDebugMode) {
           debugPrint(
             '[PROFILE_CHANGE_ORG] multi_org=${visibleOrganizationCount > 1} action=${visibleOrganizationCount > 1 ? 'show_notice' : 'hidden'}',
@@ -331,10 +309,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         }
 
         return WellarButton.secondary(
-          text: 'Switch organization',
-          onPressed: _deleteInProgress
-              ? null
-              : () => _showSwitchOrganizationNotice(context),
+          text: 'Switch workspace',
+          onPressed: () => Navigator.of(context).push<void>(
+            fadeSlideRoute(WorkspacePickerScreen(memberships: memberships)),
+          ),
         );
       },
     );
@@ -399,29 +377,45 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Future<void> _logout(BuildContext context, WidgetRef ref) async {
     if (_logoutInProgress) return;
     _logoutInProgress = true;
-    Navigator.of(
-      context,
-      rootNavigator: true,
-    ).pushAndRemoveUntil(fadeSlideRoute(const LoginScreen()), (_) => false);
-    Future.microtask(() {
-      ref.read(activeWorkspaceContextProvider.notifier).state = null;
-      ref.read(refreshTickProvider.notifier).state++;
-      ref.read(latestScanResultProvider.notifier).state = null;
-      ref.read(notificationReadOverrideProvider.notifier).state = <String>{};
-      ref.read(localNotificationsProvider.notifier).state = const [];
-      ref.invalidate(profileProvider);
-      ref.invalidate(notificationsProvider);
-      ref.invalidate(ownerHistoryTimelineProvider);
-      ref.invalidate(historyTimelineProvider);
-      ref.invalidate(homeDataProvider);
-      ref.invalidate(incomingRequestsProvider);
-      ref.invalidate(sentRequestsProvider);
-      ref.invalidate(alertsProvider);
-    });
-    unawaited(AuthService.instance.logout());
+    DirectusClient.instance.beginLogout();
+    final lang = ref.read(appLanguageControllerProvider).language;
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    final colors = Theme.of(context).colorScheme;
+    ref.read(activeWorkspaceContextProvider.notifier).state = null;
+    ref.read(refreshTickProvider.notifier).state++;
+    ref.read(latestScanResultProvider.notifier).state = null;
+    ref.read(notificationReadOverrideProvider.notifier).state = <String>{};
+    ref.read(localNotificationsProvider.notifier).state = const [];
+    ref.invalidate(profileProvider);
+    ref.invalidate(notificationsProvider);
+    ref.invalidate(ownerHistoryTimelineProvider);
+    ref.invalidate(historyTimelineProvider);
+    ref.invalidate(homeDataProvider);
+    ref.invalidate(incomingRequestsProvider);
+    ref.invalidate(sentRequestsProvider);
+    ref.invalidate(alertsProvider);
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      fadeSlideRoute(const PublicEntryScreen()),
+      (_) => false,
+    );
+    var remoteLogoutFailed = true;
+    try {
+      remoteLogoutFailed = await AuthService.instance.logout();
+    } catch (_) {
+      // Local credentials are cleared by AuthService even if a remote step fails.
+    }
+    if (remoteLogoutFailed && messenger != null) {
+      AppFeedback.showErrorOnMessenger(
+        messenger,
+        colors,
+        lang.isRtl
+            ? 'تم تسجيل الخروج من هذا الجهاز، لكن تعذّر إنهاء جلسة الخادم بالكامل.'
+            : 'You were signed out on this device, but the server session could not be fully ended.',
+      );
+    }
   }
 
-  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmLogout(WidgetRef ref) async {
     final lang = ref.read(appLanguageControllerProvider).language;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -447,162 +441,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ],
       ),
     );
-    if (confirmed == true) {
+    if (confirmed == true && mounted) {
       await _logout(context, ref);
     }
-  }
-
-  int _countSelectableOrganizations(
-    CanonicalWorkspaceContextSnapshot snapshot,
-  ) {
-    final organizationIds = <String>{};
-    for (final membership in snapshot.memberships) {
-      final status = membership.status.trim().toLowerCase();
-      final role = membership.memberRole.trim().toLowerCase();
-      if (status.isNotEmpty && status != 'active' && status != 'accepted') {
-        continue;
-      }
-      final organizationId = membership.businessProfileId.trim();
-      if (organizationId.isEmpty) continue;
-      if (!(role == 'owner' ||
-          role == 'hr' ||
-          role == 'manager' ||
-          role == 'manger' ||
-          role == 'employee')) {
-        continue;
-      }
-      organizationIds.add(organizationId);
-    }
-    return organizationIds.length;
-  }
-
-  Future<void> _openDeleteAccount(BuildContext context) async {
-    if (_deleteInProgress) return;
-    final rawUrl = AppConfig.accountDeletionUrl.trim();
-    final parsed = rawUrl.isEmpty ? null : Uri.tryParse(rawUrl);
-    final urlIsHttps =
-        parsed != null &&
-        parsed.hasScheme &&
-        parsed.scheme.toLowerCase() == 'https' &&
-        parsed.host.isNotEmpty;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: WellarTheme.surface,
-        title: const Text(
-          'Delete your account',
-          style: TextStyle(
-            color: WellarTheme.text,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        content: const Text(
-          'This will permanently delete your Wellar account and personal data '
-          'associated with it, subject to any legally required retention. '
-          'Continuing will open the secure account deletion page.',
-          style: TextStyle(color: WellarTheme.textMuted, height: 1.45),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            child: const Text(
-              'Continue',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !context.mounted) return;
-
-    if (!urlIsHttps) {
-      await showDialog<void>(
-        context: context,
-        builder: (_) => AlertDialog(
-          backgroundColor: WellarTheme.surface,
-          title: const Text(
-            'Account deletion not configured',
-            style: TextStyle(
-              color: WellarTheme.text,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          content: const Text(
-            'Account deletion is not available in this build. Please contact '
-            'your Wellar administrator to have your account removed.',
-            style: TextStyle(color: WellarTheme.textMuted, height: 1.45),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Got it'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    setState(() => _deleteInProgress = true);
-    try {
-      final launched = await launchUrl(
-        parsed,
-        mode: LaunchMode.externalApplication,
-      );
-      if (!launched && context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not open the account deletion page. Try again later.',
-            ),
-          ),
-        );
-      }
-    } catch (_) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Could not open the account deletion page. Try again later.',
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _deleteInProgress = false);
-    }
-  }
-
-  Future<void> _showSwitchOrganizationNotice(BuildContext context) async {
-    if (_deleteInProgress) return;
-    await showDialog<void>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: WellarTheme.surface,
-        title: const Text(
-          'Switch organization on the web',
-          style: TextStyle(
-            color: WellarTheme.text,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        content: const Text(
-          'Organization switching is currently available in the Wellar web app. Please switch to your preferred organization on the web, then reopen the mobile app.',
-          style: TextStyle(color: WellarTheme.textMuted, height: 1.45),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Got it'),
-          ),
-        ],
-      ),
-    );
   }
 
   String _roleLabel(String? role) {

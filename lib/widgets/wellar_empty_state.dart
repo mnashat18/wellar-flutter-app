@@ -21,6 +21,8 @@ class WellarEmptyState extends StatefulWidget {
 class _WellarEmptyStateState extends State<WellarEmptyState>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  bool _reduceMotion = false;
+  bool _motionPreferenceRead = false;
 
   @override
   void initState() {
@@ -28,7 +30,23 @@ class _WellarEmptyStateState extends State<WellarEmptyState>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
-    )..repeat(reverse: true);
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = MediaQuery.of(context).disableAnimations;
+    if (reduce != _reduceMotion || !_motionPreferenceRead) {
+      _reduceMotion = reduce;
+      _motionPreferenceRead = true;
+      if (reduce) {
+        _controller.stop();
+        _controller.value = 0.5;
+      } else {
+        _controller.repeat(reverse: true);
+      }
+    }
   }
 
   @override
@@ -43,16 +61,35 @@ class _WellarEmptyStateState extends State<WellarEmptyState>
       padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 8),
       child: Column(
         children: [
-          ScaleTransition(
-            scale: Tween<double>(begin: 0.96, end: 1.04).animate(
-              CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-            ),
-            child: Icon(widget.icon, color: WellarTheme.textMuted, size: 30),
-          ),
+          _reduceMotion
+              ? Icon(widget.icon, color: WellarTheme.textMuted, size: 30)
+              : ScaleTransition(
+                  scale: Tween<double>(begin: 0.96, end: 1.04).animate(
+                    CurvedAnimation(
+                      parent: _controller,
+                      curve: Curves.easeInOut,
+                    ),
+                  ),
+                  child: Icon(
+                    widget.icon,
+                    color: WellarTheme.textMuted,
+                    size: 30,
+                  ),
+                ),
           const SizedBox(height: 10),
-          Text(widget.title, style: const TextStyle(color: WellarTheme.text, fontWeight: FontWeight.w700)),
+          Text(
+            widget.title,
+            style: const TextStyle(
+              color: WellarTheme.text,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 6),
-          Text(widget.body, textAlign: TextAlign.center, style: const TextStyle(color: WellarTheme.textMuted)),
+          Text(
+            widget.body,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: WellarTheme.textMuted),
+          ),
         ],
       ),
     );

@@ -19,6 +19,8 @@ class WellarSkeletonShimmer extends StatefulWidget {
 class _WellarSkeletonShimmerState extends State<WellarSkeletonShimmer>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  bool _reduceMotion = false;
+  bool _motionPreferenceRead = false;
 
   @override
   void initState() {
@@ -26,7 +28,23 @@ class _WellarSkeletonShimmerState extends State<WellarSkeletonShimmer>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1300),
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = MediaQuery.of(context).disableAnimations;
+    if (reduce != _reduceMotion || !_motionPreferenceRead) {
+      _reduceMotion = reduce;
+      _motionPreferenceRead = true;
+      if (reduce) {
+        _controller.stop();
+        _controller.value = 0.5;
+      } else {
+        _controller.repeat();
+      }
+    }
   }
 
   @override
@@ -40,7 +58,7 @@ class _WellarSkeletonShimmerState extends State<WellarSkeletonShimmer>
     return AnimatedBuilder(
       animation: _controller,
       builder: (_, __) {
-        final t = _controller.value;
+        final t = _reduceMotion ? 0.5 : _controller.value;
         return Container(
           height: widget.height,
           decoration: BoxDecoration(
@@ -61,4 +79,3 @@ class _WellarSkeletonShimmerState extends State<WellarSkeletonShimmer>
     );
   }
 }
-

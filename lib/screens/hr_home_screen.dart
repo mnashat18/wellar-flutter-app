@@ -1,11 +1,14 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../i18n/tr.dart';
 import '../utils/page_transition.dart';
+import '../utils/app_feedback.dart';
+import '../utils/safe_debug_log.dart';
 import '../services/owner_ops_service.dart';
 import '../services/hr_ops_service.dart';
-import 'hr_requests_screen.dart';
+import 'admin_scan_requests_screen.dart';
 import 'wellness_check_screen.dart';
 import '../state/app_providers.dart';
 import '../state/session.dart';
@@ -58,6 +61,10 @@ class _HrHomeScreenState extends ConsumerState<HrHomeScreen> {
 
   void _reloadSnapshot() {
     if (!mounted) return;
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
+      return;
+    }
     setState(() {
       _snapshotFuture = _loadSnapshot(forceRefresh: true);
     });
@@ -75,6 +82,10 @@ class _HrHomeScreenState extends ConsumerState<HrHomeScreen> {
         showBackground: false,
         child: RefreshIndicator(
           onRefresh: () async {
+            if (ref.read(connectivityStatusProvider).asData?.value == false) {
+              AppFeedback.showOffline(context);
+              return;
+            }
             ref.read(refreshTickProvider.notifier).state++;
             ref.invalidate(profileProvider);
             ref.invalidate(notificationsProvider);
@@ -91,6 +102,7 @@ class _HrHomeScreenState extends ConsumerState<HrHomeScreen> {
                   child: PageHeaderActions(
                     unreadCount: unreadNotifications,
                     showAlertsTab: true,
+                    showNotificationBell: true,
                   ),
                 ),
               ),
@@ -197,16 +209,19 @@ class _HrHomeScreenState extends ConsumerState<HrHomeScreen> {
                   }
                   final bundle = snap.data;
                   final snapshotData = bundle?.snapshot;
+                  final workforceUnavailable =
+                      snapshotData?.workforceUnavailableMessage != null;
                   if (snap.hasError ||
                       snapshotData == null ||
-                      snapshotData.workforceTotal < 0 ||
-                      snapshotData.activeMembers < 0 ||
                       snapshotData.pendingRequests < 0 ||
-                      snapshotData.checksCompletedToday < 0 ||
-                      snapshotData.missingChecks < 0 ||
-                      snapshotData.attentionOutcomes < 0 ||
                       snapshotData.openAlerts < 0 ||
-                      snapshotData.departmentsCount < 0) {
+                      snapshotData.departmentsCount < 0 ||
+                      (!workforceUnavailable &&
+                          (snapshotData.workforceTotal < 0 ||
+                              snapshotData.activeMembers < 0 ||
+                              snapshotData.checksCompletedToday < 0 ||
+                              snapshotData.missingChecks < 0 ||
+                              snapshotData.attentionOutcomes < 0))) {
                     return WellarErrorState(
                       title: Tr.t(lang, 'snapshot_unavailable'),
                       body: Tr.t(lang, 'hr_overview_unavailable'),
@@ -229,6 +244,16 @@ class _HrHomeScreenState extends ConsumerState<HrHomeScreen> {
                           subtitle:
                               'Workforce health, requests, and readiness.',
                         ),
+                        if (d.workforceUnavailableMessage != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            d.workforceUnavailableMessage!,
+                            style: const TextStyle(
+                              color: WellarTheme.textMuted,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 10),
                         ResponsiveCardGrid(
                           spacing: 10,
@@ -277,11 +302,13 @@ class _HrHomeScreenState extends ConsumerState<HrHomeScreen> {
                           children: [
                             ResponsiveCardGridItem(
                               child: QuickActionButton(
-                                title: 'Send readiness request',
+                                title: Tr.t(lang, 'readiness_requests'),
                                 icon: Icons.assignment_add,
                                 onTap: () => Navigator.push(
                                   context,
-                                  fadeSlideRoute(const HrRequestsScreen()),
+                                  fadeSlideRoute(
+                                    const AdminScanRequestsScreen(),
+                                  ),
                                 ),
                               ),
                             ),
@@ -289,10 +316,20 @@ class _HrHomeScreenState extends ConsumerState<HrHomeScreen> {
                               child: QuickActionButton(
                                 title: 'Start my scan',
                                 icon: Icons.play_circle_outline_rounded,
-                                onTap: () => Navigator.push(
-                                  context,
-                                  fadeSlideRoute(const WellnessCheckScreen()),
-                                ),
+                                onTap: () {
+                                  if (ref
+                                          .read(connectivityStatusProvider)
+                                          .asData
+                                          ?.value ==
+                                      false) {
+                                    AppFeedback.showOffline(context);
+                                    return;
+                                  }
+                                  Navigator.push(
+                                    context,
+                                    fadeSlideRoute(const WellnessCheckScreen()),
+                                  );
+                                },
                               ),
                             ),
                             ResponsiveCardGridItem.fullWidth(
@@ -348,12 +385,19 @@ class _HrHomeScreenState extends ConsumerState<HrHomeScreen> {
                           counts: readiness.queryFailed
                               ? null
                               : readiness.distribution,
-                          onTap: () => Navigator.push(
-                            context,
-                            fadeSlideRoute(
-                              const CompanyReadinessResultsScreen(),
-                            ),
-                          ),
+                          onTap: () {
+                            if (kDebugMode) {
+                              safeDebugLog(
+                                '[HR_READINESS_NAV] source=home_distribution_card destination=CompanyReadinessResultsScreen',
+                              );
+                            }
+                            Navigator.push(
+                              context,
+                              fadeSlideRoute(
+                                const CompanyReadinessResultsScreen(),
+                              ),
+                            );
+                          },
                           subtitle:
                               'Tap to inspect workspace members and completed scans.',
                           emptyMessage:

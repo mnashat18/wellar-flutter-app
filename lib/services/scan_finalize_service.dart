@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
+import '../utils/safe_debug_log.dart';
 
 import 'scan_service.dart';
 
@@ -73,7 +74,7 @@ class ScanFinalizeService {
   }) {
     final existing = _activeMediaPrefinalizations[stagingKey];
     if (existing != null) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_PREFINALIZE] duplicate_start ignored has_staging_key=${stagingKey.trim().isNotEmpty}',
       );
       return existing;
@@ -105,7 +106,7 @@ class ScanFinalizeService {
   }) {
     final existing = _activeFinalizations[scanId];
     if (existing != null) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] duplicate_start ignored has_scan_id=${scanId.trim().isNotEmpty}',
       );
       return existing;
@@ -150,7 +151,7 @@ class ScanFinalizeService {
     }
 
     void logTiming(String step, Stopwatch stopwatch) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_PREFOCUS_TIMING] step=$step duration_ms=${stopwatch.elapsedMilliseconds}',
       );
     }
@@ -158,26 +159,27 @@ class ScanFinalizeService {
     void logSlowIfNeeded() {
       if (slowLogged || totalStopwatch.elapsedMilliseconds <= 5000) return;
       slowLogged = true;
-      debugPrint(
+      safeDebugLog(
         '[SCAN_PREFOCUS_SLOW] has_scan_id=${scanId.trim().isNotEmpty} duration_ms=${totalStopwatch.elapsedMilliseconds} current_step=$currentStep',
       );
     }
 
-    debugPrint(
+    safeDebugLog(
       '[SCAN_FINALIZE] start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
     );
 
     try {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] audio_upload_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] upload_audio_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
       setStep('upload_audio');
       final uploadAudioStopwatch = Stopwatch()..start();
       final String audioFileId;
       try {
+        safeDebugLog('[SCAN_AUDIO_UPLOAD_INVOKE]');
         audioFileId = await ScanService.instance.uploadXFile(
           audioFile,
           filename: 'scan_audio.m4a',
@@ -193,10 +195,10 @@ class ScanFinalizeService {
       }
       logTiming('upload_audio', uploadAudioStopwatch);
       logSlowIfNeeded();
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] upload_audio_success ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} has_audio_file_id=${audioFileId.trim().isNotEmpty}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FLOW] audio_done ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
 
@@ -204,22 +206,22 @@ class ScanFinalizeService {
       final uploadVideoStopwatch = Stopwatch()..start();
       ScanPrefinalizeMediaResult? stagedMedia;
       if (prefinalizedMedia != null) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_FINALIZE] prefinalize_media_wait_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
         );
         try {
           stagedMedia = await prefinalizedMedia;
-          debugPrint(
+          safeDebugLog(
             '[SCAN_FINALIZE] prefinalize_media_wait_done ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} video_uploaded=${stagedMedia.hasVideoFile} thumbnail_uploaded=${stagedMedia.hasThumbnailFile}',
           );
         } catch (error) {
-          debugPrint(
+          safeDebugLog(
             '[SCAN_FINALIZE] prefinalize_media_wait_failed ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} error_type=${error.runtimeType}',
           );
         }
       }
 
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] upload_video_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
       final stagedVideoFileId = stagedMedia?.videoFileId?.trim();
@@ -228,17 +230,18 @@ class ScanFinalizeService {
         videoFileId = stagedVideoFileId;
         logTiming('upload_video', uploadVideoStopwatch);
         logSlowIfNeeded();
-        debugPrint(
+        safeDebugLog(
           '[SCAN_FINALIZE] upload_video_reused ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} has_video_file_id=${videoFileId.trim().isNotEmpty}',
         );
       } else {
         try {
+          safeDebugLog('[SCAN_VIDEO_UPLOAD_INVOKE]');
           videoFileId = await ScanService.instance
               .uploadVideoFile(file: videoFile, scanId: scanId)
               .timeout(_videoUploadTimeout);
           logTiming('upload_video', uploadVideoStopwatch);
           logSlowIfNeeded();
-          debugPrint(
+          safeDebugLog(
             '[SCAN_FINALIZE] upload_video_success ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} has_video_file_id=${videoFileId.trim().isNotEmpty}',
           );
         } on TimeoutException catch (error, stackTrace) {
@@ -248,7 +251,7 @@ class ScanFinalizeService {
             error: error,
             stackTrace: stackTrace,
           );
-          debugPrint(
+          safeDebugLog(
             '[SCAN_FINALIZE] upload_video_failed ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} error_type=${error.runtimeType}',
           );
           throw ScanPrepareFailedException(step: 'upload_video', error: error);
@@ -259,14 +262,14 @@ class ScanFinalizeService {
             error: error,
             stackTrace: stackTrace,
           );
-          debugPrint(
+          safeDebugLog(
             '[SCAN_FINALIZE] upload_video_failed ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} error_type=${error.runtimeType}',
           );
           throw ScanPrepareFailedException(step: 'upload_video', error: error);
         }
       }
 
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] upload_thumbnail_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
       setStep('upload_thumbnail');
@@ -277,13 +280,13 @@ class ScanFinalizeService {
         thumbnailFileId = stagedThumbnailFileId;
         logTiming('upload_thumbnail', uploadThumbnailStopwatch);
         logSlowIfNeeded();
-        debugPrint(
+        safeDebugLog(
           '[SCAN_FINALIZE] upload_thumbnail_reused ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} has_thumbnail_id=${thumbnailFileId.trim().isNotEmpty}',
         );
       } else {
         if (thumbnailBytes.isEmpty) {
           final error = StateError('thumbnail_missing');
-          debugPrint(
+          safeDebugLog(
             '[SCAN_FINALIZE] upload_thumbnail_failed ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} error_type=${error.runtimeType}',
           );
           throw ScanPrepareFailedException(
@@ -292,6 +295,7 @@ class ScanFinalizeService {
           );
         }
         try {
+          safeDebugLog('[SCAN_THUMBNAIL_UPLOAD_INVOKE]');
           thumbnailFileId = await ScanService.instance.uploadBytes(
             thumbnailBytes,
             filename: 'scan_thumb.jpg',
@@ -310,12 +314,12 @@ class ScanFinalizeService {
         }
         logTiming('upload_thumbnail', uploadThumbnailStopwatch);
         logSlowIfNeeded();
-        debugPrint(
+        safeDebugLog(
           '[SCAN_FINALIZE] upload_thumbnail_success ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} has_thumbnail_id=${thumbnailFileId.trim().isNotEmpty}',
         );
       }
 
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] create_scan_media_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
       setStep('create_scan_media');
@@ -330,14 +334,14 @@ class ScanFinalizeService {
       );
       logTiming('create_scan_media', createScanMediaStopwatch);
       logSlowIfNeeded();
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] create_scan_media_success ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} has_scan_media_id=${scanMediaId.trim().isNotEmpty}',
       );
 
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] patch_media_ready_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FLOW] media_ready_patch_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
       setStep('patch_media_ready');
@@ -345,14 +349,14 @@ class ScanFinalizeService {
       await ScanService.instance.markWellnessScanMediaReady(scanId: scanId);
       logTiming('patch_media_ready', patchMediaReadyStopwatch);
       logSlowIfNeeded();
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] patch_media_ready_success ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FLOW] media_ready_patch_success ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
 
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FLOW] process_call_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
       setStep('process_accept');
@@ -360,13 +364,13 @@ class ScanFinalizeService {
       await _triggerAiProcess(scanId);
       logTiming('process_accept', processAcceptStopwatch);
       logSlowIfNeeded();
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FLOW] process_call_accepted ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] success ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_PREFOCUS_TIMING] total_prefocus_wait_ms=${totalStopwatch.elapsedMilliseconds}',
       );
       logSlowIfNeeded();
@@ -380,7 +384,7 @@ class ScanFinalizeService {
       );
     } catch (error, stackTrace) {
       if (error is UnauthenticatedException) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_FINALIZE] auth_failure ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} error_type=${error.runtimeType}',
         );
         rethrow;
@@ -389,17 +393,17 @@ class ScanFinalizeService {
           ? error.error
           : null;
       if (prepareError is UnauthenticatedException) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_FINALIZE] auth_failure ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} error_type=${prepareError.runtimeType}',
         );
         throw prepareError;
       }
       if (error is! ScanPrepareFailedException) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_FINALIZE] failed ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} error_type=${error.runtimeType}',
         );
       }
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] failed_stack ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} stack_present=${stackTrace.toString().isNotEmpty}',
       );
       await _markScanFailed(scanId);
@@ -413,7 +417,7 @@ class ScanFinalizeService {
     required Object error,
     required StackTrace stackTrace,
   }) {
-    debugPrint(
+    safeDebugLog(
       '[SCAN_PREFOCUS_FAILURE] has_scan_id=${scanId.trim().isNotEmpty} step=$step error_type=${error.runtimeType} stack_present=${stackTrace.toString().isNotEmpty}',
     );
   }
@@ -423,24 +427,24 @@ class ScanFinalizeService {
     required XFile videoFile,
     required Uint8List thumbnailBytes,
   }) async {
-    debugPrint(
+    safeDebugLog(
       '[SCAN_PREFINALIZE] start ts=${DateTime.now().toIso8601String()} has_staging_key=${stagingKey.trim().isNotEmpty}',
     );
 
     final videoFuture = (() async {
       try {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_PREFINALIZE] video_upload_start ts=${DateTime.now().toIso8601String()} has_staging_key=${stagingKey.trim().isNotEmpty}',
         );
         final videoFileId = await ScanService.instance
             .uploadVideoFile(file: videoFile, scanId: stagingKey)
             .timeout(_videoUploadTimeout);
-        debugPrint(
+        safeDebugLog(
           '[SCAN_PREFINALIZE] video_upload_success ts=${DateTime.now().toIso8601String()} has_staging_key=${stagingKey.trim().isNotEmpty} has_video_file_id=${videoFileId.trim().isNotEmpty}',
         );
         return videoFileId;
       } catch (error) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_PREFINALIZE] video_upload_failed ts=${DateTime.now().toIso8601String()} has_staging_key=${stagingKey.trim().isNotEmpty} error_type=${error.runtimeType}',
         );
         return null;
@@ -449,7 +453,7 @@ class ScanFinalizeService {
 
     final thumbnailFuture = (() async {
       try {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_PREFINALIZE] thumbnail_upload_start ts=${DateTime.now().toIso8601String()} has_staging_key=${stagingKey.trim().isNotEmpty}',
         );
         if (thumbnailBytes.isEmpty) {
@@ -459,12 +463,12 @@ class ScanFinalizeService {
           thumbnailBytes,
           filename: 'scan_thumb.jpg',
         );
-        debugPrint(
+        safeDebugLog(
           '[SCAN_PREFINALIZE] thumbnail_upload_success ts=${DateTime.now().toIso8601String()} has_staging_key=${stagingKey.trim().isNotEmpty} has_thumbnail_id=${thumbnailFileId.trim().isNotEmpty}',
         );
         return thumbnailFileId;
       } catch (error) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_PREFINALIZE] thumbnail_upload_failed ts=${DateTime.now().toIso8601String()} has_staging_key=${stagingKey.trim().isNotEmpty} error_type=${error.runtimeType}',
         );
         return null;
@@ -485,11 +489,11 @@ class ScanFinalizeService {
         scanId: scanId,
         failureReason: 'scan_prepare_failed',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] finalize_failure_patch success ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} failure_reason=scan_prepare_failed',
       );
     } catch (error) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FINALIZE] finalize_failure_patch fail ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} error_type=${error.runtimeType}',
       );
     }
@@ -497,7 +501,7 @@ class ScanFinalizeService {
 
   Future<void> _triggerAiProcess(String scanId) async {
     if (_aiProcessRequestedScanIds.contains(scanId)) {
-      debugPrint(
+      safeDebugLog(
         '[AI_TRIGGER] process_request_skipped ts=${DateTime.now().toIso8601String()} reason=already_requested has_scan_id=${scanId.trim().isNotEmpty}',
       );
       return;
@@ -509,17 +513,17 @@ class ScanFinalizeService {
       }
 
       try {
-        debugPrint(
+        safeDebugLog(
           '[AI_TRIGGER] process_request_start ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty}',
         );
         final processResponse = await ScanService.instance
             .triggerAiServerProcess(scanId: scanId);
-        debugPrint(
+        safeDebugLog(
           '[AI_TRIGGER] process_request_status ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} status=${processResponse.statusCode} body_type=${processResponse.body.runtimeType}',
         );
         if (processResponse.statusCode == 202) {
           _aiProcessRequestedScanIds.add(scanId);
-          debugPrint(
+          safeDebugLog(
             '[SCAN_FINALIZE] process_request success ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} status=${processResponse.statusCode}',
           );
           return;
@@ -528,13 +532,13 @@ class ScanFinalizeService {
         final error = StateError(
           'process_not_accepted:${processResponse.statusCode}',
         );
-        debugPrint(
+        safeDebugLog(
           '[AI_TRIGGER] process_request_failed ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} error_type=${error.runtimeType}',
         );
         throw ScanPrepareFailedException(step: 'process_request', error: error);
       } catch (error) {
         final isLastAttempt = attempt == _processRetryDelays.length - 1;
-        debugPrint(
+        safeDebugLog(
           '[AI_TRIGGER] process_request_failed ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} error_type=${error.runtimeType}',
         );
         if (error is UnauthenticatedException) {

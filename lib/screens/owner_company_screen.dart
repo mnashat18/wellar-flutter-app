@@ -15,6 +15,7 @@ import '../widgets/animated_wellar_screen.dart';
 import '../widgets/owner/owner_design_system.dart';
 import '../widgets/page_header_actions.dart';
 import '../widgets/responsive_card_grid.dart';
+import '../widgets/wellar_card.dart';
 import 'admin_scan_requests_screen.dart';
 import 'report_metric_detail_screen.dart';
 
@@ -63,12 +64,19 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
       backgroundColor: Colors.transparent,
       body: AnimatedWellarScreen(
         showBackground: false,
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        padding: const EdgeInsets.fromLTRB(
+          WellarTheme.pagePadding,
+          12,
+          WellarTheme.pagePadding,
+          24,
+        ),
         child: FutureBuilder<_OwnerComplianceData>(
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const OwnerSurfaceCard(
+                padding: EdgeInsets.all(WellarTheme.cardPadding),
+                radius: WellarTheme.cardRadius,
                 child: SizedBox(
                   height: 180,
                   child: Center(
@@ -93,7 +101,12 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
                     ? Tr.t(lang, 'access_unavailable')
                     : Tr.t(lang, 'unable_load_company_summary'),
                 actionLabel: Tr.t(lang, 'retry'),
-                onAction: () => setState(() => _future = _load()),
+                onAction: () {
+                  final next = _load();
+                  setState(() {
+                    _future = next;
+                  });
+                },
               );
             }
 
@@ -107,7 +120,13 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
             );
 
             return RefreshIndicator(
-              onRefresh: () async => setState(() => _future = _load()),
+              onRefresh: () async {
+                final next = _load();
+                setState(() {
+                  _future = next;
+                });
+                await next;
+              },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
@@ -119,9 +138,9 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
                       showAlertsTab: true,
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   _rangeSelector(lang),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   SectionHeader(title: Tr.t(lang, 'operational_summary')),
                   const SizedBox(height: 10),
                   ResponsiveCardGrid(
@@ -140,7 +159,7 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
                           label: Tr.t(lang, 'completed'),
                           value: metrics.completedCount,
                           icon: Icons.check_circle_outline_rounded,
-                          accent: const Color(0xFF6EE7A8),
+                          accent: WellarTheme.success,
                         ),
                       ),
                       ResponsiveCardGridItem(
@@ -148,7 +167,7 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
                           label: Tr.t(lang, 'pending'),
                           value: metrics.pendingCount,
                           icon: Icons.hourglass_bottom_rounded,
-                          accent: const Color(0xFF7DBBFF),
+                          accent: WellarTheme.neutral,
                         ),
                       ),
                       ResponsiveCardGridItem(
@@ -156,28 +175,31 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
                           label: Tr.t(lang, 'overdue'),
                           value: metrics.overdueCount,
                           icon: Icons.schedule_outlined,
-                          accent: const Color(0xFFFFC46B),
+                          accent: WellarTheme.warning,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   SectionHeader(title: _complianceOverviewTitle()),
                   const SizedBox(height: 10),
                   if (metrics.relevantEntries.isEmpty)
                     const SmartEmptyState(
                       icon: Icons.assignment_outlined,
                       title: 'No required checks in this period.',
-                      subtitle: 'No scan requests are due or assigned for this period.',
+                      subtitle:
+                          'No scan requests are due or assigned for this period.',
                     )
                   else
-                    ...metrics.relevantEntries.take(5).map(
-                      (entry) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _complianceCard(entry),
-                      ),
-                    ),
-                  const SizedBox(height: 18),
+                    ...metrics.relevantEntries
+                        .take(5)
+                        .map(
+                          (entry) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: _complianceCard(entry),
+                          ),
+                        ),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   SectionHeader(title: Tr.t(lang, 'department_breakdown')),
                   const SizedBox(height: 10),
                   if (metrics.departmentRows.isEmpty)
@@ -193,7 +215,7 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
                         child: _departmentCard(row),
                       ),
                     ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   SectionHeader(
                     title: Tr.t(lang, 'readiness_distribution'),
                     subtitle: 'Completed scan results in this period.',
@@ -215,40 +237,45 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
                     )
                   else
                     OwnerSurfaceCard(
+                      padding: const EdgeInsets.all(WellarTheme.cardPadding),
+                      radius: WellarTheme.cardRadius,
                       child: Column(
-                        children: _distributionEntries(
-                          data.readinessSummary.distribution,
-                        ).map((entry) {
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            child: Row(
-                              children: [
-                                _distributionDot(entry.key),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    entry.key,
-                                    style: const TextStyle(
-                                      color: WellarTheme.textMuted,
-                                      fontWeight: FontWeight.w600,
+                        children:
+                            _distributionEntries(
+                              data.readinessSummary.distribution,
+                            ).map((entry) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 6,
+                                ),
+                                child: Row(
+                                  children: [
+                                    _distributionDot(entry.key),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        entry.key,
+                                        style: const TextStyle(
+                                          color: WellarTheme.textMuted,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    Text(
+                                      '${entry.value}',
+                                      style: const TextStyle(
+                                        color: WellarTheme.text,
+                                        fontWeight: FontWeight.w800,
+                                        fontSize: 15,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Text(
-                                  '${entry.value}',
-                                  style: const TextStyle(
-                                    color: WellarTheme.text,
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
+                              );
+                            }).toList(),
                       ),
                     ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   SectionHeader(title: Tr.t(lang, 'quick_actions')),
                   const SizedBox(height: 10),
                   ResponsiveCardGrid(
@@ -264,9 +291,12 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
                             title: 'Pending checks',
                             summaryLabel: Tr.t(lang, 'pending'),
                             summaryValue: '${metrics.pendingEntries.length}',
-                            entries: _buildReportEntries(metrics.pendingEntries),
+                            entries: _buildReportEntries(
+                              metrics.pendingEntries,
+                            ),
                             emptyTitle: 'No pending checks.',
-                            emptyBody: 'No assigned scan requests are pending in this period.',
+                            emptyBody:
+                                'No assigned scan requests are pending in this period.',
                           ),
                         ),
                       ),
@@ -279,25 +309,32 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
                             title: 'Overdue checks',
                             summaryLabel: Tr.t(lang, 'overdue'),
                             summaryValue: '${metrics.overdueEntries.length}',
-                            entries: _buildReportEntries(metrics.overdueEntries),
+                            entries: _buildReportEntries(
+                              metrics.overdueEntries,
+                            ),
                             emptyTitle: 'No overdue checks.',
-                            emptyBody: 'No assigned scan requests are overdue in this period.',
+                            emptyBody:
+                                'No assigned scan requests are overdue in this period.',
                           ),
                         ),
                       ),
                       ResponsiveCardGridItem.fullWidth(
                         child: QuickActionButton(
                           title: _complianceOverviewTitle(),
-                          subtitle: 'Review completed, pending, and overdue assigned checks',
+                          subtitle:
+                              'Review completed, pending, and overdue assigned checks',
                           icon: Icons.verified_user_outlined,
                           onTap: () => _openReportDetail(
                             context,
                             title: _complianceOverviewTitle(),
                             summaryLabel: 'Required',
                             summaryValue: '${metrics.requiredCount}',
-                            entries: _buildReportEntries(metrics.relevantEntries),
+                            entries: _buildReportEntries(
+                              metrics.relevantEntries,
+                            ),
                             emptyTitle: 'No required checks in this period.',
-                            emptyBody: 'No scan requests are due or assigned for this period.',
+                            emptyBody:
+                                'No scan requests are due or assigned for this period.',
                           ),
                         ),
                       ),
@@ -330,20 +367,18 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
   }) {
     debugPrint('[COMPLIANCE_TRACE] request_count=${requests.length}');
     final complianceEntries = requests
-        .map((item) => _toComplianceEntry(
-              item,
-              readinessSummary.resultsByScanId,
-            ))
+        .map(
+          (item) => _toComplianceEntry(item, readinessSummary.resultsByScanId),
+        )
         .toList();
     for (final entry in complianceEntries) {
       debugPrint(
         '[COMPLIANCE_TRACE] request_status=${entry.status.label} requested_at_present=${entry.requestedAt != null} due_at_present=${entry.dueAt != null} completed_at_present=${entry.completedAt != null} included_in_range=${_isRelevantForRange(entry)} exclusion_reason=${_complianceExclusionReason(entry) ?? '-'}',
       );
     }
-    final relevantEntries = complianceEntries
-        .where(_isRelevantForRange)
-        .toList()
-      ..sort((a, b) => _sortComplianceEntry(a, b));
+    final relevantEntries =
+        complianceEntries.where(_isRelevantForRange).toList()
+          ..sort((a, b) => _sortComplianceEntry(a, b));
 
     final pendingEntries = relevantEntries
         .where((entry) => entry.status == NormalizedRequestStatus.pending)
@@ -395,7 +430,9 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
     for (final entry in relevantEntries) {
       final key = _departmentKey(entry.departmentId, entry.departmentName);
       if (key == null) continue;
-      requestsByDepartment.putIfAbsent(key, () => <_ComplianceEntry>[]).add(entry);
+      requestsByDepartment
+          .putIfAbsent(key, () => <_ComplianceEntry>[])
+          .add(entry);
     }
 
     final rows = <_DepartmentComplianceRow>[];
@@ -404,7 +441,8 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
     for (final department in departments) {
       final key = _departmentKey(department.id, department.displayName)!;
       knownDepartmentKeys.add(key);
-      final departmentRequests = requestsByDepartment[key] ?? const <_ComplianceEntry>[];
+      final departmentRequests =
+          requestsByDepartment[key] ?? const <_ComplianceEntry>[];
       final counts = _countStatusList(departmentRequests);
       rows.add(
         _DepartmentComplianceRow(
@@ -421,7 +459,9 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
       );
     }
 
-    return rows.where((row) => row.activeMembers > 0 || row.requiredChecks > 0).toList();
+    return rows
+        .where((row) => row.activeMembers > 0 || row.requiredChecks > 0)
+        .toList();
   }
 
   _ComplianceEntry _toComplianceEntry(
@@ -492,7 +532,9 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
   }
 
   int _sortComplianceEntry(_ComplianceEntry a, _ComplianceEntry b) {
-    final priority = _statusPriority(b.status).compareTo(_statusPriority(a.status));
+    final priority = _statusPriority(
+      b.status,
+    ).compareTo(_statusPriority(a.status));
     if (priority != 0) return priority;
     final aDate = a.primaryDate ?? DateTime.fromMillisecondsSinceEpoch(0);
     final bDate = b.primaryDate ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -558,9 +600,11 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
     final lines = <String>[
       if (entry.requestedAt != null)
         'Requested: ${_formatDateTime(entry.requestedAt)}',
-      if (entry.status == NormalizedRequestStatus.pending && entry.dueAt != null)
+      if (entry.status == NormalizedRequestStatus.pending &&
+          entry.dueAt != null)
         'Due: ${_formatDateTime(entry.dueAt)}',
-      if (entry.status == NormalizedRequestStatus.overdue && entry.dueAt != null)
+      if (entry.status == NormalizedRequestStatus.overdue &&
+          entry.dueAt != null)
         'Overdue since: ${_formatDateTime(entry.dueAt)}',
       if (entry.status == NormalizedRequestStatus.completed &&
           entry.completedAt != null)
@@ -582,13 +626,19 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
     final item = entry.item;
     final accent = _statusColor(entry.status);
     return OwnerSurfaceCard(
+      padding: const EdgeInsets.all(WellarTheme.cardPadding),
+      radius: WellarTheme.cardRadius,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              InitialsAvatar(label: item.displayTarget, size: 44, accent: accent),
+              InitialsAvatar(
+                label: item.displayTarget,
+                size: 44,
+                accent: accent,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -644,9 +694,11 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
           const SizedBox(height: 12),
           if (entry.requestedAt != null)
             _detailLine('Requested', _formatDateTime(entry.requestedAt)),
-          if (entry.status == NormalizedRequestStatus.pending && entry.dueAt != null)
+          if (entry.status == NormalizedRequestStatus.pending &&
+              entry.dueAt != null)
             _detailLine('Due', _formatDateTime(entry.dueAt)),
-          if (entry.status == NormalizedRequestStatus.overdue && entry.dueAt != null)
+          if (entry.status == NormalizedRequestStatus.overdue &&
+              entry.dueAt != null)
             _detailLine('Overdue since', _formatDateTime(entry.dueAt)),
           if (entry.status == NormalizedRequestStatus.completed &&
               entry.completedAt != null)
@@ -720,6 +772,8 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
   Widget _departmentCard(_DepartmentComplianceRow row) {
     final accent = _completionAccent(row.completionRate);
     return OwnerSurfaceCard(
+      padding: const EdgeInsets.all(WellarTheme.cardPadding),
+      radius: WellarTheme.cardRadius,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -748,16 +802,19 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
               minHeight: 6,
               value: row.completionRate.clamp(0.0, 1.0),
               color: accent,
-              backgroundColor: const Color(0x223A4A6D),
+              backgroundColor: WellarTheme.border.withValues(alpha: 0.43),
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: WellarTheme.sectionGap),
           ResponsiveCardGrid(
             spacing: 12,
             runSpacing: 12,
             children: [
               ResponsiveCardGridItem(
-                child: _departmentMetric('Active members', '${row.activeMembers}'),
+                child: _departmentMetric(
+                  'Active members',
+                  '${row.activeMembers}',
+                ),
               ),
               ResponsiveCardGridItem(
                 child: _departmentMetric('Required', '${row.requiredChecks}'),
@@ -785,13 +842,8 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
   }
 
   Widget _departmentMetric(String label, String value) {
-    return Container(
+    return WellarCard(
       padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: const Color(0x1AFFFFFF),
-        border: Border.all(color: const Color(0x18FFFFFF)),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
@@ -891,19 +943,19 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
   }
 
   Color _completionAccent(double value) {
-    if (value >= 0.75) return const Color(0xFF6EE7A8);
-    if (value >= 0.4) return const Color(0xFFFFC46B);
-    return const Color(0xFFFF7A8F);
+    if (value >= 0.75) return WellarTheme.success;
+    if (value >= 0.4) return WellarTheme.warning;
+    return WellarTheme.danger;
   }
 
   Color _statusColor(NormalizedRequestStatus status) {
     switch (status) {
       case NormalizedRequestStatus.completed:
-        return const Color(0xFF6EE7A8);
+        return WellarTheme.success;
       case NormalizedRequestStatus.pending:
-        return const Color(0xFF7DBBFF);
+        return WellarTheme.neutral;
       case NormalizedRequestStatus.overdue:
-        return const Color(0xFFFFC46B);
+        return WellarTheme.warning;
       case NormalizedRequestStatus.cancelled:
         return WellarTheme.textMuted;
     }
@@ -944,7 +996,9 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
     final departmentId = id?.trim() ?? '';
     if (departmentId.isNotEmpty) return 'id:$departmentId';
     final departmentName = name?.trim() ?? '';
-    if (departmentName.isNotEmpty) return 'name:${departmentName.toLowerCase()}';
+    if (departmentName.isNotEmpty) {
+      return 'name:${departmentName.toLowerCase()}';
+    }
     return null;
   }
 
@@ -974,16 +1028,16 @@ class _OwnerCompanyScreenState extends ConsumerState<OwnerCompanyScreen> {
     Color color;
     switch (label) {
       case 'High Risk':
-        color = const Color(0xFFFF7A8F);
+        color = WellarTheme.danger;
         break;
       case 'Elevated Fatigue':
-        color = const Color(0xFFFFC46B);
+        color = WellarTheme.warning;
         break;
       case 'Low Focus':
-        color = const Color(0xFF7DBBFF);
+        color = WellarTheme.info;
         break;
       default:
-        color = const Color(0xFF6EE7A8);
+        color = WellarTheme.success;
         break;
     }
     return Container(

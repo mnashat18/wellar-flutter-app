@@ -77,16 +77,13 @@ class ProtectedPushSubscriptionApi {
   final Dio _client;
 
   ProtectedPushSubscriptionApi({Dio? client})
-      : _client = client ?? DirectusClient.instance.client;
+    : _client = client ?? DirectusClient.instance.client;
 
   Future<PushSubscriptionSyncResult> sync(
     ProtectedPushSubscriptionPayload payload,
   ) async {
     try {
-      final response = await _client.post(
-        syncPath,
-        data: payload.toJson(),
-      );
+      final response = await _client.post(syncPath, data: payload.toJson());
       final ok = _responseBodyConfirmsOk(response.data);
       if (!ok) {
         throw ProtectedPushSubscriptionApiException(
@@ -114,9 +111,8 @@ class ProtectedPushSubscriptionApi {
     try {
       final response = await _client.post(
         revokePath,
-        data: <String, dynamic>{
-          'device_id': deviceId.trim(),
-        },
+        data: <String, dynamic>{'device_id': deviceId.trim()},
+        options: Options(extra: {'allow_during_logout': true}),
       );
       if (!_responseBodyConfirmsOk(response.data)) {
         throw ProtectedPushSubscriptionApiException(

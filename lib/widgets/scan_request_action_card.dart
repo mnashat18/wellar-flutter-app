@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/request_item.dart';
+import '../theme/app_theme.dart';
 
 enum ScanRequestCardScope { personal, organization, team }
 
@@ -26,11 +27,11 @@ class ScanRequestActionCard extends StatefulWidget {
 
 class _ScanRequestActionCardState extends State<ScanRequestActionCard>
     with SingleTickerProviderStateMixin {
-  static const Color _gold = Color(0xFFF1C16B);
-  static const Color _goldSoft = Color(0xFFB68A2A);
-  static const Color _surface = Color(0xFF101722);
-  static const Color _surfaceAlt = Color(0xFF182231);
-  static const Color _border = Color(0xFF2A3647);
+  static const Color _warning = WellarTheme.warning;
+  static final Color _warningSoft = WellarTheme.warning.withValues(alpha: 0.72);
+  static const Color _surface = WellarTheme.surface;
+  static const Color _surfaceAlt = WellarTheme.surfaceSoft;
+  static const Color _border = WellarTheme.border;
 
   late final AnimationController _controller;
   bool _startingScan = false;
@@ -132,7 +133,7 @@ class _ScanRequestActionCardState extends State<ScanRequestActionCard>
             ? Curves.easeInOut.transform(_controller.value)
             : 0.0;
         final borderColor = emphatic
-            ? Color.lerp(_goldSoft, _gold, t)!
+            ? Color.lerp(_warningSoft, _warning, t)!
             : _border;
         final glowAlpha = emphatic
             ? (0.08 + (0.08 * (1 - (t - 0.5).abs() * 2)))
@@ -152,7 +153,7 @@ class _ScanRequestActionCardState extends State<ScanRequestActionCard>
             boxShadow: emphatic
                 ? [
                     BoxShadow(
-                      color: _gold.withValues(alpha: glowAlpha),
+                      color: _warning.withValues(alpha: glowAlpha),
                       blurRadius: 18,
                       spreadRadius: 1,
                     ),
@@ -174,20 +175,23 @@ class _ScanRequestActionCardState extends State<ScanRequestActionCard>
                   child: Text(
                     _scopeLabel,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: WellarTheme.text,
                       fontWeight: FontWeight.w700,
                       fontSize: 15,
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
-                _badge(_scopeLabel, emphatic ? _gold : const Color(0xFF7EA6D8)),
+                _badge(_scopeLabel, emphatic ? _warning : WellarTheme.info),
               ],
             ),
             const SizedBox(height: 6),
             Text(
               _scopeDescription,
-              style: const TextStyle(color: Color(0xFFB5C1D1), fontSize: 12),
+              style: const TextStyle(
+                color: WellarTheme.textMuted,
+                fontSize: 12,
+              ),
             ),
             const SizedBox(height: 10),
             _line('Status', _prettyStatus(widget.item.displayStatus)),
@@ -216,8 +220,8 @@ class _ScanRequestActionCardState extends State<ScanRequestActionCard>
                     child: FilledButton(
                       onPressed: _startingScan ? null : _handleStartScan,
                       style: FilledButton.styleFrom(
-                        backgroundColor: _goldSoft,
-                        foregroundColor: Colors.white,
+                        backgroundColor: _warning,
+                        foregroundColor: WellarTheme.text,
                         padding: const EdgeInsets.symmetric(vertical: 13),
                       ),
                       child: Text(_startingScan ? 'Starting...' : 'Start Scan'),
@@ -228,8 +232,8 @@ class _ScanRequestActionCardState extends State<ScanRequestActionCard>
                     child: OutlinedButton(
                       onPressed: _startingScan ? null : widget.onViewDetails,
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.white,
-                        side: const BorderSide(color: _gold),
+                        foregroundColor: WellarTheme.text,
+                        side: const BorderSide(color: _warning),
                         padding: const EdgeInsets.symmetric(vertical: 13),
                       ),
                       child: const Text('View Details'),
@@ -244,7 +248,7 @@ class _ScanRequestActionCardState extends State<ScanRequestActionCard>
                 child: OutlinedButton(
                   onPressed: widget.onViewDetails,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
+                    foregroundColor: WellarTheme.text,
                     side: const BorderSide(color: _border),
                     padding: const EdgeInsets.symmetric(vertical: 13),
                   ),
@@ -285,14 +289,17 @@ class _ScanRequestActionCardState extends State<ScanRequestActionCard>
           width: 96,
           child: Text(
             '$label:',
-            style: const TextStyle(color: Color(0xFF8D9AAF), fontSize: 12),
+            style: const TextStyle(
+              color: WellarTheme.textMuted,
+              fontSize: 12,
+            ),
           ),
         ),
         Expanded(
           child: Text(
             value,
             style: const TextStyle(
-              color: Colors.white,
+              color: WellarTheme.text,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),

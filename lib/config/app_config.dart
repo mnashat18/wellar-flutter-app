@@ -54,8 +54,17 @@ class AppConfig {
     defaultValue: 'https://conntinuity-ai-server.csiwm3.easypanel.host/process',
   );
 
-  static const String accountDeletionUrl = String.fromEnvironment(
-    'ACCOUNT_DELETION_URL',
-    defaultValue: 'https://app.conntinuity.com/delete-account',
+  // V2 rollout is opt-in and remains disabled unless explicitly enabled.
+  static const bool enableWellarV2Scans = bool.fromEnvironment(
+    'ENABLE_WELLAR_V2_SCANS',
+    defaultValue: false,
+  );
+  static const String wellarV2BaseUrl = String.fromEnvironment(
+    'WELLAR_V2_BASE_URL',
+    defaultValue: '',
+  );
+  static const String wellarV2TestUserAllowlist = String.fromEnvironment(
+    'WELLAR_V2_TEST_USER_ALLOWLIST',
+    defaultValue: '',
   );
 }

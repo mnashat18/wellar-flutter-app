@@ -4,6 +4,7 @@ import '../../utils/app_colors.dart';
 import '../../widgets/app_buttons.dart';
 import '../../widgets/app_cards.dart';
 
+// Unused legacy view: no current screen in lib/ constructs PermissionView.
 class PermissionView extends StatelessWidget {
   const PermissionView({super.key});
 

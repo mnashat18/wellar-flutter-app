@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../i18n/tr.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/business_profile.dart';
@@ -72,6 +73,7 @@ class _CompanyDashboardScreenState extends ConsumerState<CompanyDashboardScreen>
   bool _hasBusinessAccess = false;
   bool _subscriptionExpired = false;
   bool _canManageTeam = false;
+  bool _subscriptionLookupFailed = false;
 
   @override
   void initState() {
@@ -107,6 +109,25 @@ class _CompanyDashboardScreenState extends ConsumerState<CompanyDashboardScreen>
         backgroundColor: AppColors.background,
         body: Center(
           child: CircularProgressIndicator(color: AppColors.primarySoft),
+        ),
+      );
+    }
+
+    if (_subscriptionLookupFailed) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Unable to verify subscription access.'),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: _retryBusinessAccess,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -164,7 +185,13 @@ class _CompanyDashboardScreenState extends ConsumerState<CompanyDashboardScreen>
         !exportsAsync.hasValue;
 
     final warningMessage = hasError
-        ? _firstDataError(historyAsync, sentAsync, incomingAsync, exportsAsync)
+        ? _firstDataError(
+            context,
+            historyAsync,
+            sentAsync,
+            incomingAsync,
+            exportsAsync,
+          )
         : null;
     final history = historyAsync.valueOrNull ?? const <ScanResult>[];
     final sent = sentAsync.valueOrNull ?? const <RequestItem>[];
@@ -208,18 +235,89 @@ class _CompanyDashboardScreenState extends ConsumerState<CompanyDashboardScreen>
   }
 
   Future<void> _resolveBusinessAccess() async {
-    final subscription = await ref
-        .read(subscriptionServiceProvider)
-        .fetchActiveSubscription();
-    final access = ref
-        .read(subscriptionServiceProvider)
-        .accessForSubscription(subscription);
-    var hasAccess = access.canUseBusiness;
-    var canManage = false;
-    final expired = access.isExpired;
+    try {
+      final subscription = await ref
+          .read(subscriptionServiceProvider)
+          .fetchActiveSubscription();
+      final access = ref
+          .read(subscriptionServiceProvider)
+          .accessForSubscription(subscription);
+      var hasAccess = access.canUseBusiness;
+      var canManage = false;
+      final expired = access.isExpired;
 
-    final userId = Session.instance.userId?.trim();
-    if (userId == null || userId.isEmpty) {
+      final userId = Session.instance.userId?.trim();
+      if (userId == null || userId.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _hasBusinessAccess = hasAccess;
+            _subscriptionExpired = expired;
+            _canManageTeam = canManage;
+            _resolvingBusinessAccess = false;
+          });
+        }
+        return;
+      }
+
+      BusinessProfile? profile;
+      try {
+        profile = await OrganizationService.instance
+            .fetchPrimaryBusinessProfile(forceRefresh: true);
+      } catch (_) {
+        profile = null;
+      }
+
+      final ownerUserId = profile?.ownerUserId?.trim();
+      if (ownerUserId != null &&
+          ownerUserId.isNotEmpty &&
+          ownerUserId == userId &&
+          hasAccess) {
+        canManage = true;
+      }
+      if (hasAccess && profile != null && profile.id.trim().isNotEmpty) {
+        try {
+          final members = await OrganizationService.instance
+              .fetchBusinessMembers(businessProfileId: profile.id, limit: 200);
+          for (final member in members) {
+            if (member.userId.trim() != userId) continue;
+            if (_isMemberActive(member.status)) {
+              hasAccess = true;
+            }
+            if (_isMemberOwnerAndActive(member.memberRole, member.status)) {
+              canManage = true;
+              break;
+            }
+          }
+        } catch (_) {
+          // Keep going: fallback to my memberships.
+        }
+      }
+
+      if (hasAccess && !canManage) {
+        try {
+          final myMemberships = await OrganizationService.instance
+              .fetchMyBusinessMemberships(limit: 200);
+          for (final membership in myMemberships) {
+            final membershipUserId = membership.userId.trim();
+            if (membershipUserId.isNotEmpty && membershipUserId != userId) {
+              continue;
+            }
+            if (_isMemberActive(membership.status)) {
+              hasAccess = true;
+            }
+            if (_isMemberOwnerAndActive(
+              membership.memberRole,
+              membership.status,
+            )) {
+              canManage = true;
+              break;
+            }
+          }
+        } catch (_) {
+          // Best effort only.
+        }
+      }
+
       if (mounted) {
         setState(() {
           _hasBusinessAccess = hasAccess;
@@ -228,79 +326,19 @@ class _CompanyDashboardScreenState extends ConsumerState<CompanyDashboardScreen>
           _resolvingBusinessAccess = false;
         });
       }
-      return;
-    }
-
-    BusinessProfile? profile;
-    try {
-      profile = await OrganizationService.instance.fetchPrimaryBusinessProfile(
-        forceRefresh: true,
-      );
     } catch (_) {
-      profile = null;
+      if (mounted) setState(() => _subscriptionLookupFailed = true);
+    } finally {
+      if (mounted) setState(() => _resolvingBusinessAccess = false);
     }
+  }
 
-    final ownerUserId = profile?.ownerUserId?.trim();
-    if (ownerUserId != null &&
-        ownerUserId.isNotEmpty &&
-        ownerUserId == userId &&
-        hasAccess) {
-      canManage = true;
-    }
-    if (hasAccess && profile != null && profile.id.trim().isNotEmpty) {
-      try {
-        final members = await OrganizationService.instance.fetchBusinessMembers(
-          businessProfileId: profile.id,
-          limit: 200,
-        );
-        for (final member in members) {
-          if (member.userId.trim() != userId) continue;
-          if (_isMemberActive(member.status)) {
-            hasAccess = true;
-          }
-          if (_isMemberOwnerAndActive(member.memberRole, member.status)) {
-            canManage = true;
-            break;
-          }
-        }
-      } catch (_) {
-        // Keep going: fallback to my memberships.
-      }
-    }
-
-    if (hasAccess && !canManage) {
-      try {
-        final myMemberships = await OrganizationService.instance
-            .fetchMyBusinessMemberships(limit: 200);
-        for (final membership in myMemberships) {
-          final membershipUserId = membership.userId.trim();
-          if (membershipUserId.isNotEmpty && membershipUserId != userId) {
-            continue;
-          }
-          if (_isMemberActive(membership.status)) {
-            hasAccess = true;
-          }
-          if (_isMemberOwnerAndActive(
-            membership.memberRole,
-            membership.status,
-          )) {
-            canManage = true;
-            break;
-          }
-        }
-      } catch (_) {
-        // Best effort only.
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _hasBusinessAccess = hasAccess;
-        _subscriptionExpired = expired;
-        _canManageTeam = canManage;
-        _resolvingBusinessAccess = false;
-      });
-    }
+  void _retryBusinessAccess() {
+    setState(() {
+      _subscriptionLookupFailed = false;
+      _resolvingBusinessAccess = true;
+    });
+    _resolveBusinessAccess();
   }
 
   bool _isMemberOwnerAndActive(String role, String status) {
@@ -326,6 +364,7 @@ class _CompanyDashboardScreenState extends ConsumerState<CompanyDashboardScreen>
   }
 
   String? _firstDataError(
+    BuildContext context,
     AsyncValue history,
     AsyncValue sent,
     AsyncValue incoming,
@@ -333,7 +372,7 @@ class _CompanyDashboardScreenState extends ConsumerState<CompanyDashboardScreen>
   ) {
     final err = history.error ?? sent.error ?? incoming.error ?? exports.error;
     if (err == null) return null;
-    return err.toString();
+    return Tr.localized(context, 'generic_load_error');
   }
 }
 
@@ -821,7 +860,7 @@ class _BusinessWorkspaceSnapshotState
           return AppCard(
             padding: const EdgeInsets.all(14),
             child: Text(
-              snapshot.error.toString(),
+              Tr.localized(context, 'generic_load_error'),
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,
@@ -866,6 +905,16 @@ class _BusinessWorkspaceSnapshotState
                       ),
                     ],
                   ),
+                  if (data.partialDataFailed) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      Tr.localized(context, 'partial_data_notice'),
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   _kv('Business Name', profile.displayName),
                   _kv('Plan Code', profile.planCode ?? '-'),
@@ -993,6 +1042,7 @@ class _BusinessWorkspaceSnapshotState
       return _BusinessSnapshotData(
         profile: profile,
         members: const <BusinessProfileMember>[],
+        partialDataFailed: true,
       );
     }
   }
@@ -1062,8 +1112,13 @@ class _BusinessWorkspaceSnapshotState
 class _BusinessSnapshotData {
   final BusinessProfile? profile;
   final List<BusinessProfileMember> members;
+  final bool partialDataFailed;
 
-  const _BusinessSnapshotData({required this.profile, required this.members});
+  const _BusinessSnapshotData({
+    required this.profile,
+    required this.members,
+    this.partialDataFailed = false,
+  });
 }
 
 class _FilterBar extends StatelessWidget {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../i18n/tr.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/scan_result.dart';
 import '../state/app_providers.dart';
@@ -29,11 +30,11 @@ class InsightsScreen extends ConsumerWidget {
                   const SizedBox(height: 80),
                   StatusCard(
                     title: 'Failed to load insights',
-                    message: error.toString(),
+                    message: Tr.localized(context, 'generic_load_error'),
                     icon: Icons.warning_amber_rounded,
                     iconColor: AppColors.highRisk,
                     actionText: 'Retry',
-                    onAction: () {},
+                    onAction: () => ref.invalidate(homeDataProvider),
                   ),
                 ],
               ),
@@ -42,6 +43,8 @@ class InsightsScreen extends ConsumerWidget {
                 return RefreshIndicator(
                   color: AppColors.primarySoft,
                   onRefresh: () async {
+                    ref.invalidate(homeDataProvider);
+                    await ref.read(homeDataProvider.future);
                   },
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -190,10 +193,7 @@ class InsightsScreen extends ConsumerWidget {
         children: [
           const Text(
             'Signal Breakdown',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -250,20 +250,14 @@ class InsightsScreen extends ConsumerWidget {
         children: [
           const Text(
             'Recent Trend',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           _MiniBars(values: points),
           const SizedBox(height: 8),
           const Text(
             'Last 7 scans',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 11,
-            ),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
           ),
         ],
       ),
@@ -278,10 +272,7 @@ class InsightsScreen extends ConsumerWidget {
         children: [
           const Text(
             'Readiness Notes',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
           Text(
@@ -506,7 +497,8 @@ class _RingPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RingPainter oldDelegate) =>
+      oldDelegate.value != value || oldDelegate.color != color;
 }
 
 class _PulseChart extends StatelessWidget {
@@ -517,9 +509,7 @@ class _PulseChart extends StatelessWidget {
     return SizedBox(
       height: 46,
       width: double.infinity,
-      child: CustomPaint(
-        painter: _PulsePainter(),
-      ),
+      child: CustomPaint(painter: _PulsePainter()),
     );
   }
 }
@@ -584,4 +574,3 @@ class _MiniBars extends StatelessWidget {
     );
   }
 }
-

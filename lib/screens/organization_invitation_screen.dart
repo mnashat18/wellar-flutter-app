@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../i18n/tr.dart';
 import '../models/organization_invitation.dart';
 import '../state/app_providers.dart';
 import '../services/organization_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_feedback.dart';
 import '../widgets/animated_wellar_card.dart';
 import '../widgets/animated_wellar_screen.dart';
 import '../widgets/status_chip.dart';
@@ -144,10 +146,7 @@ class _OrganizationInvitationScreenState
             ),
           ),
           Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(color: WellarTheme.text),
-            ),
+            child: Text(value, style: const TextStyle(color: WellarTheme.text)),
           ),
         ],
       ),
@@ -155,6 +154,10 @@ class _OrganizationInvitationScreenState
   }
 
   Future<void> _acceptInvitation() async {
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
+      return;
+    }
     setState(() {
       _accepting = true;
       _errorMessage = null;
@@ -166,9 +169,9 @@ class _OrganizationInvitationScreenState
       _applyWorkspaceRefresh(result.activeWorkspaceContext);
       if (!mounted) return;
       Navigator.of(context).pop(result.message);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _errorMessage = _readError(error));
+      setState(() => _errorMessage = _readError());
     } finally {
       if (mounted) setState(() => _accepting = false);
     }
@@ -200,6 +203,10 @@ class _OrganizationInvitationScreenState
       ),
     );
     if (confirmed != true || !mounted) return;
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
+      return;
+    }
 
     setState(() {
       _declining = true;
@@ -212,9 +219,9 @@ class _OrganizationInvitationScreenState
       _applyWorkspaceRefresh(result.activeWorkspaceContext);
       if (!mounted) return;
       Navigator.of(context).pop(result.message);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _errorMessage = _readError(error));
+      setState(() => _errorMessage = _readError());
     } finally {
       if (mounted) setState(() => _declining = false);
     }
@@ -232,13 +239,7 @@ class _OrganizationInvitationScreenState
     ref.invalidate(incomingRequestsProvider);
   }
 
-  String _readError(Object error) {
-    final message = error.toString().trim();
-    if (message.isEmpty) {
-      return 'We could not update this invitation right now. Please try again.';
-    }
-    return message;
-  }
+  String _readError() => Tr.localized(context, 'generic_action_error');
 
   String _formatDate(DateTime date) {
     final local = date.toLocal();

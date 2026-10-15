@@ -10,6 +10,7 @@ import '../models/user_profile.dart';
 import 'directus_client.dart';
 import 'invite_service.dart';
 import 'organization_service.dart';
+import 'workspace_selection_service.dart';
 import 'push_notification_service.dart';
 
 class AuthService {
@@ -32,15 +33,13 @@ class AuthService {
   static const Duration _loginHardTimeout = Duration(seconds: 20);
 
   Future<void> login({required String email, required String password}) async {
+    DirectusClient.instance.resumeSessionRequests();
     debugPrint('[AUTH_DEBUG] login_start=true');
     try {
       OrganizationService.instance.clearProfileCache();
       OrganizationService.instance.clearActiveWorkspaceContext();
       final response = await _client
-          .post(
-            '/auth/login',
-            data: {'email': email, 'password': password},
-          )
+          .post('/auth/login', data: {'email': email, 'password': password})
           .timeout(_loginHardTimeout);
       final data = _extractDataMap(response.data);
       final access = data['access_token']?.toString();
@@ -76,7 +75,9 @@ class AuthService {
       throw Exception('The server took too long. Try again.');
     } on DioException catch (e) {
       debugPrint('[AUTH_DEBUG] login_exception_type=${e.runtimeType}');
-      debugPrint('[AUTH_DEBUG] login_dio_status=${e.response?.statusCode ?? 0}');
+      debugPrint(
+        '[AUTH_DEBUG] login_dio_status=${e.response?.statusCode ?? 0}',
+      );
       throw Exception(_extractMessage(e));
     } catch (e) {
       debugPrint('[AUTH_DEBUG] login_exception_type=${e.runtimeType}');
@@ -90,6 +91,7 @@ class AuthService {
     required String firstName,
     required String lastName,
   }) async {
+    DirectusClient.instance.resumeSessionRequests();
     debugPrint('[AUTH_DEBUG] register_start=true');
     try {
       final response = await _client
@@ -121,7 +123,9 @@ class AuthService {
       throw Exception('The server took too long. Try again.');
     } on DioException catch (e) {
       debugPrint('[AUTH_DEBUG] register_exception_type=${e.runtimeType}');
-      debugPrint('[AUTH_DEBUG] register_dio_status=${e.response?.statusCode ?? 0}');
+      debugPrint(
+        '[AUTH_DEBUG] register_dio_status=${e.response?.statusCode ?? 0}',
+      );
       throw Exception(_extractMessage(e));
     } catch (e) {
       debugPrint('[AUTH_DEBUG] register_exception_type=${e.runtimeType}');
@@ -178,8 +182,9 @@ class AuthService {
 
   Future<void> loginWithGoogle({
     Future<({String idToken, String? accessToken})?> Function()?
-        googleAuthOverride,
+    googleAuthOverride,
   }) async {
+    DirectusClient.instance.resumeSessionRequests();
     _googleAuthLog('start');
     _googleAuthLog('flow: native_google_sdk');
     try {
@@ -194,9 +199,7 @@ class AuthService {
 
       final idToken = googleAuth.idToken;
       final accessToken = googleAuth.accessToken;
-      _googleAuthLog(
-        'idToken available: ${idToken.isNotEmpty}',
-      );
+      _googleAuthLog('idToken available: ${idToken.isNotEmpty}');
       _googleAuthLog(
         'accessToken available: ${accessToken != null && accessToken.isNotEmpty}',
       );
@@ -273,7 +276,8 @@ class AuthService {
     }
   }
 
-  Future<({String idToken, String? accessToken})?> _signInWithGoogleSdk() async {
+  Future<({String idToken, String? accessToken})?>
+  _signInWithGoogleSdk() async {
     final account = await _googleSignIn.signIn();
     if (account == null) return null;
     final auth = await account.authentication;
@@ -299,9 +303,7 @@ class AuthService {
       );
       _googleAuthLog('exchange status: ${response.statusCode ?? 0}');
       if ((response.statusCode ?? 0) != 200) {
-        _googleAuthLog(
-          'exchange body on error: ${_sanitizeLogResponse(response.data)}',
-        );
+        _googleAuthLog('exchange error response received; body redacted');
       }
       final payload = response.data;
       Map<String, dynamic>? body;
@@ -322,9 +324,7 @@ class AuthService {
       return (access, refresh);
     } on DioException catch (e) {
       _googleAuthLog('exchange status: ${e.response?.statusCode ?? 0}');
-      _googleAuthLog(
-        'exchange body on error: ${_sanitizeLogResponse(e.response?.data)}',
-      );
+      _googleAuthLog('exchange error response received; body redacted');
       _googleAuthLog('response has access_token: false');
       _googleAuthLog('response has refresh_token: false');
       if ((e.response?.statusCode ?? 0) == 404) {
@@ -381,23 +381,6 @@ class AuthService {
         message.contains('temporary failure');
   }
 
-  String _sanitizeLogResponse(dynamic data) {
-    if (data == null) return 'null';
-    if (data is Map) {
-      final copy = <String, dynamic>{};
-      data.forEach((key, value) {
-        final k = key.toString().toLowerCase();
-        if (k.contains('token') || k.contains('secret')) {
-          copy[key.toString()] = '***';
-        } else {
-          copy[key.toString()] = value;
-        }
-      });
-      return copy.toString();
-    }
-    return data.toString();
-  }
-
   Future<UserProfile> fetchProfile() async {
     return _loadMe();
   }
@@ -420,7 +403,7 @@ class AuthService {
       userName: profile.name,
       roleName: profile.roleName,
     );
-    debugPrint('[Auth] current user id=${profile.id} email=${profile.email}');
+    debugPrint('[Auth] current user profile loaded');
     return profile;
   }
 
@@ -452,31 +435,65 @@ class AuthService {
     }
   }
 
-  Future<void> logout() async {
+  Future<bool> logout() async {
+    DirectusClient.instance.beginLogout();
+    var remoteStepFailed = false;
+    final refreshToken = Session.instance.refreshToken;
+    final accessToken = Session.instance.accessToken;
+    final userId = Session.instance.userId;
     OrganizationService.instance.clearProfileCache();
     OrganizationService.instance.clearActiveWorkspaceContext();
     try {
-      await PushNotificationService.instance.unregisterDevice();
-    } catch (_) {}
+      await WorkspaceSelectionStore.instance.clearForUser(userId ?? '');
+    } catch (_) {
+      remoteStepFailed = true;
+    }
+
+    Future<void> attemptRemoteStep(Future<void> Function() action) async {
+      try {
+        await action().timeout(const Duration(seconds: 4));
+      } catch (_) {
+        remoteStepFailed = true;
+      }
+    }
+
     try {
-      final refreshToken = Session.instance.refreshToken;
-      await _client.post(
-        '/auth/logout',
-        data: {
-          if (refreshToken != null && refreshToken.isNotEmpty)
-            'refresh_token': refreshToken,
-        },
-      );
-    } catch (_) {}
-    try {
-      await _googleSignIn.signOut();
-    } catch (_) {}
-    try {
-      await _firebaseAuth.signOut();
-    } catch (_) {}
-    await Session.instance.clear();
-    OrganizationService.instance.clearProfileCache();
-    OrganizationService.instance.clearActiveWorkspaceContext();
+      await attemptRemoteStep(() async {
+        final unregistered = await PushNotificationService.instance
+            .unregisterDevice();
+        if (!unregistered) {
+          throw StateError('Push device unregister was unsuccessful');
+        }
+      });
+      await attemptRemoteStep(() async {
+        await _client.post(
+          '/auth/logout',
+          data: {
+            if (refreshToken != null && refreshToken.isNotEmpty)
+              'refresh_token': refreshToken,
+          },
+          options: Options(extra: {'allow_during_logout': true}),
+        );
+      });
+    } finally {
+      // Clear local credentials even when an upstream logout step fails.
+      // A new login can begin from the public entry while remote logout is
+      // still pending. Do not clear the newer session in that case.
+      if (Session.instance.accessToken == accessToken &&
+          Session.instance.userId == userId) {
+        try {
+          await Session.instance.clear();
+        } catch (_) {
+          remoteStepFailed = true;
+        }
+        OrganizationService.instance.clearProfileCache();
+        OrganizationService.instance.clearActiveWorkspaceContext();
+      }
+    }
+
+    await attemptRemoteStep(_googleSignIn.signOut);
+    await attemptRemoteStep(_firebaseAuth.signOut);
+    return remoteStepFailed;
   }
 
   String _extractMessage(DioException e) {

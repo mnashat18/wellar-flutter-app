@@ -9,11 +9,13 @@ import 'notification_bell_button.dart';
 class PageHeaderActions extends StatelessWidget {
   final int unreadCount;
   final bool showAlertsTab;
+  final bool showNotificationBell;
 
   const PageHeaderActions({
     super.key,
     required this.unreadCount,
     required this.showAlertsTab,
+    this.showNotificationBell = false,
   });
 
   @override
@@ -21,14 +23,16 @@ class PageHeaderActions extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        NotificationBellButton(
-          unreadCount: unreadCount,
-          onTap: () => Navigator.push(
-            context,
-            fadeSlideRoute(NotificationsScreen(showAlertsTab: showAlertsTab)),
+        if (showNotificationBell) ...[
+          NotificationBellButton(
+            unreadCount: unreadCount,
+            onTap: () => Navigator.push(
+              context,
+              fadeSlideRoute(NotificationsScreen(showAlertsTab: showAlertsTab)),
+            ),
           ),
-        ),
-        const SizedBox(width: 6),
+          const SizedBox(width: 6),
+        ],
         IconButton(
           tooltip: 'Account',
           onPressed: () =>

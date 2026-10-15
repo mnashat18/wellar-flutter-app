@@ -40,7 +40,8 @@ class WorkforceMemberCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final metadata = '${_roleLabel(data.role)} • ${data.department} • ${data.membershipId}';
+    final metadata =
+        '${_roleLabel(data.role)} • ${data.department} • ${data.membershipId}';
 
     return OwnerSurfaceCard(
       radius: 28,
@@ -173,10 +174,8 @@ class WorkforceMemberCard extends StatelessWidget {
   Widget _statusBadge(String rawStatus) {
     final normalized = rawStatus.trim().toLowerCase();
     final isActive = normalized == 'active';
-    final label = isActive ? 'Active' : 'Pending';
-    final color = isActive
-        ? const Color(0xFF6EE7A8)
-        : const Color(0xFFFFC46B);
+    final label = _statusLabel(rawStatus);
+    final color = isActive ? const Color(0xFF6EE7A8) : const Color(0xFFFFC46B);
     return TonePill(
       label: label,
       color: color,
@@ -318,9 +317,9 @@ class WorkforceMemberCard extends StatelessWidget {
   Future<void> _copyMembershipId(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: data.membershipId));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Membership ID copied')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Membership ID copied')));
   }
 
   Future<void> _showDetails(BuildContext context, String metadata) async {
@@ -411,7 +410,8 @@ class WorkforceMemberCard extends StatelessWidget {
               _detailRow('Latest Readiness', data.latestReadiness),
               _detailRow('Last Check', data.lastCheck),
               _detailRow('Membership ID', data.membershipId),
-              if (data.userId.trim().isNotEmpty) _detailRow('User ID', data.userId),
+              if (data.userId.trim().isNotEmpty)
+                _detailRow('User ID', data.userId),
             ],
           ),
         );
@@ -452,7 +452,19 @@ class WorkforceMemberCard extends StatelessWidget {
   }
 
   String _statusLabel(String rawStatus) {
-    return rawStatus.trim().toLowerCase() == 'active' ? 'Active' : 'Pending';
+    switch (rawStatus.trim().toLowerCase()) {
+      case 'active':
+        return 'Active';
+      case 'pending':
+      case 'invited':
+        return 'Pending';
+      case 'suspended':
+        return 'Suspended';
+      case 'removed':
+        return 'Removed';
+      default:
+        return 'Unknown';
+    }
   }
 
   String _roleLabel(String rawRole) {

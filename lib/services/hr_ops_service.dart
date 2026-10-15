@@ -1,5 +1,5 @@
+import '../utils/safe_debug_log.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../models/workspace_department.dart';
 import 'directus_client.dart';
@@ -7,6 +7,7 @@ import 'member_identity_service.dart';
 import 'organization_service.dart';
 import 'readiness_result_service.dart';
 import 'request_service.dart';
+import 'wellar_workforce_service.dart';
 import '../state/session.dart';
 
 class HrMemberView {
@@ -25,6 +26,10 @@ class HrMemberView {
   final bool hasOpenAlert;
   final bool hasOverdueRequest;
   final bool requiresLinking;
+  final DateTime? joinedAt;
+  final String? lastReadinessScore;
+  final bool? todaysScan;
+  final String? presenceStatus;
 
   const HrMemberView({
     required this.memberId,
@@ -42,6 +47,10 @@ class HrMemberView {
     required this.hasOpenAlert,
     required this.hasOverdueRequest,
     required this.requiresLinking,
+    this.joinedAt,
+    this.lastReadinessScore,
+    this.todaysScan,
+    this.presenceStatus,
   });
 
   bool get isActive => status.trim().toLowerCase() == 'active';
@@ -84,10 +93,12 @@ class HrMemberView {
 class HrWorkforceDirectoryData {
   final List<HrMemberView> members;
   final List<WorkspaceDepartment> departments;
+  final Map<String, dynamic> summary;
 
   const HrWorkforceDirectoryData({
     required this.members,
     required this.departments,
+    this.summary = const {},
   });
 }
 
@@ -100,6 +111,7 @@ class HrSnapshot {
   final int attentionOutcomes;
   final int openAlerts;
   final int departmentsCount;
+  final String? workforceUnavailableMessage;
 
   const HrSnapshot({
     required this.workforceTotal,
@@ -110,6 +122,7 @@ class HrSnapshot {
     required this.attentionOutcomes,
     required this.openAlerts,
     required this.departmentsCount,
+    this.workforceUnavailableMessage,
   });
 }
 
@@ -176,10 +189,10 @@ class HrOpsService {
     final activeRole = _workspaceRole(workspace);
     final trace = OrganizationService.instance.activeSwitchTrace ?? 'none';
     if (activeRole.isNotEmpty && activeRole != 'hr') {
-      debugPrint(
+      safeDebugLog(
         '[ROLE_SERVICE_GUARD] service=HrOpsService expected=hr actual=${activeRole.isEmpty ? "unknown" : activeRole} ignored=true',
       );
-      debugPrint(
+      safeDebugLog(
         '[STALE_ROLE_RESULT_IGNORED] service=HrOpsService expected_role=hr actual_role=${activeRole.isEmpty ? "unknown" : activeRole}',
       );
       return const HrWorkforceDirectoryData(members: [], departments: []);
@@ -194,11 +207,11 @@ class HrOpsService {
       return const HrWorkforceDirectoryData(members: [], departments: []);
     }
     final stopwatch = Stopwatch()..start();
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_REQUEST] feature=workforce operation=fetch_directory method=GET endpoint_or_collection=/items/business_profile_members membership_id=$membershipId business_profile=$profileId department=${workspace.departmentId?.trim() ?? ''} membership_role=$activeRole context_source=${OrganizationService.instance.activeWorkspaceContextSource} workspace_revision=$startRevision filter_summary=business_profile=$profileId;status=active;limit=500 started=true trace=$trace',
     );
-    debugPrint(
-      '[HR_WORKFORCE_CLIENT_STATE] trace=$trace client_instance_id=${DirectusClient.instance.instanceId} dio_instance_id=${DirectusClient.instance.dioInstanceId} token_fp=${DirectusClient.tokenFingerprint(Session.instance.accessToken)} membership_id=$membershipId business_profile=$profileId membership_role=$activeRole workspace_revision=$startRevision',
+    safeDebugLog(
+      '[HR_WORKFORCE_CLIENT_STATE] trace=$trace client_instance_id=${DirectusClient.instance.instanceId} dio_instance_id=${DirectusClient.instance.dioInstanceId} membership_id=$membershipId business_profile=$profileId membership_role=$activeRole workspace_revision=$startRevision',
     );
 
     if (!forceRefresh &&
@@ -222,7 +235,7 @@ class HrOpsService {
     try {
       final data = await future;
       stopwatch.stop();
-      debugPrint(
+      safeDebugLog(
         '[SCOPED_DATA_RESPONSE] feature=workforce operation=fetch_directory http_status=200 result_count=${data.members.length} duration_ms=${stopwatch.elapsedMilliseconds} membership_id=$membershipId business_profile=$profileId workspace_revision_before=$startRevision workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=${OrganizationService.instance.workspaceRevision == startRevision && OrganizationService.instance.workspaceSignature == startSignature} returned_business_profile_ids=[$profileId] returned_membership_ids=${data.members.map((m) => m.memberId).where((v) => v.isNotEmpty).toSet().toList()} empty_result=${data.members.isEmpty} trace=$trace',
       );
       if (_isWorkspaceStale(startRevision, startSignature)) {
@@ -246,7 +259,73 @@ class HrOpsService {
     String membershipId,
     String role,
   ) async {
-    debugPrint(
+    final result = await WellarWorkforceService.instance
+        .fetchWorkforceFromWellar();
+    if (result.networkError) {
+      return _buildLegacyWorkforceDirectory(profileId, membershipId, role);
+    }
+    if (!result.isSuccessful) throw result.asFailure();
+
+    final members = result.memberRows.map((row) {
+      final departmentId = _workforceString(row['department_id']);
+      final departmentName = _workforceString(row['department_name']);
+      final risk = _normalizeWorkforceRisk(
+        _workforceString(row['last_risk_level']),
+      );
+      final userId = _workforceString(row['user_id']);
+      return HrMemberView(
+        memberId: _workforceString(row['member_id']).isNotEmpty
+            ? _workforceString(row['member_id'])
+            : _workforceString(row['id']),
+        userId: userId,
+        name: _workforceString(row['display_name']),
+        email: _workforceString(row['email']),
+        role: _workforceString(row['member_role']),
+        status: _workforceString(row['status']),
+        departmentName: departmentName.isEmpty ? null : departmentName,
+        departmentId: departmentId.isEmpty ? null : departmentId,
+        latestReadiness: risk,
+        lastCheckAt: _parseDate(row['last_scan_at']),
+        needsAttention: risk == 'Elevated Fatigue' || risk == 'High Risk',
+        missingCheck: _workforceMissing(row),
+        hasOpenAlert: false,
+        hasOverdueRequest: false,
+        requiresLinking: userId.isEmpty,
+        joinedAt: _parseDate(row['joined_at']),
+        lastReadinessScore:
+            _workforceString(row['last_readiness_score']).isEmpty
+            ? null
+            : _workforceString(row['last_readiness_score']),
+        todaysScan: row['todays_scan'] is bool
+            ? row['todays_scan'] as bool
+            : null,
+        presenceStatus: _workforceString(row['presence_status']).isEmpty
+            ? null
+            : _workforceString(row['presence_status']),
+      );
+    }).toList();
+    final departments = result.departments
+        .map(
+          (row) => WorkspaceDepartment(
+            id: _workforceString(row['id']),
+            name: _workforceString(row['name']),
+          ),
+        )
+        .where((item) => item.id.trim().isNotEmpty)
+        .toList();
+    return HrWorkforceDirectoryData(
+      members: members,
+      departments: departments,
+      summary: result.summary,
+    );
+  }
+
+  Future<HrWorkforceDirectoryData> _buildLegacyWorkforceDirectory(
+    String profileId,
+    String membershipId,
+    String role,
+  ) async {
+    safeDebugLog(
       '[HR] workforce load start business_profile=$profileId membership_id=$membershipId role=$role',
     );
     final results = await Future.wait<dynamic>([
@@ -257,6 +336,40 @@ class HrOpsService {
       members: results[0] as List<HrMemberView>,
       departments: results[1] as List<WorkspaceDepartment>,
     );
+  }
+
+  String _workforceString(dynamic value) => value?.toString().trim() ?? '';
+
+  String? _normalizeWorkforceRisk(String value) {
+    final normalized = value.trim().toLowerCase().replaceAll('_', ' ');
+    return switch (normalized) {
+      'stable' => 'Stable',
+      'low focus' => 'Low Focus',
+      'elevated fatigue' => 'Elevated Fatigue',
+      'high risk' => 'High Risk',
+      _ => null,
+    };
+  }
+
+  bool _workforceMissing(Map<String, dynamic> row) {
+    final today = row['todays_scan'];
+    if (today is bool) return !today;
+    final status = _workforceString(row['presence_status']).toLowerCase();
+    return status == 'missing' ||
+        status == 'missing_scan' ||
+        status == 'not_scanned';
+  }
+
+  int _summaryInt(
+    Map<String, dynamic> summary,
+    String key, {
+    required int fallback,
+  }) {
+    if (!summary.containsKey(key)) return fallback;
+    final value = summary[key];
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   Future<ActiveWorkspaceContext?> _activeWorkspace({
@@ -446,10 +559,10 @@ class HrOpsService {
           b.displayName.toLowerCase(),
         );
       });
-      debugPrint('[HR] workforce load success count=${list.length}');
+      safeDebugLog('[HR] workforce load success count=${list.length}');
       return list;
     } on DioException catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[HR] workforce load fail status=${e.response?.statusCode} body=${e.response?.data}',
       );
       rethrow;
@@ -465,10 +578,10 @@ class HrOpsService {
     final currentUserId = workspace?.currentUserId.trim() ?? '';
     final activeRole = _workspaceRole(workspace);
     if (activeRole.isNotEmpty && activeRole != 'hr') {
-      debugPrint(
+      safeDebugLog(
         '[ROLE_SERVICE_GUARD] service=HrOpsService expected=hr actual=${activeRole.isEmpty ? "unknown" : activeRole} ignored=true',
       );
-      debugPrint(
+      safeDebugLog(
         '[STALE_ROLE_RESULT_IGNORED] service=HrOpsService expected_role=hr actual_role=${activeRole.isEmpty ? "unknown" : activeRole}',
       );
       return const HrSnapshot(
@@ -486,7 +599,7 @@ class HrOpsService {
         profileId.isEmpty ||
         membershipId.isEmpty ||
         currentUserId.isEmpty) {
-      debugPrint(
+      safeDebugLog(
         '[HR] snapshot unavailable workspace=${workspace != null} profile=$profileId membership=$membershipId current_user=${currentUserId.isNotEmpty}',
       );
       return const HrSnapshot(
@@ -515,10 +628,30 @@ class HrOpsService {
     }
     final trace = OrganizationService.instance.activeSwitchTrace ?? 'none';
     final stopwatch = Stopwatch()..start();
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_REQUEST] feature=reports operation=hr_snapshot method=GET endpoint_or_collection=/items/scan_results membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=$profileId department=${workspace?.departmentId?.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} context_source=${OrganizationService.instance.activeWorkspaceContextSource} workspace_revision=$startRevision filter_summary=business_profile=$profileId;scan_results;alerts;scan_requests;departments started=true trace=$trace',
     );
-    final members = await fetchWorkforce(forceRefresh: forceRefresh);
+    List<HrMemberView> members = const [];
+    Map<String, dynamic> workforceSummary = const {};
+    int workforceDepartmentsCount = -1;
+    String? workforceUnavailableMessage;
+    try {
+      final workforce = await fetchWorkforceDirectory(
+        forceRefresh: forceRefresh,
+      );
+      members = workforce.members;
+      workforceSummary = workforce.summary;
+      workforceDepartmentsCount = workforce.departments.length;
+    } catch (error) {
+      final status = error is DioException
+          ? error.response?.statusCode ?? 0
+          : 0;
+      safeDebugLog(
+        '[HR_SNAPSHOT_SECTION_FAILED] step=workforce http_status=$status error_type=${error.runtimeType}',
+      );
+      workforceUnavailableMessage =
+          'Workforce data is unavailable right now. Other dashboard data is still available.';
+    }
     if (_isWorkspaceStale(startRevision, startSignature)) {
       _logStaleResult();
       return const HrSnapshot(
@@ -533,28 +666,58 @@ class HrOpsService {
       );
     }
     final scopedMembers = members.where((m) => m.isHrReadyScopeMember).toList();
-    final workforceTotal = scopedMembers.length;
-    final active = scopedMembers.length;
+    final workforceTotal = workforceUnavailableMessage != null
+        ? -1
+        : _summaryInt(
+            workforceSummary,
+            'eligibleMembers',
+            fallback: scopedMembers.length,
+          );
+    final active = workforceUnavailableMessage != null
+        ? -1
+        : _summaryInt(
+            workforceSummary,
+            'activeMembers',
+            fallback: scopedMembers.length,
+          );
     final now = DateTime.now();
-    final completedToday = scopedMembers.where((m) {
-      final d = m.lastCheckAt?.toLocal();
-      return d != null &&
-          d.year == now.year &&
-          d.month == now.month &&
-          d.day == now.day;
-    }).length;
-    final missing = scopedMembers.where((m) {
-      final d = m.lastCheckAt?.toLocal();
-      return d == null ||
-          d.year != now.year ||
-          d.month != now.month ||
-          d.day != now.day;
-    }).length;
-    final attention = scopedMembers.where((m) => m.needsAttention).length;
+    final completedToday = workforceUnavailableMessage != null
+        ? -1
+        : workforceSummary.containsKey('completedToday')
+        ? _summaryInt(workforceSummary, 'completedToday', fallback: 0)
+        : scopedMembers.where((m) {
+            final d = m.lastCheckAt?.toLocal();
+            return d != null &&
+                d.year == now.year &&
+                d.month == now.month &&
+                d.day == now.day;
+          }).length;
+    final missing = workforceUnavailableMessage != null
+        ? -1
+        : workforceSummary.containsKey('missingScans')
+        ? _summaryInt(workforceSummary, 'missingScans', fallback: 0)
+        : scopedMembers.where((m) {
+            final d = m.lastCheckAt?.toLocal();
+            return d == null ||
+                d.year != now.year ||
+                d.month != now.month ||
+                d.day != now.day;
+          }).length;
+    final attention = workforceUnavailableMessage != null
+        ? -1
+        : workforceSummary.containsKey('needsAttention')
+        ? _summaryInt(workforceSummary, 'needsAttention', fallback: 0)
+        : scopedMembers.where((m) => m.needsAttention).length;
 
     int openAlerts = -1;
     int pendingRequests = -1;
-    int departmentsCount = -1;
+    int departmentsCount = workforceUnavailableMessage == null
+        ? _summaryInt(
+            workforceSummary,
+            'departments',
+            fallback: workforceDepartmentsCount,
+          )
+        : -1;
     try {
       if (profileId.isNotEmpty) {
         final alerts = await _client.get(
@@ -586,7 +749,7 @@ class HrOpsService {
       pendingRequests = -1;
     }
     try {
-      if (profileId.isNotEmpty) {
+      if (departmentsCount < 0 && profileId.isNotEmpty) {
         final dep = await _client.get(
           '/items/departments',
           queryParameters: {
@@ -615,7 +778,7 @@ class HrOpsService {
       );
     }
     stopwatch.stop();
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_RESPONSE] feature=reports operation=hr_snapshot http_status=200 result_count=$workforceTotal duration_ms=${stopwatch.elapsedMilliseconds} membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=$profileId workspace_revision_before=$startRevision workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=${OrganizationService.instance.workspaceRevision == startRevision && OrganizationService.instance.workspaceSignature == startSignature} returned_business_profile_ids=[$profileId] returned_membership_ids=[${workspace?.membershipId.trim() ?? ''}] empty_result=${workforceTotal == 0} trace=$trace',
     );
 
@@ -628,6 +791,7 @@ class HrOpsService {
       attentionOutcomes: attention,
       openAlerts: openAlerts,
       departmentsCount: departmentsCount,
+      workforceUnavailableMessage: workforceUnavailableMessage,
     );
   }
 
@@ -639,10 +803,10 @@ class HrOpsService {
     final activeRole = _workspaceRole(workspace);
     final trace = OrganizationService.instance.activeSwitchTrace ?? 'none';
     if (activeRole.isNotEmpty && activeRole != 'hr') {
-      debugPrint(
+      safeDebugLog(
         '[ROLE_SERVICE_GUARD] service=HrOpsService expected=hr actual=${activeRole.isEmpty ? "unknown" : activeRole} ignored=true',
       );
-      debugPrint(
+      safeDebugLog(
         '[STALE_ROLE_RESULT_IGNORED] service=HrOpsService expected_role=hr actual_role=${activeRole.isEmpty ? "unknown" : activeRole}',
       );
       return const HrComplianceSummary(
@@ -661,10 +825,11 @@ class HrOpsService {
         overdue: -1,
       );
     }
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_REQUEST] feature=compliance operation=hr_compliance method=GET endpoint_or_collection=/items/scan_requests membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=$profileId department=${workspace?.departmentId?.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} context_source=${OrganizationService.instance.activeWorkspaceContextSource} workspace_revision=$startRevision filter_summary=business_profile=$profileId;status=active;scan_requests started=true trace=$trace',
     );
-    final members = await fetchWorkforce();
+    final workforce = await fetchWorkforceDirectory();
+    final members = workforce.members;
     if (_isWorkspaceStale(startRevision, startSignature)) {
       _logStaleResult();
       return const HrComplianceSummary(
@@ -675,17 +840,33 @@ class HrOpsService {
       );
     }
     final now = DateTime.now();
-    final scopedMembers = members.where((member) => member.isHrReadyScopeMember).toList();
-    final completed = scopedMembers.where((member) {
-      final lastCheck = member.lastCheckAt?.toLocal();
-      return lastCheck != null &&
-          lastCheck.year == now.year &&
-          lastCheck.month == now.month &&
-          lastCheck.day == now.day;
-    }).length;
-    final activeMembers = scopedMembers.length;
-    final missing = activeMembers > completed ? activeMembers - completed : 0;
-    final attention = scopedMembers.where((member) => member.needsAttention).length;
+    final scopedMembers = members
+        .where((member) => member.isHrReadyScopeMember)
+        .toList();
+    final completed = workforce.summary.containsKey('completedToday')
+        ? _summaryInt(workforce.summary, 'completedToday', fallback: 0)
+        : scopedMembers.where((member) {
+            final lastCheck = member.lastCheckAt?.toLocal();
+            return lastCheck != null &&
+                lastCheck.year == now.year &&
+                lastCheck.month == now.month &&
+                lastCheck.day == now.day;
+          }).length;
+    final activeMembers = _summaryInt(
+      workforce.summary,
+      'activeMembers',
+      fallback: scopedMembers.length,
+    );
+    final missing = _summaryInt(
+      workforce.summary,
+      'missingScans',
+      fallback: activeMembers > completed ? activeMembers - completed : 0,
+    );
+    final attention = _summaryInt(
+      workforce.summary,
+      'needsAttention',
+      fallback: scopedMembers.where((member) => member.needsAttention).length,
+    );
 
     int overdue = 0;
     if (profileId.isNotEmpty) {
@@ -718,7 +899,7 @@ class HrOpsService {
         overdue: -1,
       );
     }
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_RESPONSE] feature=compliance operation=hr_compliance http_status=200 result_count=$completed duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=$profileId workspace_revision_before=$startRevision workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=${OrganizationService.instance.workspaceRevision == startRevision && OrganizationService.instance.workspaceSignature == startSignature} returned_business_profile_ids=[$profileId] returned_membership_ids=[${workspace?.membershipId.trim() ?? ''}] empty_result=${completed == 0 && missing == 0 && attention == 0 && overdue == 0} trace=$trace',
     );
 
@@ -827,7 +1008,7 @@ class HrOpsService {
   }
 
   void _logStaleResult() {
-    debugPrint(
+    safeDebugLog(
       '[WORKSPACE_GUARD] stale_result_ignored=true service=HrOpsService',
     );
   }

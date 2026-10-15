@@ -1,4 +1,8 @@
+import 'dart:async';
+
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'app_language_state.dart';
 
 import '../services/auth_service.dart';
@@ -39,11 +43,44 @@ final activeWorkspaceContextProvider = StateProvider<ActiveWorkspaceContext?>(
   (ref) => null,
 );
 
+
 final appLanguageControllerProvider =
     ChangeNotifierProvider<AppLanguageController>((ref) {
       final controller = AppLanguageController();
       return controller;
     });
+
+final connectivityStatusProvider = StreamProvider<bool>((ref) {
+  final connectivity = Connectivity();
+  final controller = StreamController<bool>();
+  bool hasConnection(List<ConnectivityResult> results) =>
+      !results.contains(ConnectivityResult.none);
+
+  Future<void> checkConnection() async {
+    try {
+      controller.add(hasConnection(await connectivity.checkConnectivity()));
+    } catch (error) {
+      debugPrint(
+        '[CONNECTIVITY] status_check_failed type=${error.runtimeType}',
+      );
+    }
+  }
+
+  final subscription = connectivity.onConnectivityChanged.listen((results) {
+    controller.add(hasConnection(results));
+  });
+  final lifecycleListener = AppLifecycleListener(
+    onResume: () => unawaited(checkConnection()),
+  );
+  unawaited(checkConnection());
+
+  ref.onDispose(() {
+    unawaited(subscription.cancel());
+    lifecycleListener.dispose();
+    unawaited(controller.close());
+  });
+  return controller.stream.distinct();
+});
 
 // ============================================================
 // GLOBAL REFRESH TICK (SINGLE SOURCE OF TRUTH)
@@ -279,7 +316,9 @@ final organizationInvitationsProvider =
     FutureProvider<List<OrganizationInvitation>>((ref) async {
       ref.watch(refreshTickProvider);
       ref.watch(
-        activeWorkspaceContextProvider.select((workspace) => workspace?.membershipId),
+        activeWorkspaceContextProvider.select(
+          (workspace) => workspace?.membershipId,
+        ),
       );
       return ref
           .read(organizationInvitationServiceProvider)

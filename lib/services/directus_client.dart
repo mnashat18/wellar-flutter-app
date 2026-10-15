@@ -4,8 +4,12 @@ import 'dart:core';
 
 import '../config/app_config.dart';
 import '../state/session.dart';
+import '../utils/safe_debug_log.dart';
 
 class DirectusClient {
+  @visibleForTesting
+  Dio Function()? _refreshClientFactoryForTest;
+
   DirectusClient._() {
     _baseUrls = _buildBaseUrls();
     _dio = Dio(
@@ -19,13 +23,35 @@ class DirectusClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
+          if (_logoutInProgress &&
+              options.extra['allow_during_logout'] != true) {
+            handler.reject(
+              DioException(
+                requestOptions: options,
+                type: DioExceptionType.cancel,
+                message: 'Request blocked while logout is in progress.',
+              ),
+            );
+            return;
+          }
+          final cancelToken = options.cancelToken ?? CancelToken();
+          options.cancelToken = cancelToken;
+          _activeRequestTokens.add(cancelToken);
           if (options.extra['skip_auth'] != true) {
             final token = Session.instance.accessToken;
             if (token != null && token.isNotEmpty) {
               options.headers['Authorization'] = 'Bearer $token';
             }
           }
+          if (options.method.toUpperCase() == 'POST' &&
+              options.path.endsWith('/files')) {
+            safeDebugLog('[SCAN_FILE_DIO_DISPATCH]');
+          }
           handler.next(options);
+        },
+        onResponse: (response, handler) {
+          _activeRequestTokens.remove(response.requestOptions.cancelToken);
+          handler.next(response);
         },
         onError: (error, handler) async {
           final options = error.requestOptions;
@@ -68,6 +94,7 @@ class DirectusClient {
               return;
             } catch (e) {
               handler.next(e is DioException ? e : error);
+              _activeRequestTokens.remove(options.cancelToken);
               return;
             }
           }
@@ -88,10 +115,12 @@ class DirectusClient {
               return;
             } catch (e) {
               handler.next(e is DioException ? e : error);
+              _activeRequestTokens.remove(options.cancelToken);
               return;
             }
           }
           handler.next(error);
+          _activeRequestTokens.remove(options.cancelToken);
         },
       ),
     );
@@ -101,29 +130,38 @@ class DirectusClient {
   late final List<String> _baseUrls;
   int _baseIndex = 0;
   Future<bool>? _refreshInFlight;
+  final Set<CancelToken> _activeRequestTokens = <CancelToken>{};
+  bool _logoutInProgress = false;
   static const int _maxTransientRetries = 2;
 
   static final DirectusClient instance = DirectusClient._();
 
   Dio get client => _dio;
+  bool get isLogoutInProgress => _logoutInProgress;
   int get instanceId => identityHashCode(this);
   int get dioInstanceId => identityHashCode(_dio);
 
-  static String tokenFingerprint(String? token) {
-    final normalized = token?.trim() ?? '';
-    if (normalized.isEmpty) return 'empty';
-    final hash = Object.hashAll(normalized.codeUnits).toUnsigned(32);
-    return 'len${normalized.length}:h${hash.toRadixString(16)}';
+  void beginLogout() {
+    _logoutInProgress = true;
+    final tokens = _activeRequestTokens.toList(growable: false);
+    _activeRequestTokens.clear();
+    for (final token in tokens) {
+      if (!token.isCancelled) token.cancel('logout');
+    }
   }
 
-  void debugAuthState({
-    required String label,
-    String? token,
-  }) {
+  void resumeSessionRequests() {
+    _logoutInProgress = false;
+  }
+
+  void debugAuthState({required String label, String? token}) {
     if (!kDebugMode) return;
-    final normalizedToken = token?.trim() ?? Session.instance.accessToken?.trim() ?? '';
+    final authHeaderPresent =
+        token?.trim().isNotEmpty == true ||
+        _dio.options.headers['Authorization']?.toString().trim().isNotEmpty ==
+            true;
     debugPrint(
-      '[DIRECTUS_CLIENT_STATE] label=$label client_instance_id=$instanceId dio_instance_id=$dioInstanceId token_fp=${tokenFingerprint(normalizedToken)} auth_header_present=${_dio.options.headers['Authorization']?.toString().trim().isNotEmpty == true}',
+      '[DIRECTUS_CLIENT_STATE] label=$label auth_header_present=$authHeaderPresent',
     );
   }
 
@@ -246,18 +284,17 @@ class DirectusClient {
     }
 
     final refreshClient = _buildRefreshClient();
-    final refreshed = await _refreshWithClient(
-      refreshClient,
-      {
-        'refresh_token': refreshToken,
-        'mode': 'json',
-      },
-    );
+    final refreshed = await _refreshWithClient(refreshClient, {
+      'refresh_token': refreshToken,
+      'mode': 'json',
+    });
     if (!refreshed) {
       return false;
     }
 
-    debugAuthState(label: 'refresh_session_after_workspace_switch_post_refresh');
+    debugAuthState(
+      label: 'refresh_session_after_workspace_switch_post_refresh',
+    );
     final sessionTokenPresent =
         Session.instance.accessToken?.trim().isNotEmpty == true;
     final headerMatchesSession = syncAuthorizationHeaderFromSession();
@@ -271,7 +308,9 @@ class DirectusClient {
     } else {
       _dio.options.headers.remove('Authorization');
     }
-    final headerValue = _dio.options.headers['Authorization']?.toString().trim();
+    final headerValue = _dio.options.headers['Authorization']
+        ?.toString()
+        .trim();
     final headerPresent = headerValue != null && headerValue.isNotEmpty;
     final matchesSession =
         (token != null && token.isNotEmpty) && headerValue == 'Bearer $token';
@@ -284,7 +323,10 @@ class DirectusClient {
     debugPrint(
       '[WORKSPACE_SWITCH_AUTH] auth_header_matches_session=$matchesSession',
     );
-    debugAuthState(label: 'sync_authorization_header_from_session', token: token);
+    debugAuthState(
+      label: 'sync_authorization_header_from_session',
+      token: token,
+    );
     return matchesSession;
   }
 
@@ -337,6 +379,8 @@ class DirectusClient {
   }
 
   Dio _buildRefreshClient() {
+    final testFactory = _refreshClientFactoryForTest;
+    if (testFactory != null) return testFactory();
     return Dio(
       BaseOptions(
         baseUrl: _dio.options.baseUrl,
@@ -347,17 +391,23 @@ class DirectusClient {
     );
   }
 
+  @visibleForTesting
+  void overrideRefreshClientFactoryForTest(Dio Function()? factory) {
+    assert(() {
+      _refreshClientFactoryForTest = factory;
+      return true;
+    }());
+  }
+
   Future<bool> _refreshWithClient(
     Dio client,
     Map<String, dynamic> payload,
   ) async {
     try {
-      final response = await client.post(
-        '/auth/refresh',
-        data: payload,
-      );
+      final response = await client.post('/auth/refresh', data: payload);
       final data = _extractDataMap(response.data);
-      final access = data['access_token']?.toString().trim() ??
+      final access =
+          data['access_token']?.toString().trim() ??
           data['token']?.toString().trim();
       if (access == null || access.isEmpty) return false;
 

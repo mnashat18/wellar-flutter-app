@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../i18n/tr.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/activity_event.dart';
 import '../state/app_providers.dart';
@@ -87,17 +88,20 @@ class _ActivityScreenState extends ConsumerState<ActivityScreen> {
                   const SizedBox(height: 80),
                   StatusCard(
                     title: 'Failed to load activity',
-                    message: error.toString(),
+                    message: Tr.localized(context, 'generic_load_error'),
                     icon: Icons.warning_amber_rounded,
                     iconColor: AppColors.highRisk,
                     actionText: 'Retry',
-                    onAction: () {},
+                    onAction: () => ref.invalidate(activityEventsProvider),
                   ),
                 ],
               ),
               data: (events) => RefreshIndicator(
                 color: AppColors.primarySoft,
-                onRefresh: () async {},
+                onRefresh: () async {
+                  ref.invalidate(activityEventsProvider);
+                  await ref.read(activityEventsProvider.future);
+                },
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),

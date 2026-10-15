@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../i18n/tr.dart';
 
 import '../models/business_profile.dart';
 import '../services/organization_service.dart';
@@ -35,7 +36,9 @@ class _BusinessProfileSummaryScreenState
 
   Future<void> _refresh() async {
     final next = _load(force: true);
-    setState(() => _future = next);
+    setState(() {
+      _future = next;
+    });
     await next;
   }
 
@@ -62,12 +65,15 @@ class _BusinessProfileSummaryScreenState
                     if (snapshot.hasError) {
                       return StatusCard(
                         title: 'Business profile unavailable',
-                        message: snapshot.error.toString(),
+                        message: Tr.localized(context, 'generic_load_error'),
                         icon: Icons.warning_amber_rounded,
                         iconColor: AppColors.highRisk,
                         actionText: 'Retry',
                         onAction: () {
-                          setState(() => _future = _load(force: true));
+                          final next = _load(force: true);
+                          setState(() {
+                            _future = next;
+                          });
                         },
                       );
                     }
@@ -321,7 +327,9 @@ class _BusinessProfileBody extends StatelessWidget {
                   ResponsiveCardGridItem(
                     child: _infoCell('Source Request', profile.sourceRequestId),
                   ),
-                  ResponsiveCardGridItem(child: _infoCell('Company', profile.companyName)),
+                  ResponsiveCardGridItem(
+                    child: _infoCell('Company', profile.companyName),
+                  ),
                   ResponsiveCardGridItem(
                     child: _infoCell('Business Name', profile.businessName),
                   ),
@@ -331,15 +339,21 @@ class _BusinessProfileBody extends StatelessWidget {
                   ResponsiveCardGridItem(
                     child: _infoCell('Work Email', profile.workEmail),
                   ),
-                  ResponsiveCardGridItem(child: _infoCell('Phone', profile.phone)),
+                  ResponsiveCardGridItem(
+                    child: _infoCell('Phone', profile.phone),
+                  ),
                   ResponsiveCardGridItem(
                     child: _infoCell('Industry', profile.industry),
                   ),
                   ResponsiveCardGridItem(
                     child: _infoCell('Team Size', profile.teamSize),
                   ),
-                  ResponsiveCardGridItem(child: _infoCell('Country', profile.country)),
-                  ResponsiveCardGridItem(child: _infoCell('City', profile.city)),
+                  ResponsiveCardGridItem(
+                    child: _infoCell('Country', profile.country),
+                  ),
+                  ResponsiveCardGridItem(
+                    child: _infoCell('City', profile.city),
+                  ),
                   ResponsiveCardGridItem(
                     child: _infoCell('Address', profile.address),
                   ),
@@ -353,7 +367,10 @@ class _BusinessProfileBody extends StatelessWidget {
                     child: _infoCell('Billing Status', profile.billingStatus),
                   ),
                   ResponsiveCardGridItem(
-                    child: _infoCell('Is Active', profile.isActive ? 'true' : 'false'),
+                    child: _infoCell(
+                      'Is Active',
+                      profile.isActive ? 'true' : 'false',
+                    ),
                   ),
                   ResponsiveCardGridItem(
                     child: _infoCell(

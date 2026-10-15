@@ -123,22 +123,15 @@ class SubscriptionService {
   }
 
   Future<UserSubscription?> fetchActiveSubscription() async {
-    final profileId = await OrganizationService.instance
-        .fetchPrimaryBusinessProfileId();
-    if (profileId != null && profileId.isNotEmpty) {
-      final byProfile = await _fetchLatestSubscriptionByBusinessProfile(
-        profileId,
-      );
-      if (byProfile != null) return byProfile;
-    }
-
-    final userId = Session.instance.userId?.trim();
-    if (userId != null && userId.isNotEmpty) {
-      final byUser = await _fetchLatestSubscriptionByUser(userId);
-      if (byUser != null) return byUser;
-    }
-
-    return _fallbackSubscriptionFromBusinessProfile();
+    final context = await OrganizationService.instance
+        .fetchActiveWorkspaceContext();
+    final profileId = context?.businessProfileId.trim();
+    if (profileId == null || profileId.isEmpty) return null;
+    final subscription = await _fetchLatestSubscriptionByBusinessProfile(
+      profileId,
+    );
+    if (subscription?.businessProfileId?.trim() != profileId) return null;
+    return subscription;
   }
 
   Future<TrialActivationResult> startBusinessTrial({
@@ -146,33 +139,8 @@ class SubscriptionService {
     required String billingCycle,
     required BusinessProfileDraft draft,
   }) async {
-    final userId = _requireUserId();
-    final now = DateTime.now().toUtc();
-    final trialDays = plan.trialDays > 0 ? plan.trialDays : 14;
-    final expiresAt = now.add(Duration(days: trialDays));
-
-    final profileId = await _ensureBusinessProfile(
-      userId: userId,
-      draft: draft,
-      plan: plan,
-      billingStatus: 'trial',
-      trialStartedAt: now,
-      trialExpiresAt: expiresAt,
-    );
-
-    final subscription = await _upsertSubscriptionRecord(
-      userId: userId,
-      businessProfileId: profileId,
-      plan: plan,
-      billingCycle: _normalizeBillingCycle(billingCycle),
-      status: 'trial',
-      startedAt: now,
-      expiresAt: expiresAt,
-    );
-
-    return TrialActivationResult(
-      businessProfileId: profileId,
-      subscription: subscription,
+    throw const _SubscriptionException(
+      'Subscriptions are not available yet. A verified payment service is required.',
     );
   }
 
@@ -201,37 +169,11 @@ class SubscriptionService {
     required String businessProfileId,
     String status = 'active',
   }) async {
-    final userId = _requireUserId();
-    final profileId = businessProfileId.trim();
-    if (profileId.isEmpty) {
-      throw const _SubscriptionException('Business profile is required.');
-    }
-
-    final now = DateTime.now().toUtc();
-    final normalizedStatus = _normalizeStatus(status);
-    final cycle = _normalizeBillingCycle(billingCycle);
-    final expiresAt = normalizedStatus == 'trial'
-        ? now.add(Duration(days: plan.trialDays > 0 ? plan.trialDays : 14))
-        : _computeExpiry(now, cycle);
-
-    await _syncBusinessProfileBilling(
-      businessProfileId: profileId,
-      plan: plan,
-      billingStatus: normalizedStatus,
-      trialStartedAt: normalizedStatus == 'trial' ? now : null,
-      trialExpiresAt: normalizedStatus == 'trial' ? expiresAt : null,
+    // SECURITY: never write active/trial entitlement from a client action.
+    // Replace with a protected server entitlement action driven by verified provider webhooks.
+    throw const _SubscriptionException(
+      'Subscriptions are not available yet. A verified payment service is required.',
     );
-
-    final subscription = await _upsertSubscriptionRecord(
-      userId: userId,
-      businessProfileId: profileId,
-      plan: plan,
-      billingCycle: cycle,
-      status: normalizedStatus,
-      startedAt: now,
-      expiresAt: expiresAt,
-    );
-    return subscription;
   }
 
   Future<UserSubscription?> renewSubscription(UserSubscription current) async {
@@ -250,24 +192,9 @@ class SubscriptionService {
   }
 
   Future<UserSubscription?> cancelSubscription(UserSubscription current) async {
-    final id = current.id.trim();
-    if (id.isEmpty || id.startsWith('synthetic:')) return null;
-    final now = DateTime.now().toUtc();
-    await _client.patch(
-      '/items/subscriptions/$id',
-      data: {'status': 'canceled', 'expires_at': now.toIso8601String()},
+    throw const _SubscriptionException(
+      'Subscription changes are not available yet. Contact support for help.',
     );
-    if (current.businessProfileId != null &&
-        current.businessProfileId!.trim().isNotEmpty) {
-      await _syncBusinessProfileBilling(
-        businessProfileId: current.businessProfileId!.trim(),
-        plan: current.plan,
-        billingStatus: 'canceled',
-        trialStartedAt: null,
-        trialExpiresAt: null,
-      );
-    }
-    return fetchActiveSubscription();
   }
 
   Future<int> fetchCurrentMembersCount(String businessProfileId) async {
@@ -311,7 +238,7 @@ class SubscriptionService {
     final now = DateTime.now().toUtc();
 
     if (status == 'active') {
-      if (expiresAt == null) return true;
+      if (expiresAt == null) return false;
       return now.isBefore(expiresAt);
     }
 
@@ -367,35 +294,6 @@ class SubscriptionService {
     final attempts = [
       {'filter[business_profile][_eq]': businessProfileId},
       {'filter[business_profile][id][_eq]': businessProfileId},
-    ];
-
-    for (final filter in attempts) {
-      try {
-        final response = await _client.get(
-          '/items/subscriptions',
-          queryParameters: {
-            'limit': 1,
-            'sort': '-date_created,-started_at',
-            'fields': _subscriptionFields,
-            ...filter,
-          },
-        );
-        final parsed = _firstSubscription(response.data['data']);
-        if (parsed != null) return parsed;
-      } on DioException catch (e) {
-        if (_isQueryFieldIssue(e)) continue;
-        rethrow;
-      }
-    }
-    return null;
-  }
-
-  Future<UserSubscription?> _fetchLatestSubscriptionByUser(
-    String userId,
-  ) async {
-    final attempts = [
-      {'filter[user][_eq]': userId},
-      {'filter[user][id][_eq]': userId},
     ];
 
     for (final filter in attempts) {
@@ -571,61 +469,6 @@ class SubscriptionService {
     };
   }
 
-  Future<UserSubscription?> _fallbackSubscriptionFromBusinessProfile() async {
-    try {
-      final profile = await OrganizationService.instance
-          .fetchPrimaryBusinessProfile();
-      if (profile == null || profile.id.trim().isEmpty) return null;
-
-      final code = (profile.planCode ?? '').trim().toLowerCase();
-      final now = DateTime.now().toUtc();
-      final expires = _safeUtc(profile.trialExpiresAt);
-      final started = _safeUtc(profile.trialStartedAt);
-
-      var status = _normalizeStatus(profile.billingStatus);
-      if (status.isEmpty) {
-        status = code == 'business' ? 'active' : 'inactive';
-      }
-      if (status == 'trial' && expires != null && !now.isBefore(expires)) {
-        status = 'expired';
-      }
-
-      final trialDays = (expires != null && started != null)
-          ? expires.difference(started).inDays
-          : 14;
-      final syntheticPlan = Plan(
-        id: code.isEmpty ? 'free' : code,
-        name: _planName(code),
-        code: code.isEmpty ? 'free' : code,
-        description: 'Derived from business profile.',
-        monthlyPrice: null,
-        yearlyPrice: null,
-        trialDays: trialDays > 0 ? trialDays : 14,
-        maxMembers: null,
-        isBusiness: code == 'business',
-        features: const [],
-        isPopular: false,
-        isActive: true,
-        sortOrder: 0,
-      );
-
-      return UserSubscription(
-        id: 'synthetic:${profile.id}',
-        plan: syntheticPlan,
-        businessProfileId: profile.id,
-        userId: profile.ownerUserId,
-        status: status,
-        billingCycle: 'monthly',
-        startedAt: started,
-        expiresAt: expires,
-        createdAt: now,
-        currentMembersCount: null,
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
   UserSubscription? _firstSubscription(dynamic data) {
     if (data is List && data.isNotEmpty) {
       final first = data.first;
@@ -671,22 +514,13 @@ class SubscriptionService {
 
   DateTime _computeExpiry(DateTime start, String billingCycle) {
     final cycle = _normalizeBillingCycle(billingCycle);
-    if (cycle == 'yearly') {
-      return DateTime.utc(
-        start.year + 1,
-        start.month,
-        start.day,
-        start.hour,
-        start.minute,
-        start.second,
-        start.millisecond,
-        start.microsecond,
-      );
-    }
+    final targetYear = cycle == 'yearly' ? start.year + 1 : start.year;
+    final targetMonth = cycle == 'yearly' ? start.month : start.month + 1;
+    final daysInTargetMonth = DateTime.utc(targetYear, targetMonth + 1, 0).day;
     return DateTime.utc(
-      start.year,
-      start.month + 1,
-      start.day,
+      targetYear,
+      targetMonth,
+      start.day.clamp(1, daysInTargetMonth),
       start.hour,
       start.minute,
       start.second,
