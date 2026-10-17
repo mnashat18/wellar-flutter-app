@@ -28,21 +28,16 @@ String displayRiskLevelLabel(String? riskLevel) {
     case 'high_risk':
     case 'high risk':
       return 'High risk';
-    case 'moderate':
-      return 'Moderate';
-    case 'high':
-      return 'High risk';
-    case 'critical':
-      return 'Critical';
+    case 'retake_required':
     case '':
-      return 'Review required';
+      return 'Unavailable - please retake the scan';
     default:
-      return 'Review required';
+      return 'Unavailable - please retake the scan';
   }
 }
 
 String? formatPercentValue(double? value) {
-  if (value == null) return null;
+  if (value == null || !value.isFinite || value < 0) return null;
   final percent = _normalizePercent(value);
   return '$percent%';
 }
@@ -177,6 +172,6 @@ int _normalizePercent(double value) {
 }
 
 int? _normalizePercentOrNull(double? value) {
-  if (value == null) return null;
+  if (value == null || !value.isFinite || value < 0) return null;
   return _normalizePercent(value);
 }

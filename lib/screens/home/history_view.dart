@@ -1,6 +1,6 @@
 /*
-/*
 import 'package:flutter/material.dart';
+import '../../i18n/tr.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/scan_result.dart';
@@ -39,7 +39,7 @@ class _HistoryTab extends ConsumerWidget {
             const SizedBox(height: 80),
             StatusCard(
               title: 'Failed to load history',
-              message: error.toString(),
+              message: Tr.localized(context, 'generic_load_error'),
               icon: Icons.warning_amber_rounded,
               iconColor: AppColors.highRisk,
               actionText: 'Retry',

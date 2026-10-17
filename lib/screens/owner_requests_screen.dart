@@ -90,10 +90,10 @@ class _OwnerRequestsScreenState extends State<OwnerRequestsScreen> {
                 return RefreshIndicator(
                   color: AppColors.primarySoft,
                   onRefresh: () async {
-                    setState(
-                      () => _future = RequestService.instance
-                          .fetchOwnerRequests(),
-                    );
+                    final next = RequestService.instance.fetchOwnerRequests();
+                    setState(() {
+                      _future = next;
+                    });
                   },
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../i18n/tr.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/scan_result.dart';
 import '../state/app_providers.dart';
@@ -29,11 +30,11 @@ class InsightsScreen extends ConsumerWidget {
                   const SizedBox(height: 80),
                   StatusCard(
                     title: 'Failed to load insights',
-                    message: error.toString(),
+                    message: Tr.localized(context, 'generic_load_error'),
                     icon: Icons.warning_amber_rounded,
                     iconColor: AppColors.highRisk,
                     actionText: 'Retry',
-                    onAction: () {},
+                    onAction: () => ref.invalidate(homeDataProvider),
                   ),
                 ],
               ),
@@ -42,6 +43,8 @@ class InsightsScreen extends ConsumerWidget {
                 return RefreshIndicator(
                   color: AppColors.primarySoft,
                   onRefresh: () async {
+                    ref.invalidate(homeDataProvider);
+                    await ref.read(homeDataProvider.future);
                   },
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -93,7 +96,11 @@ class InsightsScreen extends ConsumerWidget {
   Widget _buildHeroCard(ScanResult latest) {
     final state = _displayState(latest.overallState);
     final color = _stateColor(state);
-    final confidence = _normalize(latest.confidence);
+    final confidence = latest.confidence == null ||
+            !latest.confidence!.isFinite ||
+            latest.confidence! < 0
+        ? null
+        : _normalize(latest.confidence);
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -167,11 +174,14 @@ class InsightsScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                _ConfidenceRing(
-                  value: confidence,
-                  color: color,
-                  label: _formatPercent(latest.confidence),
-                ),
+                if (confidence case final value?)
+                  _ConfidenceRing(
+                    value: value,
+                    color: color,
+                    label: _formatPercent(latest.confidence),
+                  )
+                else
+                  const Text('-', style: TextStyle(color: Colors.white70)),
               ],
             ),
             const SizedBox(height: 16),
@@ -190,10 +200,7 @@ class InsightsScreen extends ConsumerWidget {
         children: [
           const Text(
             'Signal Breakdown',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -233,7 +240,11 @@ class InsightsScreen extends ConsumerWidget {
   }
 
   Widget _buildTrendCard(List<ScanResult> results) {
-    final points = results.take(7).map(_scoreForResult).toList();
+    final points = results
+        .take(7)
+        .map(_scoreForResult)
+        .whereType<double>()
+        .toList();
     if (points.isEmpty) {
       return const AppCard(
         padding: EdgeInsets.all(18),
@@ -250,20 +261,14 @@ class InsightsScreen extends ConsumerWidget {
         children: [
           const Text(
             'Recent Trend',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           _MiniBars(values: points),
           const SizedBox(height: 8),
           const Text(
             'Last 7 scans',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 11,
-            ),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
           ),
         ],
       ),
@@ -278,10 +283,7 @@ class InsightsScreen extends ConsumerWidget {
         children: [
           const Text(
             'Readiness Notes',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
           Text(
@@ -298,33 +300,19 @@ class InsightsScreen extends ConsumerWidget {
   }
 
   double _normalize(double? value) {
-    if (value == null) return 0.0;
+    if (value == null || !value.isFinite || value < 0) return 0.0;
     if (value <= 1) return value.clamp(0.0, 1.0);
     return (value / 100).clamp(0.0, 1.0);
   }
 
-  double _scoreForResult(ScanResult result) {
-    final confidence = _normalize(result.confidence);
-    if (confidence > 0) return confidence;
-    switch (result.overallState.toLowerCase()) {
-      case 'stable':
-        return 0.85;
-      case 'low focus':
-      case 'low_focus':
-        return 0.55;
-      case 'elevated fatigue':
-      case 'elevated_fatigue':
-        return 0.45;
-      case 'high risk':
-      case 'high_risk':
-        return 0.3;
-      default:
-        return 0.5;
-    }
+  double? _scoreForResult(ScanResult result) {
+    final value = result.confidence;
+    if (value == null || !value.isFinite || value < 0) return null;
+    return value <= 1 ? value : value / 100;
   }
 
   String _formatPercent(double? value) {
-    if (value == null) return '--';
+    if (value == null || !value.isFinite || value < 0) return '-';
     final normalized = value <= 1 ? value * 100 : value;
     return '${normalized.toStringAsFixed(0)}%';
   }
@@ -364,7 +352,7 @@ class InsightsScreen extends ConsumerWidget {
       return 'Readiness Concern';
     }
     if (v == 'high risk' || v == 'high_risk') return 'Action Required';
-    return state.isEmpty ? 'No Data' : state;
+    return 'Unavailable - please retake the scan';
   }
 }
 
@@ -381,7 +369,9 @@ class _InsightMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final normalized = _normalize(value);
+    final normalized = value == null || !value!.isFinite || value! < 0
+        ? null
+        : _normalize(value!);
     return Container(
       width: 150,
       padding: const EdgeInsets.all(14),
@@ -402,7 +392,7 @@ class _InsightMetric extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            _formatPercent(value),
+            normalized == null ? '-' : _formatPercent(value),
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w700,
@@ -410,28 +400,31 @@ class _InsightMetric extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: normalized,
-              minHeight: 6,
-              backgroundColor: Colors.white12,
-              color: color,
+          if (normalized == null)
+            const Text('-', style: TextStyle(color: AppColors.textSecondary))
+          else
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: LinearProgressIndicator(
+                value: normalized,
+                minHeight: 6,
+                backgroundColor: Colors.white12,
+                color: color,
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 
   double _normalize(double? value) {
-    if (value == null) return 0.0;
+    if (value == null || !value.isFinite || value < 0) return 0.0;
     if (value <= 1) return value.clamp(0.0, 1.0);
     return (value / 100).clamp(0.0, 1.0);
   }
 
   String _formatPercent(double? value) {
-    if (value == null) return '--';
+    if (value == null || !value.isFinite || value < 0) return '-';
     final normalized = value <= 1 ? value * 100 : value;
     return '${normalized.toStringAsFixed(0)}%';
   }
@@ -506,7 +499,8 @@ class _RingPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _RingPainter oldDelegate) =>
+      oldDelegate.value != value || oldDelegate.color != color;
 }
 
 class _PulseChart extends StatelessWidget {
@@ -517,9 +511,7 @@ class _PulseChart extends StatelessWidget {
     return SizedBox(
       height: 46,
       width: double.infinity,
-      child: CustomPaint(
-        painter: _PulsePainter(),
-      ),
+      child: CustomPaint(painter: _PulsePainter()),
     );
   }
 }
@@ -584,4 +576,3 @@ class _MiniBars extends StatelessWidget {
     );
   }
 }
-

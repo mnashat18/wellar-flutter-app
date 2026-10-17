@@ -1,31 +1,36 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 import '../models/invite_details.dart';
 import '../services/invite_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../state/app_providers.dart';
 import '../state/session.dart';
 import '../utils/app_colors.dart';
+import '../utils/app_feedback.dart';
 import '../widgets/animated_space_background.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/app_cards.dart';
 import '../widgets/fade_slide.dart';
 import '../widgets/lux_header.dart';
 import '../widgets/state_views.dart';
+import '../widgets/wellar_error_state.dart';
 import '../utils/page_transition.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
 import 'scan_flow_impl_normalized.dart';
 import 'role_based_shells.dart';
 
-class InviteScreen extends StatefulWidget {
+class InviteScreen extends ConsumerStatefulWidget {
   final String token;
 
   const InviteScreen({super.key, required this.token});
 
   @override
-  State<InviteScreen> createState() => _InviteScreenState();
+  ConsumerState<InviteScreen> createState() => _InviteScreenState();
 }
 
-class _InviteScreenState extends State<InviteScreen> {
+class _InviteScreenState extends ConsumerState<InviteScreen> {
   late Future<InviteDetails?> _detailsFuture;
   bool _claiming = false;
 
@@ -38,6 +43,7 @@ class _InviteScreenState extends State<InviteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final lang = ref.watch(appLanguageControllerProvider).language;
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
@@ -57,6 +63,17 @@ class _InviteScreenState extends State<InviteScreen> {
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const SkeletonList();
                       }
+                      if (snapshot.hasError) {
+                        return WellarErrorState(
+                          title: lang.isRtl
+                              ? 'تعذّر تحميل الدعوة'
+                              : 'Could not load invite',
+                          body: lang.isRtl
+                              ? 'تعذّر تحميل الدعوة، تحقق من الاتصال وحاول مرة أخرى.'
+                              : 'Could not load the invite. Check your connection and try again.',
+                          onRetry: _retryInviteLoad,
+                        );
+                      }
                       final details = snapshot.data;
                       if (details == null) {
                         return _buildErrorCard(
@@ -74,6 +91,12 @@ class _InviteScreenState extends State<InviteScreen> {
         ],
       ),
     );
+  }
+
+  void _retryInviteLoad() {
+    setState(() {
+      _detailsFuture = InviteService.instance.fetchInviteDetails(widget.token);
+    });
   }
 
   Widget _buildHeader() {
@@ -258,8 +281,7 @@ class _InviteScreenState extends State<InviteScreen> {
   String _formatDate(DateTime? date) {
     if (date == null) return '-';
     final d = date.toLocal();
-    return
-        '${d.day.toString().padLeft(2, '0')}/'
+    return '${d.day.toString().padLeft(2, '0')}/'
         '${d.month.toString().padLeft(2, '0')}/'
         '${d.year} '
         '${d.hour.toString().padLeft(2, '0')}:'
@@ -278,10 +300,7 @@ class _InviteScreenState extends State<InviteScreen> {
         Navigator.pushReplacement(
           context,
           fadeSlideRoute(
-            ScanFlowScreen(
-              requestId: result.requestId,
-              forceCompletion: true,
-            ),
+            ScanFlowScreen(requestId: result.requestId, forceCompletion: true),
           ),
         );
         return;
@@ -292,13 +311,7 @@ class _InviteScreenState extends State<InviteScreen> {
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unable to claim invite.'),
-          backgroundColor: AppColors.cardAlt,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      AppFeedback.showError(context, 'Unable to claim invite.');
     } finally {
       if (mounted) setState(() => _claiming = false);
     }
@@ -307,22 +320,12 @@ class _InviteScreenState extends State<InviteScreen> {
   Future<void> _goToRegister(String token) async {
     await Session.instance.setPendingInviteToken(token);
     if (!mounted) return;
-    Navigator.push(
-      context,
-      fadeSlideRoute(RegisterScreen(inviteToken: token)),
-    );
+    Navigator.push(context, fadeSlideRoute(RegisterScreen(inviteToken: token)));
   }
 
   Future<void> _goToLogin(String token) async {
     await Session.instance.setPendingInviteToken(token);
     if (!mounted) return;
-    Navigator.push(
-      context,
-      fadeSlideRoute(LoginScreen(inviteToken: token)),
-    );
+    Navigator.push(context, fadeSlideRoute(LoginScreen(inviteToken: token)));
   }
 }
-
-
-
-

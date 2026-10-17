@@ -51,8 +51,7 @@ class PushNotificationService {
   Map<String, dynamic>? _pendingOpenPayload;
   Future<PushSyncOutcome>? _registrationInFlight;
   bool _registrationRequestedAgain = false;
-  final ProtectedPushSubscriptionApi _pushApi =
-      ProtectedPushSubscriptionApi();
+  final ProtectedPushSubscriptionApi _pushApi = ProtectedPushSubscriptionApi();
 
   FirebaseMessaging get _messaging => FirebaseMessaging.instance;
 
@@ -234,12 +233,12 @@ class PushNotificationService {
     );
   }
 
-  Future<void> unregisterDevice() async {
-    await revokeCurrentDevice(trigger: 'logout');
+  Future<bool> unregisterDevice() async {
+    return revokeCurrentDevice(trigger: 'logout');
   }
 
-  Future<void> revokeCurrentDevice({String trigger = 'revoke_current'}) async {
-    if (kIsWeb) return;
+  Future<bool> revokeCurrentDevice({String trigger = 'revoke_current'}) async {
+    if (kIsWeb) return true;
 
     try {
       final deviceId = await _loadOrCreateDeviceId();
@@ -247,25 +246,29 @@ class PushNotificationService {
       debugPrint('[PUSH_SUBSCRIPTION_REVOKE] trigger=$trigger success=true');
       _lastLifecycleSyncStatus = 'revoked';
       _lastSuccessfulSyncSignature = null;
+      return true;
     } on ProtectedPushSubscriptionApiException catch (e) {
       if (e.isUnavailable) {
         debugPrint(
           '[PUSH_SUBSCRIPTION_REVOKE] trigger=$trigger unavailable status=404',
         );
         _lastLifecycleSyncStatus = 'revoke_unavailable';
-        return;
+        return false;
       }
       debugPrint(
         '[PUSH_SUBSCRIPTION_REVOKE_FAILED] trigger=$trigger status=${e.statusCode} error_type=protected_api',
       );
+      return false;
     } on DioException catch (e) {
       debugPrint(
         '[PUSH_SUBSCRIPTION_REVOKE_FAILED] trigger=$trigger status=${e.response?.statusCode} error_type=${e.type}',
       );
+      return false;
     } catch (e) {
       debugPrint(
         '[PUSH_SUBSCRIPTION_REVOKE_FAILED] trigger=$trigger error_type=${e.runtimeType}',
       );
+      return false;
     }
   }
 
@@ -688,8 +691,9 @@ class PushNotificationService {
       NotificationService.instance.markScanRequestNotificationsRead(
         scanRequestId: requestId,
         notificationId: notificationId.isNotEmpty ? notificationId : null,
-        businessProfileId:
-            businessProfileId.isNotEmpty ? businessProfileId : null,
+        businessProfileId: businessProfileId.isNotEmpty
+            ? businessProfileId
+            : null,
       ),
     );
 

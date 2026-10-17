@@ -1,6 +1,6 @@
 /*
-/*
 import 'package:flutter/material.dart';
+import '../i18n/tr.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/history_entry.dart';
@@ -46,7 +46,7 @@ class OwnerScanHistoryScreen extends ConsumerWidget {
                 ),
                 error: (error, _) => WellarErrorState(
                   title: 'Failed to load scan history',
-                  body: error.toString(),
+                  body: Tr.localized(context, 'generic_load_error'),
                   onRetry: () => ref.invalidate(historyTimelineProvider),
                 ),
                 data: (entries) {
@@ -201,8 +201,8 @@ class _HistoryCard extends StatelessWidget {
     if (v == 'elevated fatigue' || v == 'elevated_fatigue') {
       return 'Elevated fatigue';
     }
-    if (v == 'high risk' || v == 'high_risk' || v == 'high') return 'High risk';
-    return value.trim().isEmpty ? 'Processing assessment' : value;
+    if (v == 'high risk' || v == 'high_risk') return 'High risk';
+    return 'Unavailable - please retake the scan';
   }
 
   String _displayStatus(String value) {
@@ -233,7 +233,7 @@ class _HistoryCard extends StatelessWidget {
   }
 
   int? _toPercent(double? value) {
-    if (value == null) return null;
+    if (value == null || !value.isFinite || value < 0) return null;
     if (value <= 1) return (value * 100).round();
     return value.round();
   }

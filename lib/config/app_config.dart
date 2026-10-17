@@ -1,7 +1,7 @@
 class AppConfig {
   static const String directusBaseUrl = String.fromEnvironment(
     'DIRECTUS_URL',
-    defaultValue: 'https://dash.conntinuity.com',
+    defaultValue: 'https://dash-conntinuity.datac.com',
   );
 
   static const String directusFallbackUrl = String.fromEnvironment(
@@ -50,12 +50,24 @@ class AppConfig {
   );
 
   static const String aiServerUrl = String.fromEnvironment(
-    'AI_SERVER_URL',
+    'WELLAR_AI_SERVER_URL',
+    defaultValue: String.fromEnvironment(
+      'AI_SERVER_URL',
     defaultValue: 'https://conntinuity-ai-server.csiwm3.easypanel.host/process',
+    ),
   );
 
-  static const String accountDeletionUrl = String.fromEnvironment(
-    'ACCOUNT_DELETION_URL',
-    defaultValue: 'https://app.conntinuity.com/delete-account',
+  // V2 rollout is opt-in and remains disabled unless explicitly enabled.
+  static const bool enableWellarV2Scans = bool.fromEnvironment(
+    'ENABLE_WELLAR_V2_SCANS',
+    defaultValue: false,
+  );
+  static const String wellarV2BaseUrl = String.fromEnvironment(
+    'WELLAR_V2_BASE_URL',
+    defaultValue: 'https://conntinuity-wellar-ai-v2.csiwm3.easypanel.host',
+  );
+  static const String wellarV2TestUserAllowlist = String.fromEnvironment(
+    'WELLAR_V2_TEST_USER_ALLOWLIST',
+    defaultValue: '',
   );
 }

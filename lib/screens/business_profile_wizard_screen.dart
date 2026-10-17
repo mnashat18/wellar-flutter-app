@@ -1,18 +1,24 @@
+import '../utils/safe_debug_log.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/locations_data.dart';
 import '../models/plan.dart';
 import '../services/directus_client.dart';
 import '../services/organization_service.dart';
 import '../services/push_notification_service.dart';
 import '../services/workspace_creation_service.dart';
+import '../state/app_providers.dart';
 import '../state/session.dart';
-import '../utils/app_colors.dart';
+import '../utils/app_feedback.dart';
+import '../utils/business_profile_validators.dart';
 import '../utils/page_transition.dart';
-import '../widgets/animated_space_background.dart';
-import '../widgets/app_buttons.dart';
-import '../widgets/app_cards.dart';
+import '../theme/app_theme.dart';
+import '../widgets/searchable_picker_field.dart';
+import '../widgets/wellar_button.dart';
+import '../widgets/wellar_card.dart';
 import 'role_based_shells.dart';
 
 class BusinessProfileWizardScreen extends ConsumerStatefulWidget {
@@ -46,6 +52,7 @@ class _BusinessProfileWizardScreenState
   final _city = TextEditingController();
   final _address = TextEditingController();
   final _website = TextEditingController();
+  final _locationSelection = CascadingLocationSelection();
 
   String _authenticatedEmail = '';
   String _authenticatedFirstName = '';
@@ -121,51 +128,49 @@ class _BusinessProfileWizardScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        children: [
-          const AnimatedSpaceBackground(),
-          SafeArea(
-            child: GestureDetector(
-              onTap: () => FocusScope.of(context).unfocus(),
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  16,
-                  16,
-                  16 + MediaQuery.of(context).viewInsets.bottom,
+      backgroundColor: WellarTheme.bg,
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: WellarTheme.backgroundGradient,
+        ),
+        child: SafeArea(
+          child: GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 20, 0),
+                  child: _header(context),
                 ),
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _header(context),
-                      const SizedBox(height: 16),
-                      _progress(),
-                      const SizedBox(height: 16),
-                      AppCard(
-                        radius: 16,
-                        padding: const EdgeInsets.all(16),
-                        child: _stepBody(),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
+                  child: _progress(),
+                ),
+                Expanded(
+                  child: Form(
+                    key: _formKey,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
+                    child: SingleChildScrollView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: EdgeInsets.fromLTRB(
+                        20,
+                        0,
+                        20,
+                        20 + MediaQuery.viewInsetsOf(context).bottom,
                       ),
-                      const SizedBox(height: 14),
-                      _actions(),
-                    ],
+                      child: _stepBody(),
+                    ),
                   ),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 16),
+                  child: _actions(),
+                ),
+              ],
             ),
           ),
-          if (_submitting)
-            Container(
-              color: Colors.black.withOpacity(0.5),
-              child: const Center(
-                child: CircularProgressIndicator(color: AppColors.primarySoft),
-              ),
-            ),
-        ],
+        ),
       ),
     );
   }
@@ -175,26 +180,22 @@ class _BusinessProfileWizardScreenState
       children: [
         IconButton(
           onPressed: _submitting ? null : () => Navigator.maybePop(context),
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_rounded, color: WellarTheme.text),
         ),
         const SizedBox(width: 6),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Business Profile Setup',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                ),
+              Text(
+                'Create your company',
+                style: WellarTheme.heading.copyWith(fontSize: 20),
               ),
               const SizedBox(height: 4),
               Text(
                 '${widget.plan.name} • ${_titleCase(widget.billingCycle)}',
                 style: const TextStyle(
-                  color: AppColors.textSecondary,
+                  color: WellarTheme.textMuted,
                   fontSize: 12,
                 ),
               ),
@@ -210,7 +211,7 @@ class _BusinessProfileWizardScreenState
       children: List.generate(3, (index) {
         final current = index == _step;
         final done = index < _step;
-        final color = done || current ? AppColors.primarySoft : Colors.white24;
+        final color = done || current ? WellarTheme.primary : Colors.white24;
         return Expanded(
           child: Row(
             children: [
@@ -220,7 +221,7 @@ class _BusinessProfileWizardScreenState
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: color.withOpacity(0.2),
+                  color: color.withValues(alpha: 0.16),
                   border: Border.all(color: color),
                 ),
                 child: Text(
@@ -233,9 +234,7 @@ class _BusinessProfileWizardScreenState
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 8),
                     height: 2,
-                    color: index < _step
-                        ? AppColors.primarySoft
-                        : Colors.white12,
+                    color: index < _step ? WellarTheme.primary : Colors.white12,
                   ),
                 ),
             ],
@@ -246,39 +245,41 @@ class _BusinessProfileWizardScreenState
   }
 
   Widget _stepBody() {
-    if (_step == 0) return _stepBusiness();
-    if (_step == 1) return _stepContact();
-    return _stepLocation();
+    return WellarCard(
+      highlighted: true,
+      padding: const EdgeInsets.all(18),
+      child: switch (_step) {
+        0 => _stepBusiness(),
+        1 => _stepContact(),
+        _ => _stepLocation(),
+      },
+    );
   }
 
   Widget _stepBusiness() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Step 1 – Company Info',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
-          ),
-        ),
-        const SizedBox(height: 12),
+        _sectionTitle('Business details', 'Company identity and team size'),
         _field(
           label: 'Business Name',
           controller: _businessName,
-          validator: _required('Business Name'),
+          validator: _requiredText('Business Name', minimumLength: 2),
         ),
         _field(
           label: 'Industry',
           controller: _industry,
-          validator: _required('Industry'),
+          validator: _requiredText('Industry', minimumLength: 2),
         ),
         _field(
           label: 'Team Size',
           controller: _teamSize,
           keyboardType: TextInputType.number,
-          validator: _required('Team Size'),
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(6),
+          ],
+          validator: _teamSizeValidator,
         ),
       ],
     );
@@ -288,19 +289,14 @@ class _BusinessProfileWizardScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Step 2 – Contact Details',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
-          ),
+        _sectionTitle(
+          'Contact details',
+          'Who should we reach about this workspace?',
         ),
-        const SizedBox(height: 12),
         _field(
           label: 'Contact Name',
           controller: _contactName,
-          validator: _required('Contact Name'),
+          validator: _requiredText('Contact Name', minimumLength: 2),
         ),
         _field(
           label: 'Work Email',
@@ -309,56 +305,106 @@ class _BusinessProfileWizardScreenState
           readOnly: true,
           helperText:
               'This company will be created under your signed-in account.',
-          validator: (value) {
-            final text = value?.trim().toLowerCase() ?? '';
-            if (text.isEmpty) return 'Work Email is required';
-            final expected = _authenticatedEmail.trim().toLowerCase();
-            if (expected.isNotEmpty && text != expected) {
-              return 'Owner email must match your signed-in account.';
-            }
-            return null;
-          },
+          validator: (value) => BusinessProfileValidators.email(
+            value,
+            expected: _authenticatedEmail,
+          ),
         ),
         _field(
           label: 'Phone',
           controller: _phone,
           keyboardType: TextInputType.phone,
-          validator: _required('Phone'),
+          inputFormatters: [
+            FilteringTextInputFormatter.allow(RegExp(r'[0-9+ ()-]')),
+          ],
+          validator: _phoneValidator,
         ),
       ],
     );
   }
 
   Widget _stepLocation() {
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    final country = _locationSelection.country;
+    final region = _locationSelection.region;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Step 3 – Location',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-            fontSize: 15,
-          ),
-        ),
-        const SizedBox(height: 12),
-        _field(
+        _sectionTitle('Location', 'Choose the workspace location'),
+        SearchablePickerField(
           label: 'Country',
-          controller: _country,
-          validator: _required('Country'),
+          searchHint: 'Search countries',
+          value: country,
+          options: LocationsData.countries,
+          enabled: true,
+          onSelected: (selection) => setState(() {
+            _locationSelection.selectCountry(selection);
+            _country.text = selection.localizedName(isArabic);
+            _city.clear();
+          }),
         ),
-        _field(label: 'City', controller: _city, validator: _required('City')),
+        SearchablePickerField(
+          label: 'Governorate / State',
+          searchHint: 'Search regions',
+          value: region,
+          options: country?.children ?? const [],
+          enabled: country != null,
+          onSelected: (selection) => setState(() {
+            _locationSelection.selectRegion(selection);
+            _city.clear();
+          }),
+        ),
+        SearchablePickerField(
+          label: 'City / District',
+          searchHint: 'Search cities',
+          value: _locationSelection.city,
+          options: region?.children ?? const [],
+          enabled: region != null,
+          onSelected: (selection) => setState(() {
+            _locationSelection.selectCity(selection);
+            _city.text = selection.localizedName(isArabic);
+          }),
+        ),
         _field(
           label: 'Address',
           controller: _address,
-          validator: _required('Address'),
+          validator: BusinessProfileValidators.address,
         ),
         _field(
           label: 'Website (optional)',
           controller: _website,
           keyboardType: TextInputType.url,
+          validator: _websiteValidator,
         ),
       ],
+    );
+  }
+
+  Widget _sectionTitle(String title, String subtitle) {
+    final stepLabel = switch (_step) {
+      0 => 'STEP 1 OF 3',
+      1 => 'STEP 2 OF 3',
+      _ => 'STEP 3 OF 3',
+    };
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            stepLabel,
+            style: WellarTheme.caption.copyWith(
+              color: WellarTheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(title, style: WellarTheme.heading.copyWith(fontSize: 21)),
+          const SizedBox(height: 4),
+          Text(subtitle, style: WellarTheme.caption),
+        ],
+      ),
     );
   }
 
@@ -367,6 +413,7 @@ class _BusinessProfileWizardScreenState
     required TextEditingController controller,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    List<TextInputFormatter>? inputFormatters,
     bool readOnly = false,
     String? helperText,
   }) {
@@ -375,50 +422,49 @@ class _BusinessProfileWizardScreenState
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
+        textInputAction: TextInputAction.next,
+        inputFormatters: inputFormatters,
         validator: validator,
         readOnly: readOnly,
         style: TextStyle(
-          color: readOnly ? AppColors.textSecondary : Colors.white,
+          color: readOnly ? WellarTheme.textMuted : WellarTheme.text,
         ),
         decoration: InputDecoration(
           labelText: label,
-          labelStyle: const TextStyle(color: AppColors.textSecondary),
+          labelStyle: const TextStyle(color: WellarTheme.textMuted),
           helperText: helperText,
-          helperStyle: const TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 11,
-          ),
+          helperStyle: WellarTheme.caption,
           helperMaxLines: 2,
           filled: true,
           fillColor: readOnly
-              ? AppColors.backgroundAlt.withOpacity(0.7)
-              : AppColors.backgroundAlt,
+              ? WellarTheme.surfaceSoft.withValues(alpha: 0.45)
+              : WellarTheme.surfaceSoft,
           suffixIcon: readOnly
               ? const Icon(
                   Icons.lock_outline,
                   size: 18,
-                  color: AppColors.textSecondary,
+                  color: WellarTheme.textMuted,
                 )
               : null,
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Colors.white12),
+            borderSide: const BorderSide(color: WellarTheme.border),
           ),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: Colors.white12),
+            borderSide: const BorderSide(color: WellarTheme.border),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: AppColors.primarySoft),
+            borderSide: const BorderSide(color: WellarTheme.primary),
           ),
           errorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: AppColors.highRisk),
+            borderSide: const BorderSide(color: WellarTheme.danger),
           ),
           focusedErrorBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(14),
-            borderSide: const BorderSide(color: AppColors.highRisk),
+            borderSide: const BorderSide(color: WellarTheme.danger),
           ),
         ),
       ),
@@ -430,8 +476,8 @@ class _BusinessProfileWizardScreenState
     return Row(
       children: [
         Expanded(
-          child: SecondaryButton(
-            text: _step == 0 ? 'Back' : 'Back',
+          child: WellarButton.secondary(
+            text: 'Back',
             onPressed: _submitting
                 ? null
                 : () {
@@ -445,9 +491,8 @@ class _BusinessProfileWizardScreenState
         ),
         const SizedBox(width: 10),
         Expanded(
-          child: PrimaryButton(
+          child: WellarButton.primary(
             text: lastStep ? 'Create workspace' : 'Continue',
-            isLoading: _submitting,
             onPressed: _submitting
                 ? null
                 : () {
@@ -467,10 +512,48 @@ class _BusinessProfileWizardScreenState
   bool _validateCurrentStep() {
     final form = _formKey.currentState;
     if (form == null) return false;
-    return form.validate();
+    final visibleFieldsValid = form.validate();
+    if (!visibleFieldsValid) return false;
+    if (_step != 2) return true;
+    return _allFieldsValid();
+  }
+
+  bool _allFieldsValid() {
+    return BusinessProfileValidators.requiredText(
+              _businessName.text,
+              'Business Name',
+            ) ==
+            null &&
+        BusinessProfileValidators.requiredText(_industry.text, 'Industry') ==
+            null &&
+        BusinessProfileValidators.teamSize(_teamSize.text) == null &&
+        BusinessProfileValidators.requiredText(
+              _contactName.text,
+              'Contact Name',
+            ) ==
+            null &&
+        BusinessProfileValidators.email(
+              _workEmail.text,
+              expected: _authenticatedEmail,
+            ) ==
+            null &&
+        BusinessProfileValidators.phone(_phone.text) == null &&
+        _locationSelection.country != null &&
+        _locationSelection.region != null &&
+        _locationSelection.city != null &&
+        BusinessProfileValidators.address(_address.text) == null &&
+        BusinessProfileValidators.website(_website.text) == null;
   }
 
   Future<void> _submit() async {
+    if (!_allFieldsValid()) {
+      _formKey.currentState?.validate();
+      return;
+    }
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
+      return;
+    }
     setState(() => _submitting = true);
     try {
       final profile = await OrganizationService.instance
@@ -483,14 +566,9 @@ class _BusinessProfileWizardScreenState
           profileLastName.isEmpty ||
           profileEmail.isEmpty) {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'We could not verify your account profile right now. Try again.',
-            ),
-            backgroundColor: AppColors.highRisk,
-            behavior: SnackBarBehavior.floating,
-          ),
+        AppFeedback.showError(
+          context,
+          'We could not verify your account profile right now. Try again.',
         );
         return;
       }
@@ -516,11 +594,10 @@ class _BusinessProfileWizardScreenState
             method: 'POST',
           ),
           response: Response(
-            requestOptions:
-                RequestOptions(
-                  path: '/wellar/workspaces/create',
-                  method: 'POST',
-                ),
+            requestOptions: RequestOptions(
+              path: '/wellar/workspaces/create',
+              method: 'POST',
+            ),
             statusCode: status,
             data: createResponse.data,
           ),
@@ -530,14 +607,9 @@ class _BusinessProfileWizardScreenState
       final refreshed = await DirectusClient.instance.refreshAuthToken();
       if (!refreshed) {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'We created your workspace, but could not refresh access. Try again.',
-            ),
-            backgroundColor: AppColors.highRisk,
-            behavior: SnackBarBehavior.floating,
-          ),
+        AppFeedback.showError(
+          context,
+          'Your workspace was created successfully, but we could not refresh access. Please sign in again to complete setup.',
         );
         return;
       }
@@ -545,8 +617,8 @@ class _BusinessProfileWizardScreenState
       final workspace = await _resolveConfirmedOwnerWorkspace();
       if (workspace != null) {
         OrganizationService.instance.applyActiveWorkspaceContext(workspace);
-        debugPrint('[ORG_SWITCH_VERIFY] context_applied=true');
-        debugPrint('[ORG_SWITCH_VERIFY] owner_hr_reload_requested=true');
+        safeDebugLog('[ORG_SWITCH_VERIFY] context_applied=true');
+        safeDebugLog('[ORG_SWITCH_VERIFY] owner_hr_reload_requested=true');
         try {
           await PushNotificationService.instance.syncCurrentDevice(
             trigger: 'workspace_ready',
@@ -555,57 +627,48 @@ class _BusinessProfileWizardScreenState
         } catch (_) {}
         if (!context.mounted) return;
         final navigator = Navigator.of(context);
-        debugPrint('[ORG_SWITCH_VERIFY] role_shell_rebuilt=true');
+        safeDebugLog('[ORG_SWITCH_VERIFY] role_shell_rebuilt=true');
         navigator.pushReplacement(
           fadeSlideRoute(RoleShellRouter(initialContext: workspace)),
         );
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Your workspace was created. We are still activating access. Refresh access in a moment.',
-          ),
-          backgroundColor: AppColors.stable,
-          behavior: SnackBarBehavior.floating,
-        ),
+      AppFeedback.showError(
+        context,
+        'Your workspace was created, but access is not ready yet. Please sign in again to complete setup.',
       );
     } on DioException catch (e) {
       final status = e.response?.statusCode ?? 0;
-      debugPrint(
+      safeDebugLog(
         '[BUSINESS_PROFILE_CREATE] endpoint=${e.requestOptions.method} ${e.requestOptions.path} status=$status body=${e.response?.data}',
       );
       if (!context.mounted) return;
+      if (ref.read(connectivityStatusProvider).asData?.value == false) {
+        AppFeedback.showOffline(context);
+        return;
+      }
       final message = _messageForCreateStatus(status);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: AppColors.highRisk,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      AppFeedback.showError(context, message);
     } on Exception catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'We could not create your workspace right now. Try again.',
-          ),
-          backgroundColor: AppColors.highRisk,
-          behavior: SnackBarBehavior.floating,
-        ),
+      if (ref.read(connectivityStatusProvider).asData?.value == false) {
+        AppFeedback.showOffline(context);
+        return;
+      }
+      AppFeedback.showError(
+        context,
+        'We could not create your workspace right now. Try again.',
       );
     } catch (_) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'We could not create your workspace right now. Try again.',
-          ),
-          backgroundColor: AppColors.highRisk,
-          behavior: SnackBarBehavior.floating,
-        ),
+      if (ref.read(connectivityStatusProvider).asData?.value == false) {
+        AppFeedback.showOffline(context);
+        return;
+      }
+      AppFeedback.showError(
+        context,
+        'We could not create your workspace right now. Try again.',
       );
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -661,12 +724,27 @@ class _BusinessProfileWizardScreenState
     }
   }
 
-  String? Function(String?) _required(String label) {
+  String? Function(String?) _requiredText(
+    String label, {
+    required int minimumLength,
+  }) {
     return (value) {
-      if ((value ?? '').trim().isEmpty) return '$label is required';
-      return null;
+      return BusinessProfileValidators.requiredText(
+        value,
+        label,
+        minimumLength: minimumLength,
+      );
     };
   }
+
+  String? _teamSizeValidator(String? value) =>
+      BusinessProfileValidators.teamSize(value);
+
+  String? _phoneValidator(String? value) =>
+      BusinessProfileValidators.phone(value);
+
+  String? _websiteValidator(String? value) =>
+      BusinessProfileValidators.website(value);
 
   String _titleCase(String value) {
     final v = value.trim().toLowerCase();

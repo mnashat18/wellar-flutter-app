@@ -1,3 +1,4 @@
+import '../utils/safe_debug_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -40,18 +41,18 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
     super.initState();
     _workspaceIdentity = _identityOf(ref.read(activeWorkspaceContextProvider));
     _future = _load();
-    _workspaceSubscription = ref.listenManual(
-      activeWorkspaceContextProvider,
-      (previous, next) {
-        final nextIdentity = _identityOf(next);
-        if (nextIdentity == _workspaceIdentity) return;
-        if (!mounted) return;
-        setState(() {
-          _workspaceIdentity = nextIdentity;
-          _future = _load();
-        });
-      },
-    );
+    _workspaceSubscription = ref.listenManual(activeWorkspaceContextProvider, (
+      previous,
+      next,
+    ) {
+      final nextIdentity = _identityOf(next);
+      if (nextIdentity == _workspaceIdentity) return;
+      if (!mounted) return;
+      setState(() {
+        _workspaceIdentity = nextIdentity;
+        _future = _load();
+      });
+    });
   }
 
   @override
@@ -63,7 +64,9 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
   String get _role {
     final override = widget.roleOverride?.trim().toLowerCase();
     if (override != null && override.isNotEmpty) return override;
-    return ref.read(activeWorkspaceContextProvider)?.finalEffectiveRole
+    return ref
+            .read(activeWorkspaceContextProvider)
+            ?.finalEffectiveRole
             .trim()
             .toLowerCase() ??
         'owner';
@@ -80,10 +83,12 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
     final requests = await requestsFuture;
 
     List<AlertItem> alerts = const [];
+    var alertsFailed = false;
     try {
       alerts = await AlertService.instance.fetchAlerts(limit: 200);
     } catch (_) {
       alerts = const [];
+      alertsFailed = true;
     }
 
     late WorkspaceReadinessSummary readinessSummary;
@@ -112,6 +117,7 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
       readinessSummary: readinessSummary,
       assessmentsByScanId: readinessSummary.resultsByScanId,
       readinessFailed: readinessSummary.queryFailed,
+      partialDataFailed: alertsFailed || readinessSummary.queryFailed,
     );
   }
 
@@ -124,12 +130,19 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
       backgroundColor: Colors.transparent,
       body: AnimatedWellarScreen(
         showBackground: false,
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+        padding: const EdgeInsets.fromLTRB(
+          WellarTheme.pagePadding,
+          16,
+          WellarTheme.pagePadding,
+          24,
+        ),
         child: FutureBuilder<_ReportsData>(
           future: _future,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
               return const OwnerSurfaceCard(
+                padding: EdgeInsets.all(WellarTheme.cardPadding),
+                radius: WellarTheme.cardRadius,
                 child: SizedBox(
                   height: 180,
                   child: Center(
@@ -147,7 +160,12 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
                 title: Tr.t(lang, 'reports_summary_unavailable'),
                 subtitle: Tr.t(lang, 'unable_load_reports_summary'),
                 actionLabel: Tr.t(lang, 'retry'),
-                onAction: () => setState(() => _future = _load()),
+                onAction: () {
+                  final next = _load();
+                  setState(() {
+                    _future = next;
+                  });
+                },
               );
             }
             final data = snapshot.data!;
@@ -159,21 +177,28 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
             );
             final businessProfileId = workspace?.businessProfileId.trim() ?? '';
             final membershipId = workspace?.membershipId.trim() ?? '';
-            final role = (workspace?.finalEffectiveRole ??
-                    workspace?.memberRole ??
-                    _role)
-                .trim();
+            final role =
+                (workspace?.finalEffectiveRole ??
+                        workspace?.memberRole ??
+                        _role)
+                    .trim();
             final readinessTotal = metrics.readinessDistribution.values
                 .fold<int>(0, (sum, value) => sum + value);
-            debugPrint(
+            safeDebugLog(
               '[HR_REPORTS_CONTEXT] business_profile=$businessProfileId membership_id=$membershipId role=$role',
             );
-            debugPrint(
+            safeDebugLog(
               '[HR_REPORTS_RENDER] raw_count=$readinessTotal stable=${metrics.readinessDistribution['Stable'] ?? 0} low_focus=${metrics.readinessDistribution['Low Focus'] ?? 0} elevated_fatigue=${metrics.readinessDistribution['Elevated Fatigue'] ?? 0} high_risk=${metrics.readinessDistribution['High Risk'] ?? 0}',
             );
 
             return RefreshIndicator(
-              onRefresh: () async => setState(() => _future = _load()),
+              onRefresh: () async {
+                final next = _load();
+                setState(() {
+                  _future = next;
+                });
+                await next;
+              },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
@@ -195,14 +220,18 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: WellarTheme.sectionGap),
+                  if (data.partialDataFailed) ...[
+                    _partialDataBanner(lang.isRtl),
+                    const SizedBox(height: 12),
+                  ],
                   _rangeSelector(lang),
                   const SizedBox(height: 16),
                   ResponsiveCardGrid(
                     spacing: 10,
                     runSpacing: 10,
                     children: [
-                  ResponsiveCardGridItem(
+                      ResponsiveCardGridItem(
                         child: _metricCard(
                           title: Tr.t(lang, 'required'),
                           value: '${metrics.requiredCount}',
@@ -275,11 +304,7 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  _readinessCard(
-                    lang: lang,
-                    metrics: metrics,
-                    data: data,
-                  ),
+                  _readinessCard(lang: lang, metrics: metrics, data: data),
                 ],
               ),
             );
@@ -295,12 +320,13 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
     required List<AlertItem> alerts,
     required WorkspaceReadinessSummary readinessSummary,
   }) {
-    final relevantEntries = requests
-        .where(_isAssignedRequest)
-        .map((item) => _toRequestEntry(item, assessmentsByScanId))
-        .where(_isRelevantForRange)
-        .toList()
-      ..sort((a, b) => _sortRequestEntry(a, b));
+    final relevantEntries =
+        requests
+            .where(_isAssignedRequest)
+            .map((item) => _toRequestEntry(item, assessmentsByScanId))
+            .where(_isRelevantForRange)
+            .toList()
+          ..sort((a, b) => _sortRequestEntry(a, b));
 
     final completedEntries = relevantEntries
         .where((entry) => entry.status == NormalizedRequestStatus.completed)
@@ -326,7 +352,9 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
       completionRate: completionRate,
       readinessDistribution: readiness,
       requiredEntries: relevantEntries.map(_toReportDetailEntry).toList(),
-      completedEntriesDetails: completedEntries.map(_toReportDetailEntry).toList(),
+      completedEntriesDetails: completedEntries
+          .map(_toReportDetailEntry)
+          .toList(),
       pendingEntriesDetails: pendingEntries.map(_toReportDetailEntry).toList(),
       overdueEntriesDetails: overdueEntries.map(_toReportDetailEntry).toList(),
       alertEntries: openAlerts.map((alert) {
@@ -363,6 +391,31 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
     );
   }
 
+  Widget _partialDataBanner(bool isRtl) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: WellarTheme.warning.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: WellarTheme.warning.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: WellarTheme.warning),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isRtl
+                  ? 'تعذّر تحميل بعض البيانات.'
+                  : 'Some data could not be loaded.',
+              style: const TextStyle(color: WellarTheme.text, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _rangeChip(dynamic lang, _ReportsRange range) {
     return ChoiceChip(
       label: Text(_rangeLabel(lang, range)),
@@ -382,6 +435,8 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
     required VoidCallback onTap,
   }) {
     return OwnerSurfaceCard(
+      padding: const EdgeInsets.all(WellarTheme.cardPadding),
+      radius: WellarTheme.cardRadius,
       onTap: onTap,
       glow: true,
       child: Column(
@@ -399,7 +454,7 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: WellarTheme.sectionGap),
           Text(
             value,
             style: const TextStyle(
@@ -481,11 +536,16 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
     required _ReportMetrics metrics,
     required _ReportsData data,
   }) {
-    final total = metrics.readinessDistribution.values
-        .fold<int>(0, (sum, item) => sum + item);
+    final total = metrics.readinessDistribution.values.fold<int>(
+      0,
+      (sum, item) => sum + item,
+    );
     final hasResults = !data.readinessFailed && total > 0;
     return OwnerSurfaceCard(
-      onTap: () => _openCompanyReadiness(readinessSummary: data.readinessSummary),
+      padding: const EdgeInsets.all(WellarTheme.cardPadding),
+      radius: WellarTheme.cardRadius,
+      onTap: () =>
+          _openCompanyReadiness(readinessSummary: data.readinessSummary),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -516,7 +576,7 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
                 children: [
                   Icon(
                     Icons.info_outline_rounded,
-                    color: Color(0xFFFFC46B),
+                    color: WellarTheme.warning,
                     size: 18,
                   ),
                   SizedBox(width: 8),
@@ -668,8 +728,9 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
   }
 
   int _sortRequestEntry(_RequestReportEntry a, _RequestReportEntry b) {
-    final priority =
-        _statusPriority(b.status).compareTo(_statusPriority(a.status));
+    final priority = _statusPriority(
+      b.status,
+    ).compareTo(_statusPriority(a.status));
     if (priority != 0) return priority;
     final aDate = a.primaryDate ?? DateTime.fromMillisecondsSinceEpoch(0);
     final bDate = b.primaryDate ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -708,9 +769,11 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
     final lines = <String>[
       if (entry.requestedAt != null)
         'Requested: ${_formatDate(entry.requestedAt)}',
-      if (entry.status == NormalizedRequestStatus.pending && entry.dueAt != null)
+      if (entry.status == NormalizedRequestStatus.pending &&
+          entry.dueAt != null)
         'Due: ${_formatDate(entry.dueAt)}',
-      if (entry.status == NormalizedRequestStatus.overdue && entry.dueAt != null)
+      if (entry.status == NormalizedRequestStatus.overdue &&
+          entry.dueAt != null)
         'Overdue since: ${_formatDate(entry.dueAt)}',
       if (entry.status == NormalizedRequestStatus.completed &&
           entry.completedAt != null)
@@ -722,11 +785,20 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
   String? _summaryTrailing(_RequestReportEntry entry) {
     switch (entry.status) {
       case NormalizedRequestStatus.completed:
-        return Tr.t(ref.read(appLanguageControllerProvider).language, 'completed');
+        return Tr.t(
+          ref.read(appLanguageControllerProvider).language,
+          'completed',
+        );
       case NormalizedRequestStatus.pending:
-        return Tr.t(ref.read(appLanguageControllerProvider).language, 'pending');
+        return Tr.t(
+          ref.read(appLanguageControllerProvider).language,
+          'pending',
+        );
       case NormalizedRequestStatus.overdue:
-        return Tr.t(ref.read(appLanguageControllerProvider).language, 'overdue');
+        return Tr.t(
+          ref.read(appLanguageControllerProvider).language,
+          'overdue',
+        );
       case NormalizedRequestStatus.cancelled:
         return null;
     }
@@ -735,7 +807,8 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
   String? _subtitleForEntry(_RequestReportEntry entry) {
     final assessment = entry.assessment;
     final segments = <String>[];
-    if (assessment?.outcome != null) segments.add('Outcome: ${assessment!.outcome}');
+    if (assessment?.outcome != null)
+      segments.add('Outcome: ${assessment!.outcome}');
     if (assessment?.readinessScore != null) {
       segments.add('Readiness score: ${assessment!.readinessScore}');
     }
@@ -788,16 +861,16 @@ class _OwnerReportsScreenState extends ConsumerState<OwnerReportsScreen> {
     Color color;
     switch (normalized) {
       case 'high risk':
-        color = const Color(0xFFFF7A8F);
+        color = WellarTheme.danger;
         break;
       case 'elevated fatigue':
-        color = const Color(0xFFFFC46B);
+        color = WellarTheme.warning;
         break;
       case 'low focus':
-        color = const Color(0xFF7DBBFF);
+        color = WellarTheme.info;
         break;
       default:
-        color = const Color(0xFF6EE7A8);
+        color = WellarTheme.success;
         break;
     }
     return Container(
@@ -814,6 +887,7 @@ class _ReportsData {
   final WorkspaceReadinessSummary readinessSummary;
   final Map<String, OwnerAssessmentResult> assessmentsByScanId;
   final bool readinessFailed;
+  final bool partialDataFailed;
 
   const _ReportsData({
     required this.requests,
@@ -821,6 +895,7 @@ class _ReportsData {
     required this.readinessSummary,
     required this.assessmentsByScanId,
     required this.readinessFailed,
+    required this.partialDataFailed,
   });
 }
 

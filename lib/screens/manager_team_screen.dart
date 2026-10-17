@@ -85,7 +85,7 @@ class _ManagerTeamScreenState extends ConsumerState<ManagerTeamScreen> {
                     title: Tr.t(lang, 'team'),
                     subtitle: Tr.t(lang, 'workforce_subtitle'),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   TextField(
                     onChanged: (v) =>
                         setState(() => _query = v.trim().toLowerCase()),
@@ -105,9 +105,9 @@ class _ManagerTeamScreenState extends ConsumerState<ManagerTeamScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   _filterBar(filters),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   if (data.isEmpty)
                     WellarEmptyState(
                       icon: Icons.groups_outlined,

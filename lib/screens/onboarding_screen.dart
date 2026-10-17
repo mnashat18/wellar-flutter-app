@@ -15,6 +15,7 @@ import 'pricing_screen.dart';
 import 'register_screen.dart';
 import 'role_based_shells.dart';
 import 'workspace_access_screen.dart';
+import 'workspace_picker_screen.dart';
 
 import '../state/app_providers.dart';
 
@@ -43,6 +44,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           Navigator.pushReplacement(
             context,
             fadeSlideRoute(RoleShellRouter(initialContext: result.context)),
+          );
+          return;
+        case VerifiedRouteKind.workspaceSelection:
+          Navigator.pushReplacement(
+            context,
+            fadeSlideRoute(
+              WorkspacePickerScreen(
+                memberships: result.memberships,
+                mandatory: true,
+              ),
+            ),
           );
           return;
         case VerifiedRouteKind.workspaceAccessError:
@@ -89,7 +101,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       setState(() {
         _error = e is AuthFlowException
             ? _friendlyGoogleError(e)
-            : Tr.t(ref.read(appLanguageControllerProvider).language, 'signin_generic_failed');
+            : Tr.t(
+                ref.read(appLanguageControllerProvider).language,
+                'signin_generic_failed',
+              );
       });
     } finally {
       if (mounted) {

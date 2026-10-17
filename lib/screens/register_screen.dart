@@ -10,10 +10,13 @@ import '../services/auth_service.dart';
 import '../state/app_providers.dart';
 import '../state/session.dart';
 import '../utils/app_colors.dart';
+import '../utils/app_feedback.dart';
 import '../utils/page_transition.dart';
-import '../widgets/fade_slide.dart';
 import 'login_screen.dart';
 import 'splash_screen.dart';
+
+const _authTeal = Color(0xFF12B892);
+const _authTealDeep = Color(0xFF0B7A63);
 
 class RegisterScreen extends ConsumerStatefulWidget {
   final String? inviteToken;
@@ -24,7 +27,18 @@ class RegisterScreen extends ConsumerStatefulWidget {
   ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+class _RegisterScreenState extends ConsumerState<RegisterScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _entranceController;
+  late final Animation<double> _headerFade;
+  late final Animation<Offset> _headerSlide;
+  late final Animation<double> _fieldsFade;
+  late final Animation<Offset> _fieldsSlide;
+  late final Animation<double> _actionsFade;
+  late final Animation<Offset> _actionsSlide;
+  late final Animation<double> _reducedFade;
+  bool _reducedMotion = false;
+  bool _motionInitialized = false;
   final firstNameController = TextEditingController();
   final lastNameController = TextEditingController();
   final emailController = TextEditingController();
@@ -52,6 +66,41 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   @override
   void initState() {
     super.initState();
+    _entranceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _headerFade = _entranceController
+        .drive(CurveTween(curve: const Interval(0, .48, curve: Curves.easeOut)))
+        .drive(Tween(begin: .01, end: 1));
+    _headerSlide = _entranceController
+        .drive(
+          CurveTween(curve: const Interval(0, .48, curve: Curves.easeOutCubic)),
+        )
+        .drive(Tween(begin: const Offset(0, .035), end: Offset.zero));
+    _fieldsFade = _entranceController
+        .drive(
+          CurveTween(curve: const Interval(.18, .72, curve: Curves.easeOut)),
+        )
+        .drive(Tween(begin: .01, end: 1));
+    _fieldsSlide = _entranceController
+        .drive(
+          CurveTween(
+            curve: const Interval(.18, .72, curve: Curves.easeOutCubic),
+          ),
+        )
+        .drive(Tween(begin: const Offset(0, .035), end: Offset.zero));
+    _actionsFade = _entranceController
+        .drive(CurveTween(curve: const Interval(.42, 1, curve: Curves.easeOut)))
+        .drive(Tween(begin: .01, end: 1));
+    _actionsSlide = _entranceController
+        .drive(
+          CurveTween(curve: const Interval(.42, 1, curve: Curves.easeOutCubic)),
+        )
+        .drive(Tween(begin: const Offset(0, .035), end: Offset.zero));
+    _reducedFade = _entranceController
+        .drive(CurveTween(curve: Curves.easeOut))
+        .drive(Tween(begin: .01, end: 1));
     final token = widget.inviteToken?.trim();
     if (token != null && token.isNotEmpty) {
       Session.instance.setPendingInviteToken(token);
@@ -76,7 +125,36 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = MediaQuery.disableAnimationsOf(context);
+    if (!_motionInitialized || reduce != _reducedMotion) {
+      _motionInitialized = true;
+      _reducedMotion = reduce;
+      _entranceController
+        ..stop()
+        ..duration = Duration(milliseconds: reduce ? 170 : 900)
+        ..forward(from: 0);
+    }
+  }
+
+  Widget _reveal(
+    Widget child, {
+    required Animation<double> opacity,
+    required Animation<Offset> slide,
+  }) => FadeTransition(
+    opacity: _reducedMotion ? _reducedFade : opacity,
+    child: SlideTransition(
+      position: _reducedMotion
+          ? const AlwaysStoppedAnimation(Offset.zero)
+          : slide,
+      child: child,
+    ),
+  );
+
+  @override
   void dispose() {
+    _entranceController.dispose();
     firstNameController.dispose();
     lastNameController.dispose();
     emailController.dispose();
@@ -113,6 +191,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return Uri.parse('$base$path');
   }
 
+  Future<void> _openLegalPage(String path) async {
+    try {
+      if (await launchUrl(_legalUri(path))) return;
+    } catch (_) {
+      // Show the same feedback as a false launch result.
+    }
+    if (!mounted) return;
+    final lang = ref.read(appLanguageControllerProvider).language;
+    AppFeedback.showError(
+      context,
+      lang.isRtl
+          ? 'تعذّر فتح هذه الصفحة. حاول مرة أخرى.'
+          : 'Could not open this page. Please try again.',
+    );
+  }
+
   Future<void> _register() async {
     setState(() {
       _submitAttempted = true;
@@ -144,7 +238,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       return;
     }
     if (!_acceptedLegal) {
-      setState(() => _error = 'Accept the Terms and Privacy Policy to continue.');
+      setState(
+        () => _error = 'Accept the Terms and Privacy Policy to continue.',
+      );
+      return;
+    }
+
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
       return;
     }
 
@@ -176,11 +277,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+      if (ref.read(connectivityStatusProvider).asData?.value == false) {
+        AppFeedback.showOffline(context);
+        return;
+      }
       final message = e.toString();
       if (_isDuplicateEmailError(message)) {
-        setState(
-          () => _error = 'Account already exists.',
-        );
+        setState(() => _error = 'Account already exists.');
         return;
       }
       setState(() => _error = _friendlySignupError(message));
@@ -192,10 +295,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Future<void> _advanceAfterAuthentication() async {
     if (!mounted) return;
     debugPrint('[AUTH_DEBUG] post_auth_route_start=true');
-    Navigator.pushReplacement(
-      context,
-      fadeSlideRoute(const SplashScreen()),
-    );
+    Navigator.pushReplacement(context, fadeSlideRoute(const SplashScreen()));
   }
 
   bool _isDuplicateEmailError(String raw) {
@@ -211,8 +311,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (_isDuplicateEmailError(raw)) {
       return 'Account already exists.';
     }
-    if (lower.contains('timeout') ||
-        lower.contains('too long')) {
+    if (lower.contains('timeout') || lower.contains('too long')) {
       return 'Server took too long. Try again.';
     }
     if (lower.contains('network') ||
@@ -254,344 +353,414 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         !_isConfirmPasswordValid;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF050A12),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return AnimatedPadding(
-              duration: const Duration(milliseconds: 180),
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: SingleChildScrollView(
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          IconButton(
-                            tooltip: Tr.t(lang, 'home'),
-                            icon: const Icon(
-                              Icons.arrow_back_rounded,
-                              color: Colors.white,
-                            ),
-                            onPressed: () => Navigator.pushReplacement(
-                              context,
-                              fadeSlideRoute(
-                                LoginScreen(
-                                  emailFromRegister: emailController.text.trim(),
-                                  inviteToken: widget.inviteToken,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Wellar AI',
-                            style: TextStyle(
-                              color: AppColors.primarySoft,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 14,
-                              letterSpacing: 0.35,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      FadeSlide(
-                        child: Text(
-                          hasInvite
-                              ? 'Create your account to join your organization'
-                              : 'Start your organization',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 31,
-                            height: 1.08,
-                            letterSpacing: -0.45,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Create your account to begin managed activation for your organization.',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13.8,
-                          height: 1.5,
-                        ),
-                      ),
-                      if (hasInvite) ...[
-                        const SizedBox(height: 14),
-                        const _InviteBanner(),
-                      ],
-                      const SizedBox(height: 16),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF0B1320),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: const Color(0xFF243247)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (_error != null) ...[
-                              _NoticeBanner(
-                                text: _error!,
-                                tone: _NoticeTone.error,
-                              ),
-                              const SizedBox(height: 14),
-                            ],
-                            LayoutBuilder(
-                              builder: (context, fieldConstraints) {
-                                final isWide = fieldConstraints.maxWidth >= 520;
-                                if (isWide) {
-                                  final fieldWidth =
-                                      (fieldConstraints.maxWidth - 10) / 2;
-                                  return Row(
-                                    children: [
-                                      SizedBox(
-                                        width: fieldWidth,
-                                        child: _FieldColumn(
-                                          label: Tr.t(lang, 'first_name'),
-                                          hint: Tr.t(lang, 'first_name_hint'),
-                                          icon: Icons.person_outline_rounded,
-                                          controller: firstNameController,
-                                          focusNode: _firstNameFocus,
-                                          textInputAction: TextInputAction.next,
-                                          errorText: showFirstNameError
-                                              ? 'First name is required.'
-                                              : null,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      SizedBox(
-                                        width: fieldWidth,
-                                        child: _FieldColumn(
-                                          label: Tr.t(lang, 'last_name'),
-                                          hint: Tr.t(lang, 'last_name_hint'),
-                                          icon: Icons.person_outline_rounded,
-                                          controller: lastNameController,
-                                          focusNode: _lastNameFocus,
-                                          textInputAction: TextInputAction.next,
-                                          errorText: showLastNameError
-                                              ? 'Last name is required.'
-                                              : null,
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                }
-
-                                return Column(
-                                  children: [
-                                    _FieldColumn(
-                                      label: Tr.t(lang, 'first_name'),
-                                      hint: Tr.t(lang, 'first_name_hint'),
-                                      icon: Icons.person_outline_rounded,
-                                      controller: firstNameController,
-                                      focusNode: _firstNameFocus,
-                                      textInputAction: TextInputAction.next,
-                                      errorText: showFirstNameError
-                                          ? 'First name is required.'
-                                          : null,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    _FieldColumn(
-                                      label: Tr.t(lang, 'last_name'),
-                                      hint: Tr.t(lang, 'last_name_hint'),
-                                      icon: Icons.person_outline_rounded,
-                                      controller: lastNameController,
-                                      focusNode: _lastNameFocus,
-                                      textInputAction: TextInputAction.next,
-                                      errorText: showLastNameError
-                                          ? 'Last name is required.'
-                                          : null,
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 12),
-                            _FieldColumn(
-                              label: Tr.t(lang, 'email'),
-                              hint: Tr.t(lang, 'email_hint'),
-                              icon: Icons.alternate_email_rounded,
-                              controller: emailController,
-                              focusNode: _emailFocus,
-                              keyboardType: TextInputType.emailAddress,
-                              textInputAction: TextInputAction.next,
-                              errorText: showEmailError
-                                  ? 'Enter a valid email address.'
-                                  : null,
-                            ),
-                            const SizedBox(height: 12),
-                            _FieldColumn(
-                              label: Tr.t(lang, 'password'),
-                              hint: Tr.t(lang, 'password_hint'),
-                              icon: Icons.lock_outline_rounded,
-                              controller: passwordController,
-                              focusNode: _passwordFocus,
-                              obscureText: _obscurePass,
-                              textInputAction: TextInputAction.done,
-                              onSubmitted: (_) {
-                                if (!_loading) _register();
-                              },
-                              suffix: IconButton(
-                                onPressed: () => setState(
-                                  () => _obscurePass = !_obscurePass,
-                                ),
-                                icon: Icon(
-                                  _obscurePass
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              errorText: showPasswordError
-                                  ? 'Use 10 to 128 characters with at least one letter and one number.'
-                                  : null,
-                            ),
-                            const SizedBox(height: 12),
-                            _FieldColumn(
-                              label: 'Confirm password',
-                              hint: 'Re-enter your password',
-                              icon: Icons.lock_outline_rounded,
-                              controller: confirmPasswordController,
-                              focusNode: _confirmPasswordFocus,
-                              obscureText: _obscureConfirmPass,
-                              textInputAction: TextInputAction.done,
-                              onSubmitted: (_) {
-                                if (!_loading) _register();
-                              },
-                              suffix: IconButton(
-                                onPressed: () => setState(
-                                  () =>
-                                      _obscureConfirmPass = !_obscureConfirmPass,
-                                ),
-                                icon: Icon(
-                                  _obscureConfirmPass
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                  color: AppColors.textSecondary,
-                                ),
-                              ),
-                              errorText: showConfirmPasswordError
-                                  ? 'Confirm password must exactly match password.'
-                                  : null,
-                            ),
-                            const SizedBox(height: 14),
-                            CheckboxListTile(
-                              value: _acceptedLegal,
-                              contentPadding: EdgeInsets.zero,
-                              controlAffinity: ListTileControlAffinity.leading,
-                              onChanged: (value) => setState(
-                                () => _acceptedLegal = value ?? false,
-                              ),
-                              title: Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
+      backgroundColor: const Color(0xFF04060F),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF0A2424), Color(0xFF081521), Color(0xFF04060F)],
+            stops: [0, .48, 1],
+          ),
+        ),
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return AutofillGroup(
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: (constraints.maxHeight - 34)
+                          .clamp(0.0, double.infinity)
+                          .toDouble(),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _reveal(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 children: [
-                                  const Text(
-                                    'I agree to the ',
-                                    style: TextStyle(
+                                  IconButton(
+                                    tooltip: Tr.t(lang, 'home'),
+                                    icon: const Icon(
+                                      Icons.arrow_back_rounded,
                                       color: Colors.white,
-                                      fontSize: 12.5,
                                     ),
+                                    onPressed: () =>
+                                        Navigator.maybePop(context),
                                   ),
-                                  GestureDetector(
-                                    onTap: () => launchUrl(_legalUri('/terms')),
-                                    child: const Text(
-                                      'Terms',
-                                      style: TextStyle(
-                                        color: AppColors.primarySoft,
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
+                                  const SizedBox(width: 8),
                                   const Text(
-                                    ' and ',
+                                    'Wellar',
                                     style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12.5,
-                                    ),
-                                  ),
-                                  GestureDetector(
-                                    onTap: () => launchUrl(_legalUri('/privacy')),
-                                    child: const Text(
-                                      'Privacy Policy',
-                                      style: TextStyle(
-                                        color: AppColors.primarySoft,
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                  const Text(
-                                    '.',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12.5,
+                                      color: _authTeal,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14,
+                                      letterSpacing: 0.35,
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                            const SizedBox(height: 10),
-                            _ActionButton.primary(
-                              text: _loading
-                                  ? (hasInvite
-                                        ? 'Creating account and joining...'
-                                        : 'Creating account...')
-                                  : (hasInvite
-                                        ? 'Create account and join organization'
-                                        : 'Create account'),
-                              onPressed: (!_loading && canSubmit)
-                                  ? _register
-                                  : null,
-                              isLoading: _loading,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton(
-                          onPressed: () => Navigator.pushReplacement(
-                            context,
-                            fadeSlideRoute(
-                              LoginScreen(
-                                emailFromRegister: emailController.text.trim(),
-                                inviteToken: widget.inviteToken,
+                              const SizedBox(height: 10),
+                              Text(
+                                hasInvite
+                                    ? 'Create your account to join your organization'
+                                    : 'Start your organization',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 31,
+                                  height: 1.08,
+                                  letterSpacing: -0.45,
+                                ),
                               ),
-                            ),
+                              const SizedBox(height: 8),
+                              const Text(
+                                'Create your account to begin managed activation for your organization.',
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontSize: 13.8,
+                                  height: 1.5,
+                                ),
+                              ),
+                              if (hasInvite) ...[
+                                const SizedBox(height: 14),
+                                const _InviteBanner(),
+                              ],
+                            ],
                           ),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 0,
-                              vertical: 6,
-                            ),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            foregroundColor: AppColors.primarySoft,
+                          opacity: _headerFade,
+                          slide: _headerSlide,
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0B1320),
+                            borderRadius: BorderRadius.circular(24),
+                            border: Border.all(color: const Color(0xFF243247)),
                           ),
-                          child: const Text(
-                            'Log in',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13.5,
-                            ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (_error != null) ...[
+                                _NoticeBanner(
+                                  text: _error!,
+                                  tone: _NoticeTone.error,
+                                ),
+                                const SizedBox(height: 14),
+                              ],
+                              _reveal(
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    LayoutBuilder(
+                                      builder: (context, fieldConstraints) {
+                                        final isWide =
+                                            fieldConstraints.maxWidth >= 520;
+                                        if (isWide) {
+                                          final fieldWidth =
+                                              (fieldConstraints.maxWidth - 10) /
+                                              2;
+                                          return Row(
+                                            children: [
+                                              SizedBox(
+                                                width: fieldWidth,
+                                                child: _FieldColumn(
+                                                  label: Tr.t(
+                                                    lang,
+                                                    'first_name',
+                                                  ),
+                                                  hint: Tr.t(
+                                                    lang,
+                                                    'first_name_hint',
+                                                  ),
+                                                  icon: Icons
+                                                      .person_outline_rounded,
+                                                  controller:
+                                                      firstNameController,
+                                                  focusNode: _firstNameFocus,
+                                                  onChanged: (_) =>
+                                                      setState(() {}),
+                                                  textInputAction:
+                                                      TextInputAction.next,
+                                                  errorText: showFirstNameError
+                                                      ? 'First name is required.'
+                                                      : null,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              SizedBox(
+                                                width: fieldWidth,
+                                                child: _FieldColumn(
+                                                  label: Tr.t(
+                                                    lang,
+                                                    'last_name',
+                                                  ),
+                                                  hint: Tr.t(
+                                                    lang,
+                                                    'last_name_hint',
+                                                  ),
+                                                  icon: Icons
+                                                      .person_outline_rounded,
+                                                  controller:
+                                                      lastNameController,
+                                                  focusNode: _lastNameFocus,
+                                                  onChanged: (_) =>
+                                                      setState(() {}),
+                                                  textInputAction:
+                                                      TextInputAction.next,
+                                                  errorText: showLastNameError
+                                                      ? 'Last name is required.'
+                                                      : null,
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        }
+
+                                        return Column(
+                                          children: [
+                                            _FieldColumn(
+                                              label: Tr.t(lang, 'first_name'),
+                                              hint: Tr.t(
+                                                lang,
+                                                'first_name_hint',
+                                              ),
+                                              icon:
+                                                  Icons.person_outline_rounded,
+                                              controller: firstNameController,
+                                              focusNode: _firstNameFocus,
+                                              onChanged: (_) => setState(() {}),
+                                              textInputAction:
+                                                  TextInputAction.next,
+                                              errorText: showFirstNameError
+                                                  ? 'First name is required.'
+                                                  : null,
+                                            ),
+                                            const SizedBox(height: 12),
+                                            _FieldColumn(
+                                              label: Tr.t(lang, 'last_name'),
+                                              hint: Tr.t(
+                                                lang,
+                                                'last_name_hint',
+                                              ),
+                                              icon:
+                                                  Icons.person_outline_rounded,
+                                              controller: lastNameController,
+                                              focusNode: _lastNameFocus,
+                                              onChanged: (_) => setState(() {}),
+                                              textInputAction:
+                                                  TextInputAction.next,
+                                              errorText: showLastNameError
+                                                  ? 'Last name is required.'
+                                                  : null,
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _FieldColumn(
+                                      label: Tr.t(lang, 'email'),
+                                      hint: Tr.t(lang, 'email_hint'),
+                                      icon: Icons.alternate_email_rounded,
+                                      controller: emailController,
+                                      focusNode: _emailFocus,
+                                      onChanged: (_) => setState(() {}),
+                                      keyboardType: TextInputType.emailAddress,
+                                      autofillHints: const [
+                                        AutofillHints.email,
+                                      ],
+                                      textInputAction: TextInputAction.next,
+                                      errorText: showEmailError
+                                          ? 'Enter a valid email address.'
+                                          : null,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _FieldColumn(
+                                      label: Tr.t(lang, 'password'),
+                                      hint: Tr.t(lang, 'password_hint'),
+                                      icon: Icons.lock_outline_rounded,
+                                      controller: passwordController,
+                                      focusNode: _passwordFocus,
+                                      onChanged: (_) => setState(() {}),
+                                      obscureText: _obscurePass,
+                                      keyboardType:
+                                          TextInputType.visiblePassword,
+                                      autofillHints: const [
+                                        AutofillHints.newPassword,
+                                      ],
+                                      textInputAction: TextInputAction.done,
+                                      onSubmitted: (_) {
+                                        if (!_loading) _register();
+                                      },
+                                      suffix: IconButton(
+                                        style: IconButton.styleFrom(
+                                          foregroundColor: _authTeal,
+                                          overlayColor: _authTeal.withValues(
+                                            alpha: .14,
+                                          ),
+                                        ),
+                                        tooltip: _obscurePass
+                                            ? 'Show password'
+                                            : 'Hide password',
+                                        onPressed: () => setState(
+                                          () => _obscurePass = !_obscurePass,
+                                        ),
+                                        icon: Icon(
+                                          _obscurePass
+                                              ? Icons.visibility_outlined
+                                              : Icons.visibility_off_outlined,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                      errorText: showPasswordError
+                                          ? 'Use 10 to 128 characters with at least one letter and one number.'
+                                          : null,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    _FieldColumn(
+                                      label: 'Confirm password',
+                                      hint: 'Re-enter your password',
+                                      icon: Icons.lock_outline_rounded,
+                                      controller: confirmPasswordController,
+                                      focusNode: _confirmPasswordFocus,
+                                      onChanged: (_) => setState(() {}),
+                                      obscureText: _obscureConfirmPass,
+                                      keyboardType:
+                                          TextInputType.visiblePassword,
+                                      autofillHints: const [
+                                        AutofillHints.newPassword,
+                                      ],
+                                      textInputAction: TextInputAction.done,
+                                      onSubmitted: (_) {
+                                        if (!_loading) _register();
+                                      },
+                                      suffix: IconButton(
+                                        style: IconButton.styleFrom(
+                                          foregroundColor: _authTeal,
+                                          overlayColor: _authTeal.withValues(
+                                            alpha: .14,
+                                          ),
+                                        ),
+                                        tooltip: _obscureConfirmPass
+                                            ? 'Show password'
+                                            : 'Hide password',
+                                        onPressed: () => setState(
+                                          () => _obscureConfirmPass =
+                                              !_obscureConfirmPass,
+                                        ),
+                                        icon: Icon(
+                                          _obscureConfirmPass
+                                              ? Icons.visibility_outlined
+                                              : Icons.visibility_off_outlined,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                      ),
+                                      errorText: showConfirmPasswordError
+                                          ? 'Confirm password must exactly match password.'
+                                          : null,
+                                    ),
+                                    const SizedBox(height: 14),
+                                  ],
+                                ),
+                                opacity: _fieldsFade,
+                                slide: _fieldsSlide,
+                              ),
+                              _reveal(
+                                Column(
+                                  children: [
+                                    CheckboxListTile(
+                                      value: _acceptedLegal,
+                                      contentPadding: EdgeInsets.zero,
+                                      controlAffinity:
+                                          ListTileControlAffinity.leading,
+                                      onChanged: (value) => setState(
+                                        () => _acceptedLegal = value ?? false,
+                                      ),
+                                      title: Wrap(
+                                        crossAxisAlignment:
+                                            WrapCrossAlignment.center,
+                                        children: [
+                                          const Text(
+                                            'I agree to the ',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12.5,
+                                            ),
+                                          ),
+                                          GestureDetector(
+                                            onTap: () =>
+                                                _openLegalPage('/terms'),
+                                            child: const Text(
+                                              'Terms',
+                                              style: TextStyle(
+                                                color: _authTeal,
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                          const Text(
+                                            ' and ',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12.5,
+                                            ),
+                                          ),
+                                          GestureDetector(
+                                            onTap: () =>
+                                                _openLegalPage('/privacy'),
+                                            child: const Text(
+                                              'Privacy Policy',
+                                              style: TextStyle(
+                                                color: _authTeal,
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                          const Text(
+                                            '.',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    _ActionButton.primary(
+                                      text: _loading
+                                          ? (hasInvite
+                                                ? 'Creating account and joining...'
+                                                : 'Creating account...')
+                                          : (hasInvite
+                                                ? 'Create account and join organization'
+                                                : 'Create account'),
+                                      onPressed: (!_loading && canSubmit)
+                                          ? _register
+                                          : null,
+                                      isLoading: _loading,
+                                    ),
+                                  ],
+                                ),
+                                opacity: _actionsFade,
+                                slide: _actionsSlide,
+                              ),
+                            ],
                           ),
                         ),
-                      ),
-                      if (_isDuplicateEmailError(_error ?? ''))
+                        const SizedBox(height: 12),
                         Align(
                           alignment: Alignment.centerLeft,
                           child: TextButton(
@@ -599,7 +768,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                               context,
                               fadeSlideRoute(
                                 LoginScreen(
-                                  emailFromRegister: emailController.text.trim(),
+                                  emailFromRegister: emailController.text
+                                      .trim(),
                                   inviteToken: widget.inviteToken,
                                 ),
                               ),
@@ -609,12 +779,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                 horizontal: 0,
                                 vertical: 6,
                               ),
-                              tapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               foregroundColor: AppColors.primarySoft,
                             ),
                             child: const Text(
-                              'Sign in',
+                              'Log in',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 13.5,
@@ -622,12 +791,44 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             ),
                           ),
                         ),
-                    ],
+                        if (_isDuplicateEmailError(_error ?? ''))
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              onPressed: () => Navigator.pushReplacement(
+                                context,
+                                fadeSlideRoute(
+                                  LoginScreen(
+                                    emailFromRegister: emailController.text
+                                        .trim(),
+                                    inviteToken: widget.inviteToken,
+                                  ),
+                                ),
+                              ),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 0,
+                                  vertical: 6,
+                                ),
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                foregroundColor: AppColors.primarySoft,
+                              ),
+                              child: const Text(
+                                'Sign in',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
@@ -642,10 +843,12 @@ class _FieldColumn extends StatelessWidget {
   final FocusNode focusNode;
   final TextInputType keyboardType;
   final TextInputAction textInputAction;
+  final Iterable<String>? autofillHints;
   final bool obscureText;
   final Widget? suffix;
   final String? errorText;
   final void Function(String)? onSubmitted;
+  final ValueChanged<String>? onChanged;
 
   const _FieldColumn({
     required this.label,
@@ -655,10 +858,12 @@ class _FieldColumn extends StatelessWidget {
     required this.focusNode,
     this.keyboardType = TextInputType.text,
     this.textInputAction = TextInputAction.next,
+    this.autofillHints,
     this.obscureText = false,
     this.suffix,
     this.errorText,
     this.onSubmitted,
+    this.onChanged,
   });
 
   @override
@@ -676,43 +881,64 @@ class _FieldColumn extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          focusNode: focusNode,
-          keyboardType: keyboardType,
-          textInputAction: textInputAction,
-          obscureText: obscureText,
-          onChanged: (_) {},
-          onSubmitted: onSubmitted,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(color: AppColors.textSecondary),
-            errorText: errorText,
-            errorMaxLines: 2,
-            prefixIcon: Icon(icon, color: AppColors.textSecondary),
-            suffixIcon: suffix,
-            filled: true,
-            fillColor: const Color(0xFF0A111D),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 14,
-              vertical: 15,
-            ),
-            enabledBorder: OutlineInputBorder(
+        AnimatedBuilder(
+          animation: focusNode,
+          builder: (context, _) => AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: Color(0xFF2A384E)),
+              boxShadow: focusNode.hasFocus
+                  ? [
+                      BoxShadow(
+                        color: _authTeal.withValues(alpha: .16),
+                        blurRadius: 14,
+                        spreadRadius: 1,
+                      ),
+                    ]
+                  : const [],
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.primarySoft),
-            ),
-            errorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.highRisk),
-            ),
-            focusedErrorBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(14),
-              borderSide: const BorderSide(color: AppColors.highRisk),
+            child: TextField(
+              controller: controller,
+              focusNode: focusNode,
+              keyboardType: keyboardType,
+              autofillHints: autofillHints,
+              textInputAction: textInputAction,
+              obscureText: obscureText,
+              autocorrect: false,
+              enableSuggestions: !obscureText,
+              onChanged: onChanged,
+              onSubmitted: onSubmitted,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: const TextStyle(color: AppColors.textSecondary),
+                errorText: errorText,
+                errorMaxLines: 2,
+                prefixIcon: Icon(icon, color: AppColors.textSecondary),
+                suffixIcon: suffix,
+                filled: true,
+                fillColor: const Color(0xFF0A111D),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 15,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFF2A384E)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: _authTeal, width: 1.4),
+                ),
+                errorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: AppColors.highRisk),
+                ),
+                focusedErrorBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: AppColors.highRisk),
+                ),
+              ),
             ),
           ),
         ),
@@ -721,7 +947,7 @@ class _FieldColumn extends StatelessWidget {
   }
 }
 
-class _ActionButton extends StatelessWidget {
+class _ActionButton extends StatefulWidget {
   final String text;
   final VoidCallback? onPressed;
   final bool isLoading;
@@ -733,36 +959,76 @@ class _ActionButton extends StatelessWidget {
   });
 
   @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
       height: 52,
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFF0BD5F),
-          foregroundColor: const Color(0xFF08111F),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
+      child: AnimatedScale(
+        scale: _pressed && widget.onPressed != null ? .97 : 1,
+        duration: Duration(milliseconds: _pressed ? 90 : 220),
+        curve: _pressed ? Curves.easeOut : Curves.easeOutBack,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: widget.onPressed == null
+                ? null
+                : const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [_authTeal, _authTealDeep],
+                  ),
+            color: widget.onPressed == null ? const Color(0xFF33404A) : null,
             borderRadius: BorderRadius.circular(16),
+            boxShadow: widget.onPressed == null
+                ? const []
+                : [
+                    BoxShadow(
+                      color: _authTeal.withValues(alpha: .22),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(16),
+              splashColor: Colors.white.withValues(alpha: .14),
+              highlightColor: Colors.white.withValues(alpha: .06),
+              onTap: widget.onPressed,
+              onTapDown: widget.onPressed == null
+                  ? null
+                  : (_) => setState(() => _pressed = true),
+              onTapCancel: () => setState(() => _pressed = false),
+              onTapUp: (_) => setState(() => _pressed = false),
+              child: Center(
+                child: widget.isLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        widget.text,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+              ),
+            ),
           ),
         ),
-        child: isLoading
-            ? const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  color: Color(0xFF08111F),
-                ),
-              )
-            : Text(
-                text,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
       ),
     );
   }

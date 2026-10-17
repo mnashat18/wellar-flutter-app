@@ -5,11 +5,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../utils/safe_debug_log.dart';
 
 import '../models/scan_result.dart';
+import '../models/wellar_v2_result.dart';
 import '../services/scan_service.dart';
 import '../state/app_providers.dart';
 import '../utils/page_transition.dart';
+import '../utils/dashboard_navigation.dart';
 import '../utils/scan_result_display.dart';
 import '../widgets/responsive_card_grid.dart';
 import 'scan/scan_premium_components.dart';
@@ -19,6 +22,7 @@ enum _ResultLoadState { loading, ready, timeout, failed }
 
 class ScanDetailsScreen extends StatefulWidget {
   final ScanResult? result;
+  final WellarV2Result? v2Result;
   final String? scanId;
   final bool markAsLatest;
   final bool allowRetry;
@@ -30,6 +34,7 @@ class ScanDetailsScreen extends StatefulWidget {
   const ScanDetailsScreen({
     super.key,
     this.result,
+    this.v2Result,
     this.scanId,
     this.markAsLatest = false,
     this.allowRetry = false,
@@ -91,20 +96,23 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
       vsync: this,
       duration: const Duration(milliseconds: 700),
     );
-    if (widget.result != null) {
+    if (widget.v2Result != null) {
+      _state = _ResultLoadState.ready;
+      _revealController.forward(from: 0);
+    } else if (widget.result != null) {
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[POST_FOCUS] result_screen_init has_result=true has_scan_id=${widget.result!.scanId.trim().isNotEmpty} immediate_mode=${widget.immediateMode}',
         );
       }
       _applyInitialResult(widget.result!);
     } else if (widget.scanId != null && widget.scanId!.isNotEmpty) {
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[POST_FOCUS] result_screen_init has_result=false has_scan_id=${widget.scanId?.trim().isNotEmpty == true} immediate_mode=${widget.immediateMode}',
         );
       }
-      debugPrint(
+      safeDebugLog(
         '[RESULT_UX] resume_existing_scan has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
       );
       _startPolling();
@@ -126,21 +134,21 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
     if (_pollTimer != null &&
         _activePollingScanId == widget.scanId &&
         !_terminalStateReached) {
-      debugPrint(
+      safeDebugLog(
         '[RESULT] polling already active has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
       );
       return;
     }
     if (kDebugMode) {
-      debugPrint(
+      safeDebugLog(
         '[POST_FOCUS] result_poll_start has_scan_id=${widget.scanId?.trim().isNotEmpty == true} immediate_mode=${widget.immediateMode}',
       );
     }
-    debugPrint(
+    safeDebugLog(
       '[RESULT] poll_start has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
     );
     if (widget.immediateMode) {
-      debugPrint(
+      safeDebugLog(
         '[RESULT] post_focus_result_check_start has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
       );
     }
@@ -161,12 +169,14 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
     _result = result;
     _lastAppliedResultId = result.id;
     _state = _ResultLoadState.ready;
-    debugPrint('[RESULT] ready has_scan_id=${result.scanId.trim().isNotEmpty}');
-    debugPrint(
+    safeDebugLog(
+      '[RESULT] ready has_scan_id=${result.scanId.trim().isNotEmpty}',
+    );
+    safeDebugLog(
       '[RESULT] render_result has_scan_id=${result.scanId.trim().isNotEmpty} has_risk_level=${result.overallState.trim().isNotEmpty} has_confidence=${result.confidence != null}',
     );
     if (widget.immediateMode) {
-      debugPrint(
+      safeDebugLog(
         '[RESULT] result_found has_scan_id=${result.scanId.trim().isNotEmpty}',
       );
     }
@@ -187,7 +197,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
       return;
     }
     if (_pollInFlight) {
-      debugPrint(
+      safeDebugLog(
         '[RESULT] duplicate poll skipped has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
       );
       return;
@@ -203,22 +213,22 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
         widget.scanId!,
       );
       _completedAt = scan.completedAt ?? _completedAt;
-      debugPrint(
+      safeDebugLog(
         '[RESULT] poll_attempt=$_pollAttempts has_scan_id=${widget.scanId?.trim().isNotEmpty == true} status=${scan.status}',
       );
       if (_pollAttempts % 5 == 0) {
-        debugPrint(
+        safeDebugLog(
           '[RESULT] status checkpoint has_scan_id=${widget.scanId?.trim().isNotEmpty == true} attempt=$_pollAttempts status=${scan.status}',
         );
       }
       _updateProgressState(pollElapsed);
       _networkErrors = 0;
       if (scan.isFailed) {
-        debugPrint(
+        safeDebugLog(
           '[RESULT] failed_detected has_scan_id=${widget.scanId?.trim().isNotEmpty == true} has_failure_reason=${scan.failureReason?.trim().isNotEmpty == true}',
         );
         if (widget.immediateMode) {
-          debugPrint(
+          safeDebugLog(
             '[RESULT] failed_status_found has_scan_id=${widget.scanId?.trim().isNotEmpty == true} has_failure_reason=${scan.failureReason?.trim().isNotEmpty == true}',
           );
         }
@@ -226,7 +236,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
         return;
       }
       if (scan.isCompleted) {
-        debugPrint(
+        safeDebugLog(
           '[RESULT] completed_detected has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
         );
         await _resolveCompletedScan();
@@ -237,7 +247,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
       }
       if (pollElapsed >= const Duration(seconds: 30) &&
           pollElapsed.inSeconds % 10 < _nextPollInterval().inSeconds) {
-        debugPrint(
+        safeDebugLog(
           '[RESULT_UX] long_processing has_scan_id=${widget.scanId?.trim().isNotEmpty == true} elapsed_seconds=${pollElapsed.inSeconds}',
         );
       }
@@ -247,7 +257,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
     } on DioException catch (e) {
       if (_isTransientNetworkError(e)) {
         _networkErrors++;
-        debugPrint(
+        safeDebugLog(
           '[RESULT] transient_network_error has_scan_id=${widget.scanId?.trim().isNotEmpty == true} count=$_networkErrors error_type=${e.type}',
         );
         if (!mounted) return;
@@ -271,7 +281,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
         );
       }
     } catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[RESULT] poll unexpected error has_scan_id=${widget.scanId?.trim().isNotEmpty == true} error_type=${e.runtimeType}',
       );
       _setTimeoutState(
@@ -296,25 +306,25 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
     try {
       final deadline = DateTime.now().add(_effectiveCompletedResultFetchWindow);
       while (DateTime.now().isBefore(deadline)) {
-        debugPrint(
+        safeDebugLog(
           '[RESULT] fetch_scan_result_start has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
         );
         final result = await ScanService.instance.fetchScanResultForScan(
           widget.scanId!,
         );
         if (result != null) {
-          debugPrint(
+          safeDebugLog(
             '[RESULT] fetch_scan_result_success has_scan_id=${widget.scanId?.trim().isNotEmpty == true} has_result_id=${result.id.trim().isNotEmpty}',
           );
           if (widget.immediateMode) {
-            debugPrint(
+            safeDebugLog(
               '[RESULT] result_found has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
             );
           }
           _setResult(result);
           return;
         }
-        debugPrint(
+        safeDebugLog(
           '[RESULT] fetch_scan_result_empty_retry has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
         );
         await Future.delayed(_completedResultFetchInterval);
@@ -325,7 +335,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
             'Your assessment completed, but the result record is not available yet. Please check again shortly.',
       );
     } catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[RESULT] fetch completed result failed has_scan_id=${widget.scanId?.trim().isNotEmpty == true} error_type=${e.runtimeType}',
       );
       _setTimeoutState(
@@ -343,29 +353,29 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
     if (_pollAttempts < _fallbackResultStartAttempt) return false;
     if (_pollAttempts % _fallbackResultEveryAttempts != 0) return false;
     try {
-      debugPrint(
+      safeDebugLog(
         '[RESULT] fallback_scan_results_lookup has_scan_id=${widget.scanId?.trim().isNotEmpty == true} attempt=$_pollAttempts',
       );
       final result = await ScanService.instance.fetchScanResultForScan(
         widget.scanId!,
       );
       if (result != null) {
-        debugPrint(
+        safeDebugLog(
           '[RESULT] fetch_scan_result_success has_scan_id=${widget.scanId?.trim().isNotEmpty == true} has_result_id=${result.id.trim().isNotEmpty}',
         );
         if (widget.immediateMode) {
-          debugPrint(
+          safeDebugLog(
             '[RESULT] result_found has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
           );
         }
         _setResult(result);
         return true;
       }
-      debugPrint(
+      safeDebugLog(
         '[RESULT] fetch_scan_result_empty_retry has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
       );
     } catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[RESULT] fallback_scan_results_failed has_scan_id=${widget.scanId?.trim().isNotEmpty == true} error_type=${e.runtimeType}',
       );
     }
@@ -387,7 +397,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
         widget.scanId!,
       );
       _completedAt = scan.completedAt ?? _completedAt;
-      debugPrint(
+      safeDebugLog(
         '[RESULT] timeout final check has_scan_id=${widget.scanId?.trim().isNotEmpty == true} status=${scan.status} has_failure_reason=${scan.failureReason?.trim().isNotEmpty == true}',
       );
       if (scan.isFailed) {
@@ -401,18 +411,18 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
     } catch (_) {}
     if (widget.scanId != null) {
       try {
-        debugPrint(
+        safeDebugLog(
           '[RESULT] timeout_scan_results_lookup has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
         );
         final result = await ScanService.instance.fetchScanResultForScan(
           widget.scanId!,
         );
         if (result != null) {
-          debugPrint(
+          safeDebugLog(
             '[RESULT] timeout_scan_results_hit has_scan_id=${widget.scanId?.trim().isNotEmpty == true} has_result_id=${result.id.trim().isNotEmpty}',
           );
           if (widget.immediateMode) {
-            debugPrint(
+            safeDebugLog(
               '[RESULT] result_found has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
             );
           }
@@ -420,13 +430,13 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
           return;
         }
       } catch (e) {
-        debugPrint(
+        safeDebugLog(
           '[RESULT] timeout_scan_results_failed has_scan_id=${widget.scanId?.trim().isNotEmpty == true} error_type=${e.runtimeType}',
         );
       }
     }
     if (widget.immediateMode) {
-      debugPrint(
+      safeDebugLog(
         '[RESULT] post_focus_timeout has_scan_id=${widget.scanId?.trim().isNotEmpty == true}',
       );
       _setTimeoutState(
@@ -451,12 +461,14 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
     _result = result;
     _lastAppliedResultId = result.id;
     _state = _ResultLoadState.ready;
-    debugPrint('[RESULT] ready has_scan_id=${result.scanId.trim().isNotEmpty}');
-    debugPrint(
+    safeDebugLog(
+      '[RESULT] ready has_scan_id=${result.scanId.trim().isNotEmpty}',
+    );
+    safeDebugLog(
       '[RESULT] render_result has_scan_id=${result.scanId.trim().isNotEmpty} has_risk_level=${result.overallState.trim().isNotEmpty} has_confidence=${result.confidence != null}',
     );
     if (widget.immediateMode) {
-      debugPrint(
+      safeDebugLog(
         '[RESULT] result_found has_scan_id=${result.scanId.trim().isNotEmpty}',
       );
     }
@@ -470,10 +482,10 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
   void _syncResultToProviders(ScanResult result) {
     if (!mounted) return;
     final container = ProviderScope.containerOf(context, listen: false);
-    debugPrint(
+    safeDebugLog(
       '[RESULT_REFRESH] invalidating owner dashboard providers has_scan_id=${result.scanId.trim().isNotEmpty}',
     );
-    debugPrint(
+    safeDebugLog(
       '[RESULT_REFRESH] invalidating owner readiness distribution has_scan_id=${result.scanId.trim().isNotEmpty}',
     );
     container.read(latestScanResultProvider.notifier).state = result;
@@ -497,7 +509,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
     if (!mounted) return;
     _stopPolling(markTerminal: true);
     _failureReason = reason;
-    debugPrint(
+    safeDebugLog(
       '[RESULT] failed has_scan_id=${widget.scanId?.trim().isNotEmpty == true} has_failure_reason=${reason?.trim().isNotEmpty == true}',
     );
     setState(() => _state = _ResultLoadState.failed);
@@ -536,7 +548,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
       < 120 => 'finalizing',
       _ => 'almost_ready',
     };
-    debugPrint('[RESULT_UX] progress_state=$progressState');
+    safeDebugLog('[RESULT_UX] progress_state=$progressState');
     final nextMessage = switch (progressState) {
       'uploading' => 'Uploading scan media',
       'preparing' => 'Preparing analysis',
@@ -576,7 +588,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
       stepLabel: _state == _ResultLoadState.ready
           ? 'Readiness assessment'
           : 'Preparing your result',
-      onBack: () => Navigator.maybePop(context),
+      onBack: _backToShellRoot,
       body: switch (_state) {
         _ResultLoadState.loading => _buildProcessing(),
         _ResultLoadState.timeout => _buildTimeout(),
@@ -660,7 +672,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
               width: double.infinity,
               child: ScanSecondaryButton(
                 label: 'Back to dashboard',
-                onPressed: () => Navigator.maybePop(context),
+                onPressed: _backToShellRoot,
               ),
             ),
           ],
@@ -681,7 +693,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
           _startFreshScan();
         },
         secondaryLabel: 'Back to dashboard',
-        secondaryAction: () => Navigator.maybePop(context),
+        secondaryAction: _backToShellRoot,
       ),
     );
   }
@@ -695,19 +707,21 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
         primaryLabel: 'Retake assessment',
         primaryAction: _startFreshScan,
         secondaryLabel: 'Back to dashboard',
-        secondaryAction: () => Navigator.maybePop(context),
+        secondaryAction: _backToShellRoot,
       ),
     );
   }
 
   Widget _buildResult() {
+    final v2Result = widget.v2Result;
+    if (v2Result != null) return _buildV2Result(v2Result);
     final result = _result!;
     _logResultFields(result);
     final statusLabel = displayRiskLevelLabel(result.riskLevel);
     final scanTime = result.completedAt ?? _completedAt ?? result.dateCreated;
     final retakeRequired = _isRetakeRequiredResult(result, statusLabel);
     final prominentStatus = retakeRequired
-        ? 'RETAKE NEEDED'
+        ? 'Unavailable - please retake the scan'
         : _prominentStatusLabel(statusLabel);
     final primaryMessage = retakeRequired
         ? 'We could not get a reliable reading. Please retake with your face clearly visible, good lighting, and clear voice.'
@@ -718,7 +732,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
       retakeRequired: retakeRequired,
     );
     final statusColor = retakeRequired
-        ? ScanTheme.danger
+        ? ScanTheme.textSecondary
         : _resultStatusColor(statusLabel);
     final ctas = _resultCtas(statusLabel, retakeRequired: retakeRequired);
     final readinessScore = _readinessScoreForDisplay(result);
@@ -739,7 +753,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
     );
     final technicalMetrics = visibleSignalMetrics(result);
     final assessmentDetails = assessmentDetailsForDisplay(result);
-    debugPrint(
+    safeDebugLog(
       '[RESULT_UI] status_label=$statusLabel retake_required=$retakeRequired',
     );
 
@@ -854,7 +868,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
               label: ctas.primaryLabel,
               onPressed: ctas.primaryRetake
                   ? _startFreshScan
-                  : () => Navigator.maybePop(context),
+                  : _backToShellRoot,
             ),
             if (ctas.secondaryLabel != null) ...[
               const SizedBox(height: 10),
@@ -862,7 +876,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
                 label: ctas.secondaryLabel!,
                 onPressed: ctas.secondaryRetake
                     ? _startFreshScan
-                    : () => Navigator.maybePop(context),
+                    : _backToShellRoot,
               ),
             ],
           ],
@@ -870,6 +884,128 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
       ),
     );
   }
+
+  Widget _buildV2Result(WellarV2Result result) {
+    final indicator = result.drowsinessIndicator;
+    final baseline = _stringMap(indicator['personal_baseline']);
+    final quality = result.quality;
+    final videoQuality = quality['video']?.toString();
+    final audioQuality = quality['audio']?.toString();
+    final indicatorQuality = indicator['status']?.toString();
+    final qualityLabel = [videoQuality, audioQuality]
+        .where((value) => value != null && value.trim().isNotEmpty)
+        .join(' · ');
+    final effectiveQuality = qualityLabel.isNotEmpty
+        ? qualityLabel
+        : (indicatorQuality ?? 'unavailable');
+    final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+    final stateEnglish = indicatorQuality == 'insufficient_quality'
+        ? 'Unavailable'
+        : switch (indicator['state']?.toString().toLowerCase()) {
+            'stable' => 'Stable',
+            'low focus' || 'low_focus' => 'Low focus',
+            'elevated fatigue' || 'elevated_fatigue' => 'Elevated fatigue',
+            'high risk' || 'high_risk' => 'High risk',
+            _ => 'Unavailable',
+          };
+    final insufficient = indicatorQuality == 'insufficient_quality' ||
+        stateEnglish == 'Unavailable';
+    final state = isArabic
+        ? switch (stateEnglish) {
+            'Stable' => 'مستقر',
+            'Low focus' => 'انخفاض التركيز',
+            'Elevated fatigue' => 'مؤشرات إرهاق مرتفعة',
+            'High risk' => 'مؤشرات مرتفعة',
+            _ => 'القراءة غير متاحة',
+          }
+        : stateEnglish;
+    final statusColor = insufficient
+        ? ScanTheme.textSecondary
+        : _stateColor(stateEnglish);
+    final fraction = result.eyeClosureFraction;
+    final blinkRate = result.blinkRatePerMinute;
+    final metrics = <ScanResultMetricDisplay>[
+      if (fraction != null)
+        ScanResultMetricDisplay(
+          label: isArabic ? 'نسبة إغلاق العين المرصودة' : 'Measured eye-closure fraction',
+          value: fraction.toStringAsFixed(3),
+        ),
+      if (blinkRate != null)
+        ScanResultMetricDisplay(
+          label: isArabic ? 'معدل الرمش في الدقيقة' : 'Blink rate per minute',
+          value: blinkRate.toStringAsFixed(1),
+        ),
+      ScanResultMetricDisplay(
+        label: isArabic ? 'جودة الإشارة' : 'Signal quality',
+        value: effectiveQuality,
+      ),
+      if (baseline['status'] == 'available') ...[
+        if (baseline['z_score'] is num)
+          ScanResultMetricDisplay(
+            label: isArabic ? 'مقارنة بخطك الأساسي' : 'Personal baseline comparison',
+            value: (baseline['z_score'] as num).toStringAsFixed(2),
+          ),
+        if (baseline['prior_scans'] is num)
+          ScanResultMetricDisplay(
+            label: isArabic ? 'عدد الفحوصات السابقة' : 'Prior baseline scans',
+            value: baseline['prior_scans'].toString(),
+          ),
+      ],
+    ];
+    final explanatoryCopy = insufficient
+        ? (isArabic
+              ? 'الإشارات المتاحة غير كافية لعرض قراءة. حسّن الإضاءة وثبّت الكاميرا وأعد الفحص إذا رغبت.'
+              : 'The available signals are insufficient for a reading. Improve lighting, steady the camera, and retake if you choose.')
+        : (isArabic
+              ? 'هذه مؤشرات وصفية أولية وليست تشخيصًا أو تنبؤًا مُعتمدًا. استخدمها للاسترشاد فقط.'
+              : 'These are indicative descriptive signals, not a diagnosis or validated prediction. Use them as guidance only.');
+
+    return FadeTransition(
+      opacity: _revealController,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildAnimatedSection(
+              begin: 0,
+              end: 0.22,
+              child: _ResultSummaryCard(
+                statusLabel: state,
+                statusColor: statusColor,
+                conclusion: explanatoryCopy,
+                completionTime: 'V2',
+                retakeRequired: insufficient,
+                scoreLabel: effectiveQuality,
+                secondaryInfoLabel: isArabic ? 'جودة الإشارة' : 'Signal quality',
+              ),
+            ),
+            const SizedBox(height: 12),
+            _PlainSectionCard(
+              title: isArabic ? 'مؤشر استرشادي غير تشخيصي' : 'Indicative, non-diagnostic signal',
+              body: explanatoryCopy,
+              accent: statusColor,
+            ),
+            const SizedBox(height: 12),
+            if (metrics.isNotEmpty)
+              _MetricListCard(
+                title: isArabic ? 'القياسات المتاحة' : 'Available measurements',
+                metrics: metrics,
+              ),
+            const SizedBox(height: 14),
+            Text(
+              isArabic ? 'مرجع الفحص: ${result.scanId}' : 'Scan reference: ${result.scanId}',
+              style: GoogleFonts.inter(color: ScanTheme.textSecondary, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Map<String, dynamic> _stringMap(dynamic value) => value is Map
+      ? value.map((key, item) => MapEntry(key.toString(), item))
+      : const {};
 
   void _retryScan() {
     Navigator.pushReplacement(
@@ -881,6 +1017,11 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
         ),
       ),
     );
+  }
+
+  void _backToShellRoot() {
+    if (!mounted) return;
+    goToDashboard(context);
   }
 
   void _startFreshScan() {
@@ -900,19 +1041,19 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
     if (_lastLoggedResultId == result.id) return;
     _lastLoggedResultId = result.id;
     final taskValidated = hasValidatedTaskSignal(result);
-    debugPrint(
+    safeDebugLog(
       '[RESULT_FIELD] field=task_signal_validated value=${taskValidated ? 'yes' : 'no'}',
     );
-    debugPrint(
+    safeDebugLog(
       '[RESULT_FIELD] has_ai_model_version=${result.aiModelVersion?.trim().isNotEmpty == true} has_baseline_used=${result.baselineUsed != null}',
     );
-    debugPrint(
+    safeDebugLog(
       '[RESULT_FIELD] field=confidence_drift_present=${result.confidenceDrift != null}',
     );
-    debugPrint(
+    safeDebugLog(
       '[RESULT_FIELD] field=confidence_present=${result.confidence != null}',
     );
-    debugPrint(
+    safeDebugLog(
       '[RESULT_FIELD] field=date_created_present=${result.dateCreated != null}',
     );
   }
@@ -1066,7 +1207,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
   }
 
   int? _normalizePercent(double? value) {
-    if (value == null) return null;
+    if (value == null || !value.isFinite || value < 0) return null;
     if (value <= 1) return (value * 100).round();
     return value.round();
   }
@@ -1186,7 +1327,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
 
   String _humanConfidenceLabel(double? confidence) {
     final percent = _normalizePercent(confidence);
-    if (percent == null) return 'Moderate confidence';
+    if (percent == null) return 'Unavailable';
     if (percent < 45) return 'Low confidence';
     if (percent < 70) return 'Moderate confidence';
     return 'High confidence';
@@ -1206,6 +1347,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
   }
 
   bool _isRetakeRequiredResult(ScanResult result, String statusLabel) {
+    if (statusLabel == 'Unavailable - please retake the scan') return true;
     final actionText = [
       result.suggestedAction,
       result.recommendedAction,
@@ -1231,7 +1373,7 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
         explanationText.contains('noisy') ||
         explanationText.contains('weak');
     return wantsRetake &&
-        (qualityIssue || statusLabel.trim().toLowerCase() == 'review required');
+        qualityIssue;
   }
 
   String _employeeRecommendedNextStep(
@@ -1401,6 +1543,7 @@ class _ResultSummaryCard extends StatelessWidget {
   final String completionTime;
   final bool retakeRequired;
   final String scoreLabel;
+  final String secondaryInfoLabel;
 
   const _ResultSummaryCard({
     required this.statusLabel,
@@ -1409,6 +1552,7 @@ class _ResultSummaryCard extends StatelessWidget {
     required this.completionTime,
     required this.retakeRequired,
     required this.scoreLabel,
+    this.secondaryInfoLabel = 'Readiness score',
   });
 
   @override
@@ -1510,7 +1654,7 @@ class _ResultSummaryCard extends StatelessWidget {
                         Expanded(
                           child: _ResultInlineInfo(
                             icon: Icons.assessment_outlined,
-                            label: 'Readiness score',
+                            label: secondaryInfoLabel,
                             value: scoreLabel,
                           ),
                         ),

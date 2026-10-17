@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../utils/safe_debug_log.dart';
 
 import '../models/plan.dart';
 import '../services/organization_service.dart';
-import '../services/push_notification_service.dart';
 import '../state/session.dart';
 import '../utils/app_colors.dart';
 import '../utils/page_transition.dart';
@@ -58,7 +58,9 @@ class WorkspaceAccessScreen extends StatefulWidget {
 class _WorkspaceAccessScreenState extends State<WorkspaceAccessScreen> {
   final _tokenController = TextEditingController();
   bool _checking = false;
+  bool _joiningInvite = false;
   String? _statusMessage;
+  String? _inviteError;
   WorkspaceResolveStatus? _lastStatus;
   late WorkspaceAccessViewState _state;
 
@@ -81,12 +83,9 @@ class _WorkspaceAccessScreenState extends State<WorkspaceAccessScreen> {
   void _guardAuthenticated() {
     if (!mounted) return;
     if (Session.instance.isLoggedIn) return;
-    debugPrint('[WORKSPACE_ACCESS] authenticated_user_required=true');
+    safeDebugLog('[WORKSPACE_ACCESS] authenticated_user_required=true');
     OrganizationService.instance.clearActiveWorkspaceContext();
-    Navigator.pushReplacement(
-      context,
-      fadeSlideRoute(const LoginScreen()),
-    );
+    Navigator.pushReplacement(context, fadeSlideRoute(const LoginScreen()));
   }
 
   @override
@@ -96,7 +95,7 @@ class _WorkspaceAccessScreenState extends State<WorkspaceAccessScreen> {
   }
 
   Future<void> _refreshMembership() async {
-    debugPrint('[WorkspaceAccess] refresh requested');
+    safeDebugLog('[WorkspaceAccess] refresh requested');
     setState(() => _checking = true);
     try {
       final canonical = await OrganizationService.instance
@@ -116,7 +115,8 @@ class _WorkspaceAccessScreenState extends State<WorkspaceAccessScreen> {
       if (canonical.status == CanonicalWorkspaceContextStatus.forbidden ||
           canonical.status == CanonicalWorkspaceContextStatus.error) {
         setState(() {
-          _lastStatus = canonical.status == CanonicalWorkspaceContextStatus.forbidden
+          _lastStatus =
+              canonical.status == CanonicalWorkspaceContextStatus.forbidden
               ? WorkspaceResolveStatus.forbidden
               : WorkspaceResolveStatus.error;
           _state = WorkspaceAccessViewState.accessResolutionError;
@@ -169,27 +169,15 @@ class _WorkspaceAccessScreenState extends State<WorkspaceAccessScreen> {
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
-        builder: (_) => _WorkspaceAccessMembershipSheet(
-          memberships: memberships,
-        ),
+        builder: (_) =>
+            _WorkspaceAccessMembershipSheet(memberships: memberships),
       );
       if (selected == null || !mounted) return;
-
-      final synced = await OrganizationService.instance.syncWorkspaceSession(
-        membershipId: selected.membershipId,
-        trigger: 'workspace_access_refresh',
-        expectedMembership: selected,
-      );
-      unawaited(
-        PushNotificationService.instance.syncCurrentDevice(
-          trigger: 'workspace_switch',
-          workspaceContext: synced,
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Coming soon: workspace switching is in development.'),
+          behavior: SnackBarBehavior.floating,
         ),
-      );
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        fadeSlideRoute(RoleShellRouter(initialContext: synced)),
       );
     } on OrganizationServiceException catch (e) {
       if (!mounted) return;
@@ -206,23 +194,27 @@ class _WorkspaceAccessScreenState extends State<WorkspaceAccessScreen> {
   }
 
   Future<void> _debugWorkspaceLookup() async {
-    debugPrint('[WorkspaceAccess] debug workspace lookup started');
+    safeDebugLog('[WorkspaceAccess] debug workspace lookup started');
     OrganizationService.instance.clearActiveWorkspaceContext();
     final result = await OrganizationService.instance
         .resolveCanonicalActiveWorkspace(forceRefresh: true);
-    debugPrint(
+    safeDebugLog(
       '[WorkspaceAccess] debug result status=${result.status.name} message=${result.message}',
     );
     if (result.status == WorkspaceResolveStatus.forbidden) {
-      debugPrint('[WorkspaceAccess] debug classification=403 forbidden');
+      safeDebugLog('[WorkspaceAccess] debug classification=403 forbidden');
     } else if (result.status == WorkspaceResolveStatus.unauthenticated) {
-      debugPrint('[WorkspaceAccess] debug classification=401 unauthenticated');
+      safeDebugLog(
+        '[WorkspaceAccess] debug classification=401 unauthenticated',
+      );
     } else if (result.status == WorkspaceResolveStatus.noMembership) {
-      debugPrint('[WorkspaceAccess] debug classification=200 empty');
+      safeDebugLog('[WorkspaceAccess] debug classification=200 empty');
     } else if (result.status == WorkspaceResolveStatus.ok) {
-      debugPrint('[WorkspaceAccess] debug classification=200 with membership');
+      safeDebugLog(
+        '[WorkspaceAccess] debug classification=200 with membership',
+      );
     } else {
-      debugPrint('[WorkspaceAccess] debug classification=unexpected_error');
+      safeDebugLog('[WorkspaceAccess] debug classification=unexpected_error');
     }
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -230,7 +222,7 @@ class _WorkspaceAccessScreenState extends State<WorkspaceAccessScreen> {
         content: Text('Workspace diagnostics printed to console.'),
       ),
     );
-    debugPrint('[WorkspaceAccess] debug workspace lookup completed');
+    safeDebugLog('[WorkspaceAccess] debug workspace lookup completed');
   }
 
   bool _hasValidActiveContext(ActiveWorkspaceContext? context) {
@@ -264,21 +256,19 @@ class _WorkspaceAccessScreenState extends State<WorkspaceAccessScreen> {
   @override
   Widget build(BuildContext context) {
     final newCompanyMode = _isNewCompanyMode;
-    debugPrint(
+    safeDebugLog(
       newCompanyMode
           ? '[WORKSPACE_ACCESS] mode=new_company'
           : '[WORKSPACE_ACCESS] mode=access_failed',
     );
-    debugPrint(
-      '[WORKSPACE_ACCESS] create_company_allowed=$newCompanyMode',
-    );
+    safeDebugLog('[WORKSPACE_ACCESS] create_company_allowed=$newCompanyMode');
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
           const AnimatedSpaceBackground(),
           SafeArea(
-            child: Padding(
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: AppCard(
                 padding: const EdgeInsets.all(18),
@@ -341,20 +331,31 @@ class _WorkspaceAccessScreenState extends State<WorkspaceAccessScreen> {
         const SizedBox(height: 10),
         TextField(
           controller: _tokenController,
-          decoration: const InputDecoration(hintText: 'Invite code'),
+          onChanged: (_) {
+            if (_inviteError != null) setState(() => _inviteError = null);
+          },
+          decoration: InputDecoration(
+            hintText: 'Invite code',
+            errorText: _inviteError,
+          ),
         ),
         const SizedBox(height: 10),
         PrimaryButton(
           text: 'Join with invite',
-          onPressed: _checking
+          onPressed: _checking || _joiningInvite
               ? null
-              : () {
+              : () async {
                   final token = _tokenController.text.trim();
-                  if (token.isEmpty) return;
-                  Navigator.push(
+                  if (token.isEmpty) {
+                    setState(() => _inviteError = 'Enter your invite code.');
+                    return;
+                  }
+                  setState(() => _joiningInvite = true);
+                  await Navigator.push(
                     context,
                     fadeSlideRoute(InviteScreen(token: token)),
                   );
+                  if (mounted) setState(() => _joiningInvite = false);
                 },
         ),
         const SizedBox(height: 14),
@@ -419,64 +420,71 @@ class _WorkspaceAccessMembershipSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SafeArea(
-      child: Container(
-        decoration: const BoxDecoration(
-          color: AppColors.background,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
         ),
-        padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 42,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 14),
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(999),
-              ),
-            ),
-            const Text(
-              'Choose an organization',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Select the company you want to activate. Nothing switches until you tap one.',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-            const SizedBox(height: 12),
-            ...memberships.map(
-              (membership) => Card(
-                color: AppColors.card,
-                margin: const EdgeInsets.only(bottom: 10),
-                child: ListTile(
-                  title: Text(
-                    membership.companyName,
-                    style: const TextStyle(color: Colors.white),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: AppColors.background,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 42,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(999),
                   ),
-                  subtitle: Text(
-                    membership.departmentName?.trim().isNotEmpty == true
-                        ? '${membership.memberRole.toUpperCase()} - ${membership.departmentName!.trim()}'
-                        : membership.memberRole.toUpperCase(),
-                    style: const TextStyle(color: AppColors.textSecondary),
-                  ),
-                  trailing: const Icon(
-                    Icons.chevron_right_rounded,
-                    color: Colors.white70,
-                  ),
-                  onTap: () => Navigator.of(context).pop(membership),
                 ),
-              ),
+                const Text(
+                  'Choose an organization',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Select the company you want to activate. Nothing switches until you tap one.',
+                  style: TextStyle(color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 12),
+                ...memberships.map(
+                  (membership) => Card(
+                    color: AppColors.card,
+                    margin: const EdgeInsets.only(bottom: 10),
+                    child: ListTile(
+                      title: Text(
+                        membership.companyName,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                      subtitle: Text(
+                        membership.departmentName?.trim().isNotEmpty == true
+                            ? '${membership.memberRole.toUpperCase()} - ${membership.departmentName!.trim()}'
+                            : membership.memberRole.toUpperCase(),
+                        style: const TextStyle(color: AppColors.textSecondary),
+                      ),
+                      trailing: const Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.white70,
+                      ),
+                      onTap: () => Navigator.of(context).pop(membership),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+              ],
             ),
-            const SizedBox(height: 4),
-          ],
+          ),
         ),
       ),
     );

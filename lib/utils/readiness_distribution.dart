@@ -7,6 +7,7 @@ class ReadinessDistributionNormalizer {
     'Low Focus',
     'Elevated Fatigue',
     'High Risk',
+    'Unavailable - please retake the scan',
   ];
 
   static Map<String, int> emptyCounts() {
@@ -26,13 +27,19 @@ class ReadinessDistributionNormalizer {
   ) {
     final counts = emptyCounts();
     for (final entry in entries) {
-      if (!entry.hasResult) continue;
-      if (entry.status.trim().toLowerCase() != 'completed') continue;
+      final scanStatus = entry.status.trim().toLowerCase();
+      if (!entry.hasResult &&
+          !{'failed', 'error', 'rejected', 'cancelled', 'retake_required'}
+              .contains(scanStatus)) {
+        continue;
+      }
       final label = normalizeLabel(
         entry.result?.riskLevel ?? entry.result?.overallState,
       );
-      if (label == null || !counts.containsKey(label)) continue;
-      counts[label] = (counts[label] ?? 0) + 1;
+      final bucket = label != null && counts.containsKey(label)
+          ? label
+          : 'Unavailable - please retake the scan';
+      counts[bucket] = (counts[bucket] ?? 0) + 1;
     }
     return counts;
   }

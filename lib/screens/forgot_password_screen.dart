@@ -1,10 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/auth_service.dart';
 import '../utils/app_colors.dart';
-import '../utils/page_transition.dart';
-import 'login_screen.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   final String? initialEmail;
@@ -85,11 +83,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final showEmailError = (_submitAttempted || _touchedEmail) && !_isEmailValid;
+    final showEmailError =
+        (_submitAttempted || _touchedEmail) && !_isEmailValid;
     return Scaffold(
       backgroundColor: const Color(0xFF050A12),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,12 +96,8 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
               IconButton(
                 tooltip: 'Back',
                 icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
-                onPressed: () => Navigator.pushReplacement(
-                  context,
-                  fadeSlideRoute(
-                    LoginScreen(emailFromRegister: _emailController.text.trim()),
-                  ),
-                ),
+                onPressed: () =>
+                    Navigator.pop(context, _emailController.text.trim()),
               ),
               const SizedBox(height: 10),
               const Text(
@@ -153,13 +148,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       const SizedBox(height: 16),
                       _PrimaryButton(
                         text: 'Back to sign in',
-                        onPressed: () => Navigator.pushReplacement(
+                        onPressed: () => Navigator.pop(
                           context,
-                          fadeSlideRoute(
-                            LoginScreen(
-                              emailFromRegister: _emailController.text.trim(),
-                            ),
-                          ),
+                          _emailController.text.trim(),
                         ),
                       ),
                     ] else ...[
@@ -181,10 +172,12 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           hintText: 'name@company.com',
-                          hintStyle:
-                              const TextStyle(color: AppColors.textSecondary),
-                          errorText:
-                              showEmailError ? 'Enter a valid email address.' : null,
+                          hintStyle: const TextStyle(
+                            color: AppColors.textSecondary,
+                          ),
+                          errorText: showEmailError
+                              ? 'Enter a valid email address.'
+                              : null,
                           filled: true,
                           fillColor: const Color(0xFF0A111D),
                           prefixIcon: const Icon(
@@ -197,8 +190,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                           ),
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide:
-                                const BorderSide(color: Color(0xFF2A384E)),
+                            borderSide: const BorderSide(
+                              color: Color(0xFF2A384E),
+                            ),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
@@ -208,13 +202,15 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                           ),
                           errorBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide:
-                                const BorderSide(color: AppColors.highRisk),
+                            borderSide: const BorderSide(
+                              color: AppColors.highRisk,
+                            ),
                           ),
                           focusedErrorBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
-                            borderSide:
-                                const BorderSide(color: AppColors.highRisk),
+                            borderSide: const BorderSide(
+                              color: AppColors.highRisk,
+                            ),
                           ),
                         ),
                       ),
@@ -226,13 +222,9 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       ),
                       const SizedBox(height: 10),
                       TextButton(
-                        onPressed: () => Navigator.pushReplacement(
+                        onPressed: () => Navigator.pop(
                           context,
-                          fadeSlideRoute(
-                            LoginScreen(
-                              emailFromRegister: _emailController.text.trim(),
-                            ),
-                          ),
+                          _emailController.text.trim(),
                         ),
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
@@ -383,4 +375,3 @@ class _ErrorBanner extends StatelessWidget {
     );
   }
 }
-

@@ -1,7 +1,9 @@
+import '../utils/safe_debug_log.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../i18n/tr.dart';
 import '../services/directus_client.dart';
 import '../services/hr_ops_service.dart';
 import '../services/organization_service.dart';
@@ -75,11 +77,11 @@ class _CompanyReadinessResultsScreenState
     final membershipId = workspace?.membershipId.trim() ?? 'missing';
     final effectiveRole =
         workspace?.finalEffectiveRole ?? workspace?.memberRole ?? 'missing';
-    debugPrint(
+    safeDebugLog(
       '[COMPANY_READINESS_TRACE] user_id=$currentUserId membership_id=$membershipId business_profile=$profileId effective_role=$effectiveRole workspace_revision=${OrganizationService.instance.workspaceRevision} workspace_signature=${OrganizationService.instance.workspaceSignature}',
     );
     if (profileId.isEmpty) {
-      debugPrint(
+      safeDebugLog(
         '[HR_READINESS_TRACE] profile_present=false result_count=0 request_count=0 results_query_failed=false requests_query_failed=false scans_query_failed=false',
       );
       return _ScreenSnapshot.empty();
@@ -121,7 +123,7 @@ class _CompanyReadinessResultsScreenState
       profileId: profileId,
       membershipId: membershipId,
     );
-    debugPrint(
+    safeDebugLog(
       '[COMPANY_DIRECTORY_READY] members=${memberDirectory.members.length} user_keys=${memberDirectory.byUserId.length} membership_keys=${memberDirectory.byMembershipId.length}',
     );
 
@@ -170,12 +172,20 @@ class _CompanyReadinessResultsScreenState
     var resolvedDirectMembershipCount = 0;
     var resolvedViaRequestCount = 0;
     var unresolvedCount = 0;
+    var missingScanIdCount = 0;
+    var invalidBucketLabelCount = 0;
     for (final assessment in results) {
       final scanId = assessment.scanId.trim();
-      if (scanId.isEmpty) continue;
+      if (scanId.isEmpty) {
+        missingScanIdCount++;
+        continue;
+      }
       final outcome = assessment.outcome?.trim() ?? '';
       final bucket = _bucketFromLabel(outcome);
-      if (bucket == null) continue;
+      if (bucket == null) {
+        invalidBucketLabelCount++;
+        continue;
+      }
       final scanMeta = scanMetaById[scanId];
       final userId = _normalizeUserKey(scanMeta?.userId);
       final requestMembershipId = requestMemberIdByScanId[scanId] ?? '';
@@ -212,7 +222,7 @@ class _CompanyReadinessResultsScreenState
           requestDepartment.isNotEmpty;
       if (member == null && !hasRequestFallback) {
         unresolvedCount += 1;
-        debugPrint(
+        safeDebugLog(
           '[COMPANY_RESULT_UNRESOLVED] result_id=${assessment.scanId} scan_id=$scanId has_user_id=${userId.isNotEmpty || requestUserId.isNotEmpty} has_membership_id=${requestMembershipId.isNotEmpty} has_matching_request=${requestMembershipId.isNotEmpty || requestUserId.isNotEmpty}',
         );
       } else if (member != null) {
@@ -247,7 +257,27 @@ class _CompanyReadinessResultsScreenState
         ),
       );
     }
-    debugPrint(
+    // TEMP_READINESS_DEBUG: account for rows skipped between the service
+    // summary and the widgets that render the Company readiness screen.
+    if (kDebugMode) {
+      final safeProfile = profileId.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+      final profilePrefix = safeProfile.isEmpty
+          ? 'none'
+          : safeProfile.substring(0, safeProfile.length < 8 ? safeProfile.length : 8);
+      final normalizedRole = effectiveRole.trim().toLowerCase();
+      final workspaceRole = const {
+        'owner',
+        'hr',
+        'manager',
+        'employee',
+      }.contains(normalizedRole)
+          ? normalizedRole
+          : 'unknown';
+      readinessDebugLog(
+        '[READINESS_DEBUG] profile_prefix=$profilePrefix workspace_role=$workspaceRole path=company_readiness_widget raw_count=${results.length} filtered_count=${resultRows.length} reject_missing_scan_id=$missingScanIdCount reject_invalid_bucket_label=$invalidBucketLabelCount member_unresolved_displayed=$unresolvedCount period_start=${widget.start == null ? 'none' : _formatDate(widget.start)} period_end=${widget.end == null ? 'none' : _formatDate(widget.end)} period_basis=${widget.start == null && widget.end == null ? 'unbounded' : 'service_caller_bounds_start_inclusive_end_exclusive'}',
+      );
+    }
+    safeDebugLog(
       '[COMPANY_RESULT_RESOLUTION] results=${resultRows.length} resolved_direct_user=$resolvedDirectUserCount resolved_direct_membership=$resolvedDirectMembershipCount resolved_via_request=$resolvedViaRequestCount unresolved=$unresolvedCount',
     );
     resultRows.sort((a, b) {
@@ -274,6 +304,7 @@ class _CompanyReadinessResultsScreenState
     // Directus deep-relation query Owner already relies on.
     var assessmentsByScanId = const <String, OwnerAssessmentResult>{};
     var assessmentQueryFailed = false;
+    var extraScansQueryFailed = false;
     if (requestScanIds.isNotEmpty) {
       try {
         final lookup = await OwnerOpsService.instance
@@ -295,7 +326,8 @@ class _CompanyReadinessResultsScreenState
           .toList();
       if (missingScanIds.isNotEmpty) {
         final extra = await _fetchScansByIds(profileId, missingScanIds);
-        for (final entry in extra.entries) {
+        extraScansQueryFailed = !extra.ok;
+        for (final entry in extra.data.entries) {
           scanMetaById[entry.key] = entry.value;
         }
       }
@@ -337,7 +369,7 @@ class _CompanyReadinessResultsScreenState
           _humanReadableLabel(requestItem.requestedForName) == null &&
           _humanReadableLabel(requestItem.requestedForEmail) == null;
       if (unresolvedRequest) {
-        debugPrint(
+        safeDebugLog(
           '[COMPANY_REQUEST_MEMBER_UNRESOLVED] request_id=${requestItem.id} has_target_member=${targetMemberId.isNotEmpty} has_recipient_user=${_normalizeUserKey(requestItem.requestedForUserId).isNotEmpty}',
         );
       }
@@ -382,13 +414,13 @@ class _CompanyReadinessResultsScreenState
         ),
       );
     }
-    debugPrint(
+    safeDebugLog(
       "[COMPANY_REQUEST_RESOLUTION] requests=${requestRowsBuilt.length} resolved=${requestRowsBuilt.where((row) => (row.memberName ?? '').trim() != 'Recipient unavailable' || row.memberEmail.trim().isNotEmpty || row.roleLabel.trim().isNotEmpty || row.departmentLabel.trim().isNotEmpty).length} unresolved=${requestRowsBuilt.where((row) => (row.memberName ?? '').trim() == 'Recipient unavailable' && row.memberEmail.trim().isEmpty && row.roleLabel.trim().isEmpty && row.departmentLabel.trim().isEmpty).length}",
     );
 
     final requestSummary = _RequestSummary.build(requestRowsBuilt);
 
-    debugPrint(
+    safeDebugLog(
       '[HR_READINESS_TRACE] profile_present=true '
       'result_count=${resultRows.length} '
       'request_count=${requestRowsBuilt.length} '
@@ -405,7 +437,7 @@ class _CompanyReadinessResultsScreenState
       resultsQueryFailed: resultsQueryFailed,
       requestsQuery: requestsFetch.outcome,
       scansQuery: scansFetch.outcome,
-      assessmentQueryFailed: assessmentQueryFailed,
+      assessmentQueryFailed: assessmentQueryFailed || extraScansQueryFailed,
     );
   }
 
@@ -437,7 +469,7 @@ class _CompanyReadinessResultsScreenState
       }
       return _QueryResult(map, const _QueryOutcome.ok());
     } on DioException catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[COMPANY_READINESS] wellness_scans query_failed status=${e.response?.statusCode}',
       );
       return _QueryResult(
@@ -445,7 +477,9 @@ class _CompanyReadinessResultsScreenState
         _QueryOutcome.failed(e.response?.statusCode),
       );
     } catch (_) {
-      debugPrint('[COMPANY_READINESS] wellness_scans query_failed status=null');
+      safeDebugLog(
+        '[COMPANY_READINESS] wellness_scans query_failed status=null',
+      );
       return _QueryResult(
         <String, _ScanMeta>{},
         const _QueryOutcome.failed(null),
@@ -453,11 +487,13 @@ class _CompanyReadinessResultsScreenState
     }
   }
 
-  Future<Map<String, _ScanMeta>> _fetchScansByIds(
+  Future<_QueryResult<Map<String, _ScanMeta>>> _fetchScansByIds(
     String profileId,
     List<String> scanIds,
   ) async {
-    if (scanIds.isEmpty) return const {};
+    if (scanIds.isEmpty) {
+      return const _QueryResult({}, _QueryOutcome.ok());
+    }
     try {
       final res = await DirectusClient.instance.client.get(
         '/items/wellness_scans',
@@ -481,9 +517,12 @@ class _CompanyReadinessResultsScreenState
           status: row['status']?.toString().trim().toLowerCase() ?? '',
         );
       }
-      return map;
+      return _QueryResult(map, const _QueryOutcome.ok());
     } catch (_) {
-      return const {};
+      safeDebugLog(
+        '[COMPANY_READINESS] targeted wellness_scans query_failed status=null',
+      );
+      return const _QueryResult({}, _QueryOutcome.failed(null));
     }
   }
 
@@ -497,7 +536,7 @@ class _CompanyReadinessResultsScreenState
           : await RequestService.instance.fetchHrRequests();
       return _QueryResult(items, const _QueryOutcome.ok());
     } on RequestPermissionException catch (_) {
-      debugPrint(
+      safeDebugLog(
         '[COMPANY_READINESS] request_source_failed permission_error=true',
       );
       return _QueryResult(
@@ -505,7 +544,7 @@ class _CompanyReadinessResultsScreenState
         const _QueryOutcome.failed(null),
       );
     } catch (_) {
-      debugPrint(
+      safeDebugLog(
         '[COMPANY_READINESS] request_source_failed permission_error=false',
       );
       return _QueryResult(
@@ -535,16 +574,19 @@ class _CompanyReadinessResultsScreenState
       if (completedScanId.isEmpty) {
         return const _RequestOutcome(bucket: null, label: 'Result unavailable');
       }
+      if (scanStatus.trim().toLowerCase() == 'retake_required') {
+        return const _RequestOutcome(
+          bucket: _ResultBucket.unavailable,
+          label: 'Unavailable - please retake the scan',
+        );
+      }
       if (assessment != null) {
-        final bucket = _bucketFromLabel(assessment.outcome?.trim() ?? '');
-        if (bucket != null &&
-            _isValidReadinessScore(assessment.readinessScore)) {
+        final bucket = _bucketFromLabel(assessment.outcome?.trim() ?? '') ??
+            _ResultBucket.unavailable;
+        if (bucket != _ResultBucket.unavailable) {
           return _RequestOutcome(bucket: bucket, label: bucket.label);
         }
-        return const _RequestOutcome(
-          bucket: null,
-          label: 'Result requires review',
-        );
+        return _RequestOutcome(bucket: bucket, label: bucket.label);
       }
       if (assessmentQueryFailed) {
         return const _RequestOutcome(bucket: null, label: 'Result unavailable');
@@ -552,6 +594,12 @@ class _CompanyReadinessResultsScreenState
       return const _RequestOutcome(bucket: null, label: 'Result processing');
     }
     if (normalized == NormalizedRequestStatus.pending) {
+      if (scanStatus == 'retake_required') {
+        return const _RequestOutcome(
+          bucket: _ResultBucket.unavailable,
+          label: 'Unavailable - please retake the scan',
+        );
+      }
       if (scanStatus == 'failed' ||
           scanStatus == 'error' ||
           scanStatus == 'rejected' ||
@@ -601,6 +649,9 @@ class _CompanyReadinessResultsScreenState
       case 'high risk':
       case 'high_risk':
         return _ResultBucket.highRisk;
+      case 'retake_required':
+      case 'unavailable - please retake the scan':
+        return _ResultBucket.unavailable;
       default:
         return null;
     }
@@ -679,7 +730,12 @@ class _CompanyReadinessResultsScreenState
                 title: 'Unable to load company readiness',
                 subtitle: 'Please try again.',
                 actionLabel: 'Retry',
-                onAction: () => setState(() => _future = _load()),
+                onAction: () {
+                  final next = _load();
+                  setState(() {
+                    _future = next;
+                  });
+                },
               );
             }
             final data = snapshot.data ?? _ScreenSnapshot.empty();
@@ -688,14 +744,24 @@ class _CompanyReadinessResultsScreenState
               children: [
                 _ReadinessResultsTab(
                   data: data,
-                  onRetry: () => setState(() => _future = _load()),
+                  onRetry: () {
+                    final next = _load();
+                    setState(() {
+                      _future = next;
+                    });
+                  },
                   onOpenScan: _openScanDetails,
                   formatDateTime: _formatDateTime,
                   periodLabel: widget.periodLabel,
                 ),
                 _ScanRequestsTab(
                   data: data,
-                  onRetry: () => setState(() => _future = _load()),
+                  onRetry: () {
+                    final next = _load();
+                    setState(() {
+                      _future = next;
+                    });
+                  },
                   onOpenScan: _openScanDetails,
                   formatDate: _formatDate,
                   formatDateTime: _formatDateTime,
@@ -770,19 +836,27 @@ class _ReadinessResultsTab extends StatelessWidget {
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
-          children: [
-          SectionHeader(
-            title: 'Readiness distribution',
-            subtitle: subtitle,
-          ),
+        children: [
+          SectionHeader(title: 'Readiness distribution', subtitle: subtitle),
           const SizedBox(height: 12),
           ...banners,
-          for (final bucket in _ResultBucket.values)
-            _bucketSection(
-              bucket: bucket,
-              count: data.distribution[bucket] ?? 0,
-              rows: byBucket[bucket] ?? const <_ResultRow>[],
-            ),
+          if (!data.resultsQueryFailed && data.resultRows.isEmpty)
+            const OwnerSurfaceCard(
+              child: Text(
+                'No completed assessments in this period.',
+                style: TextStyle(
+                  color: WellarTheme.textMuted,
+                  fontSize: 13,
+                ),
+              ),
+            )
+          else
+            for (final bucket in _ResultBucket.values)
+              _bucketSection(
+                bucket: bucket,
+                count: data.distribution[bucket] ?? 0,
+                rows: byBucket[bucket] ?? const <_ResultRow>[],
+              ),
         ],
       ),
     );
@@ -974,6 +1048,15 @@ class _ScanRequestsTab extends StatelessWidget {
           subtitle: data.requestsQuery.isForbidden
               ? 'Directus refused scan_requests read for this session.'
               : 'scan_requests query failed — tap to retry.',
+          onRetry: onRetry,
+        ),
+      );
+    }
+    if (data.assessmentQueryFailed) {
+      banners.add(
+        _queryFailureBanner(
+          title: 'Some data may be incomplete',
+          subtitle: Tr.localized(context, 'partial_data_notice'),
           onRetry: onRetry,
         ),
       );
@@ -1337,6 +1420,8 @@ Color _bucketColor(_ResultBucket bucket) {
       return const Color(0xFFFFC46B);
     case _ResultBucket.highRisk:
       return const Color(0xFFFF7A8F);
+    case _ResultBucket.unavailable:
+      return WellarTheme.neutral;
   }
 }
 
@@ -1357,7 +1442,8 @@ enum _ResultBucket {
   stable,
   lowFocus,
   elevatedFatigue,
-  highRisk;
+  highRisk,
+  unavailable;
 
   String get label {
     switch (this) {
@@ -1369,6 +1455,8 @@ enum _ResultBucket {
         return 'Elevated Fatigue';
       case _ResultBucket.highRisk:
         return 'High Risk';
+      case _ResultBucket.unavailable:
+        return 'Unavailable - please retake the scan';
     }
   }
 
@@ -1383,6 +1471,8 @@ enum _ResultBucket {
         return 'Elevated Fatigue';
       case _ResultBucket.highRisk:
         return 'High Risk';
+      case _ResultBucket.unavailable:
+        return 'Unavailable - please retake the scan';
     }
   }
 }

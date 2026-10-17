@@ -326,7 +326,7 @@ class _AlertDetailScreenState extends State<AlertDetailScreen> {
   }
 
   String _scoreLabel(double? value) {
-    if (value == null) return 'Processing assessment';
+    if (value == null || !value.isFinite) return '-';
     final normalized = value <= 1 ? (value * 100).round() : value.round();
     return '$normalized%';
   }

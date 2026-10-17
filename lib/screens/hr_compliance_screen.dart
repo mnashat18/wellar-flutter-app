@@ -1,4 +1,6 @@
+import '../utils/safe_debug_log.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -42,18 +44,18 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
     super.initState();
     _workspaceIdentity = _identityOf(ref.read(activeWorkspaceContextProvider));
     _future = _load();
-    _workspaceSubscription = ref.listenManual(
-      activeWorkspaceContextProvider,
-      (previous, next) {
-        final nextIdentity = _identityOf(next);
-        if (nextIdentity == _workspaceIdentity) return;
-        if (!mounted) return;
-        setState(() {
-          _workspaceIdentity = nextIdentity;
-          _future = _load();
-        });
-      },
-    );
+    _workspaceSubscription = ref.listenManual(activeWorkspaceContextProvider, (
+      previous,
+      next,
+    ) {
+      final nextIdentity = _identityOf(next);
+      if (nextIdentity == _workspaceIdentity) return;
+      if (!mounted) return;
+      setState(() {
+        _workspaceIdentity = nextIdentity;
+        _future = _load();
+      });
+    });
   }
 
   @override
@@ -71,34 +73,53 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
     List<HrMemberView> members = const [];
     List<WorkspaceDepartment> departments = const [];
     int openAlertsCount = 0;
+    var supportingDataFailed = false;
     late WorkspaceReadinessSummary readinessSummary;
 
     try {
       snapshot = await HrOpsService.instance.fetchSnapshot();
     } catch (_) {
       snapshot = null;
+      supportingDataFailed = true;
     }
     try {
       members = await HrOpsService.instance.fetchWorkforce();
     } catch (_) {
       members = const [];
+      supportingDataFailed = true;
     }
     try {
       departments = await HrOpsService.instance.fetchDepartments();
     } catch (_) {
       departments = const [];
+      supportingDataFailed = true;
     }
     try {
       final alerts = await AlertService.instance.fetchAlerts(limit: 200);
       openAlertsCount = alerts.where((alert) => alert.isOpen).length;
     } catch (_) {
       openAlertsCount = 0;
+      supportingDataFailed = true;
     }
-    readinessSummary = await OwnerOpsService.instance
-        .fetchWorkspaceReadinessSummary(
-          start: _rangeStart(),
-          end: _rangeEnd(),
-        );
+    try {
+      readinessSummary = await OwnerOpsService.instance
+          .fetchWorkspaceReadinessSummary(
+            start: _rangeStart(),
+            end: _rangeEnd(),
+          );
+    } catch (_) {
+      readinessSummary = WorkspaceReadinessSummary(
+        distribution: const {
+          'Stable': 0,
+          'Low Focus': 0,
+          'Elevated Fatigue': 0,
+          'High Risk': 0,
+        },
+        resultsByScanId: const <String, OwnerAssessmentResult>{},
+        queryFailed: true,
+      );
+    }
+    supportingDataFailed = supportingDataFailed || readinessSummary.queryFailed;
 
     return _HrComplianceData(
       requests: requests,
@@ -109,6 +130,7 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
       readinessSummary: readinessSummary,
       assessmentsByScanId: readinessSummary.resultsByScanId,
       readinessFailed: readinessSummary.queryFailed,
+      partialDataFailed: supportingDataFailed,
     );
   }
 
@@ -121,7 +143,12 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
       backgroundColor: Colors.transparent,
       body: AnimatedWellarScreen(
         showBackground: false,
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        padding: const EdgeInsets.fromLTRB(
+          WellarTheme.pagePadding,
+          12,
+          WellarTheme.pagePadding,
+          24,
+        ),
         child: FutureBuilder<_HrComplianceData>(
           future: _future,
           builder: (context, snapshot) {
@@ -151,7 +178,12 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
                     ? Tr.t(lang, 'access_unavailable')
                     : Tr.t(lang, 'unable_load_reports_summary'),
                 actionLabel: Tr.t(lang, 'retry'),
-                onAction: () => setState(() => _future = _load()),
+                onAction: () {
+                  final next = _load();
+                  setState(() {
+                    _future = next;
+                  });
+                },
               );
             }
 
@@ -167,19 +199,26 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
             final missingScanEntries = _buildMissingScanEntries(data.members);
             final businessProfileId = workspace?.businessProfileId.trim() ?? '';
             final membershipId = workspace?.membershipId.trim() ?? '';
-            final role = (workspace?.finalEffectiveRole ??
-                    workspace?.memberRole ??
-                    'unknown')
-                .trim();
-            debugPrint(
+            final role =
+                (workspace?.finalEffectiveRole ??
+                        workspace?.memberRole ??
+                        'unknown')
+                    .trim();
+            safeDebugLog(
               '[HR_COMPLIANCE_CONTEXT] business_profile=$businessProfileId membership_id=$membershipId role=$role',
             );
-            debugPrint(
+            safeDebugLog(
               '[HR_COMPLIANCE_RENDER] total=${metrics.requiredCount} pending=${metrics.pendingCount} completed=${metrics.completedCount} overdue=${metrics.overdueCount}',
             );
 
             return RefreshIndicator(
-              onRefresh: () async => setState(() => _future = _load()),
+              onRefresh: () async {
+                final next = _load();
+                setState(() {
+                  _future = next;
+                });
+                await next;
+              },
               child: ListView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
@@ -191,10 +230,16 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
                       showAlertsTab: true,
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: WellarTheme.sectionGap),
+                  if (data.partialDataFailed) ...[
+                    _partialDataBanner(lang.isRtl),
+                    const SizedBox(height: 12),
+                  ],
                   _rangeSelector(lang),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   OwnerSurfaceCard(
+                    padding: const EdgeInsets.all(WellarTheme.cardPadding),
+                    radius: WellarTheme.cardRadius,
                     glow: true,
                     child: Row(
                       children: [
@@ -217,7 +262,10 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                metrics.requiredCount == 0
+                                data.readinessFailed
+                                    ? 'Unavailable'
+                                    : data.readinessSummary.totalCount == 0 ||
+                                          metrics.requiredCount == 0
                                     ? '-'
                                     : '${(metrics.completionRate * 100).round()}%',
                                 style: const TextStyle(
@@ -249,7 +297,7 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   SectionHeader(title: Tr.t(lang, 'operational_summary')),
                   const SizedBox(height: 10),
                   ResponsiveCardGrid(
@@ -275,7 +323,7 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
                           label: Tr.t(lang, 'pending'),
                           value: metrics.pendingCount,
                           icon: Icons.pending_actions_rounded,
-                          accent: const Color(0xFF7DBBFF),
+                          accent: WellarTheme.info,
                         ),
                       ),
                       ResponsiveCardGridItem(
@@ -283,7 +331,7 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
                           label: Tr.t(lang, 'overdue'),
                           value: metrics.overdueCount,
                           icon: Icons.schedule_outlined,
-                          accent: const Color(0xFFFFC46B),
+                          accent: WellarTheme.warning,
                         ),
                       ),
                       ResponsiveCardGridItem(
@@ -291,7 +339,7 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
                           label: Tr.t(lang, 'open_alerts'),
                           value: metrics.openAlertsCount,
                           icon: Icons.notification_important_outlined,
-                          accent: const Color(0xFF7DBBFF),
+                          accent: WellarTheme.info,
                         ),
                       ),
                       ResponsiveCardGridItem(
@@ -299,12 +347,12 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
                           label: Tr.t(lang, 'high_risk_today'),
                           value: metrics.highRiskCount,
                           icon: Icons.warning_amber_rounded,
-                          accent: const Color(0xFFFF7A8F),
+                          accent: WellarTheme.danger,
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   SectionHeader(title: Tr.t(lang, 'department_breakdown')),
                   const SizedBox(height: 10),
                   if (metrics.departmentRows.isEmpty)
@@ -320,7 +368,7 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
                         child: _departmentCard(row),
                       ),
                     ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   SectionHeader(
                     title: Tr.t(lang, 'readiness_distribution'),
                     subtitle: 'Completed scan results in this period.',
@@ -334,7 +382,7 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
                     end: _rangeEnd(),
                     periodLabel: _rangeLabel(lang, _range),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   SectionHeader(title: Tr.t(lang, 'quick_actions')),
                   const SizedBox(height: 10),
                   QuickActionButton(
@@ -390,6 +438,31 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
     );
   }
 
+  Widget _partialDataBanner(bool isRtl) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: WellarTheme.warning.withValues(alpha: 0.13),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: WellarTheme.warning.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: WellarTheme.warning),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              isRtl
+                  ? 'تعذّر تحميل بعض البيانات.'
+                  : 'Some data could not be loaded.',
+              style: const TextStyle(color: WellarTheme.text, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   _HrComplianceMetrics _buildMetrics({
     required List<RequestItem> requests,
     required Map<String, OwnerAssessmentResult> assessmentsByScanId,
@@ -398,12 +471,13 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
     required int openAlertsCount,
     required String unassignedLabel,
   }) {
-    final relevantEntries = requests
-        .where(_isAssignedRequest)
-        .map((item) => _toRequestEntry(item, assessmentsByScanId))
-        .where(_isRelevantForRange)
-        .toList()
-      ..sort(_sortRequestEntry);
+    final relevantEntries =
+        requests
+            .where(_isAssignedRequest)
+            .map((item) => _toRequestEntry(item, assessmentsByScanId))
+            .where(_isRelevantForRange)
+            .toList()
+          ..sort(_sortRequestEntry);
 
     final completedEntries = relevantEntries
         .where((entry) => entry.status == NormalizedRequestStatus.completed)
@@ -507,8 +581,9 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
   }
 
   int _sortRequestEntry(_RequestReportEntry a, _RequestReportEntry b) {
-    final priority =
-        _statusPriority(b.status).compareTo(_statusPriority(a.status));
+    final priority = _statusPriority(
+      b.status,
+    ).compareTo(_statusPriority(a.status));
     if (priority != 0) return priority;
     final aDate = a.primaryDate ?? DateTime.fromMillisecondsSinceEpoch(0);
     final bDate = b.primaryDate ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -557,16 +632,18 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
           ? ''
           : (membersByMembershipId[requestedForId]?.departmentId?.trim() ?? '');
       final directDeptId = entry.item.departmentId?.trim() ?? '';
-      final departmentId = memberDeptId.isNotEmpty ? memberDeptId : directDeptId;
+      final departmentId = memberDeptId.isNotEmpty
+          ? memberDeptId
+          : directDeptId;
       final memberDeptName = requestedForId.isEmpty
           ? null
           : membersByMembershipId[requestedForId]?.departmentName;
       final departmentName = (memberDeptName?.trim().isNotEmpty == true)
           ? memberDeptName!.trim()
           : (departmentNameById[departmentId]?.trim() ??
-              (entry.item.displayDepartment.trim().isNotEmpty
-                  ? entry.item.displayDepartment.trim()
-                  : ''));
+                (entry.item.displayDepartment.trim().isNotEmpty
+                    ? entry.item.displayDepartment.trim()
+                    : ''));
 
       if (departmentId.isNotEmpty) {
         final bucket = buckets.putIfAbsent(
@@ -594,14 +671,16 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
     for (final department in departments) {
       final bucket = buckets.remove(department.id);
       if (bucket == null) {
-        rows.add(_HrDepartmentComplianceRow(
-          name: department.displayName,
-          requiredCount: 0,
-          completedCount: 0,
-          pendingCount: 0,
-          overdueCount: 0,
-          completionRate: 0.0,
-        ));
+        rows.add(
+          _HrDepartmentComplianceRow(
+            name: department.displayName,
+            requiredCount: 0,
+            completedCount: 0,
+            pendingCount: 0,
+            overdueCount: 0,
+            completionRate: 0.0,
+          ),
+        );
       } else {
         rows.add(bucket.toRow(department.displayName));
       }
@@ -618,6 +697,8 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
   Widget _departmentCard(_HrDepartmentComplianceRow row) {
     final accent = _completionAccent(row.completionRate);
     return OwnerSurfaceCard(
+      padding: const EdgeInsets.all(WellarTheme.cardPadding),
+      radius: WellarTheme.cardRadius,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -648,7 +729,7 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
               minHeight: 6,
               value: row.completionRate.clamp(0.0, 1.0),
               color: accent,
-              backgroundColor: const Color(0x223A4A6D),
+              backgroundColor: WellarTheme.border.withValues(alpha: 0.28),
             ),
           ),
           const SizedBox(height: 14),
@@ -697,8 +778,8 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
       padding: const EdgeInsets.fromLTRB(12, 11, 12, 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: const Color(0x1AFFFFFF),
-        border: Border.all(color: const Color(0x18FFFFFF)),
+        color: WellarTheme.surfaceSoft,
+        border: Border.all(color: WellarTheme.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -738,17 +819,26 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
     final total = readiness.values.fold<int>(0, (sum, item) => sum + item);
     final hasResults = !readinessFailed && total > 0;
     return OwnerSurfaceCard(
-      onTap: () => Navigator.push(
-        context,
-        fadeSlideRoute(
-          CompanyReadinessResultsScreen(
-            initialSummary: readinessSummary,
-            start: start,
-            end: end,
-            periodLabel: periodLabel,
+      padding: const EdgeInsets.all(WellarTheme.cardPadding),
+      radius: WellarTheme.cardRadius,
+      onTap: () {
+        if (kDebugMode) {
+          safeDebugLog(
+            '[HR_READINESS_NAV] source=compliance_readiness_card destination=CompanyReadinessResultsScreen',
+          );
+        }
+        Navigator.push(
+          context,
+          fadeSlideRoute(
+            CompanyReadinessResultsScreen(
+              initialSummary: readinessSummary,
+              start: start,
+              end: end,
+              periodLabel: periodLabel,
+            ),
           ),
-        ),
-      ),
+        );
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -773,28 +863,15 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
           ),
           const SizedBox(height: 10),
           if (readinessFailed)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                children: [
-                  const Icon(
-                    Icons.info_outline_rounded,
-                    color: Color(0xFFFFC46B),
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  const Expanded(
-                    child: Text(
-                      'Readiness details unavailable for your role. Contact your admin to enable Directus read access on scan_results (relation scan_id → wellness_scans.business_profile).',
-                      style: TextStyle(
-                        color: WellarTheme.text,
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        height: 1.35,
-                      ),
-                    ),
-                  ),
-                ],
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Text(
+                'Unavailable',
+                style: TextStyle(
+                  color: WellarTheme.textMuted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             )
           else if (!hasResults)
@@ -867,14 +944,13 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
     );
   }
 
-  List<ReportDetailEntry> _buildMissingScanEntries(
-    List<HrMemberView> members,
-  ) {
+  List<ReportDetailEntry> _buildMissingScanEntries(List<HrMemberView> members) {
     final missingMembers = members
         .where((member) => member.isHrReadyScopeMember && member.missingCheck)
         .toList();
     missingMembers.sort(
-      (a, b) => a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
+      (a, b) =>
+          a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()),
     );
     return missingMembers
         .map(
@@ -897,9 +973,11 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
     final lines = <String>[
       if (entry.requestedAt != null)
         'Requested: ${_formatDate(entry.requestedAt)}',
-      if (entry.status == NormalizedRequestStatus.pending && entry.dueAt != null)
+      if (entry.status == NormalizedRequestStatus.pending &&
+          entry.dueAt != null)
         'Due: ${_formatDate(entry.dueAt)}',
-      if (entry.status == NormalizedRequestStatus.overdue && entry.dueAt != null)
+      if (entry.status == NormalizedRequestStatus.overdue &&
+          entry.dueAt != null)
         'Overdue since: ${_formatDate(entry.dueAt)}',
       if (entry.status == NormalizedRequestStatus.completed &&
           entry.completedAt != null)
@@ -911,7 +989,8 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
   String? _subtitleForEntry(_RequestReportEntry entry) {
     final assessment = entry.assessment;
     final segments = <String>[];
-    if (assessment?.outcome != null) segments.add('Outcome: ${assessment!.outcome}');
+    if (assessment?.outcome != null)
+      segments.add('Outcome: ${assessment!.outcome}');
     if (assessment?.readinessScore != null) {
       segments.add('Readiness score: ${assessment!.readinessScore}');
     }
@@ -984,9 +1063,9 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
   }
 
   Color _completionAccent(double value) {
-    if (value >= 0.75) return const Color(0xFF6EE7A8);
-    if (value >= 0.4) return const Color(0xFFFFC46B);
-    return const Color(0xFFFF7A8F);
+    if (value >= 0.75) return WellarTheme.success;
+    if (value >= 0.4) return WellarTheme.warning;
+    return WellarTheme.danger;
   }
 
   DateTime _rangeStart() {
@@ -1059,16 +1138,16 @@ class _HrComplianceScreenState extends ConsumerState<HrComplianceScreen> {
     Color color;
     switch (normalized) {
       case 'high risk':
-        color = const Color(0xFFFF7A8F);
+        color = WellarTheme.danger;
         break;
       case 'elevated fatigue':
-        color = const Color(0xFFFFC46B);
+        color = WellarTheme.warning;
         break;
       case 'low focus':
-        color = const Color(0xFF7DBBFF);
+        color = WellarTheme.info;
         break;
       default:
-        color = const Color(0xFF6EE7A8);
+        color = WellarTheme.success;
         break;
     }
     return Container(
@@ -1088,6 +1167,7 @@ class _HrComplianceData {
   final WorkspaceReadinessSummary readinessSummary;
   final Map<String, OwnerAssessmentResult> assessmentsByScanId;
   final bool readinessFailed;
+  final bool partialDataFailed;
 
   const _HrComplianceData({
     required this.requests,
@@ -1098,6 +1178,7 @@ class _HrComplianceData {
     required this.readinessSummary,
     required this.assessmentsByScanId,
     required this.readinessFailed,
+    required this.partialDataFailed,
   });
 }
 
@@ -1194,8 +1275,7 @@ class _DeptBucket {
   }
 
   _HrDepartmentComplianceRow toRow(String displayName) {
-    final rate =
-        requiredCount == 0 ? 0.0 : completedCount / requiredCount;
+    final rate = requiredCount == 0 ? 0.0 : completedCount / requiredCount;
     return _HrDepartmentComplianceRow(
       name: displayName,
       requiredCount: requiredCount,

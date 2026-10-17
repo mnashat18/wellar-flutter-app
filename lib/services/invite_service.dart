@@ -47,9 +47,11 @@ class InviteService {
         }
       } on DioException catch (e) {
         final message = _extractMessage(e).toLowerCase();
-        if (message.contains('does not exist') ||
-            message.contains('field') ||
-            message.contains('request')) {
+        // Only retry alternate field projections for a server-side schema error.
+        // Network/5xx/authorization failures must reach the UI as fetch errors.
+        if (e.response?.statusCode == 400 &&
+            message.contains('does not exist') &&
+            (message.contains('field') || message.contains('request'))) {
           continue;
         }
         rethrow;

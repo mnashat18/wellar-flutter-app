@@ -9,6 +9,7 @@ import '../services/request_service.dart';
 import '../state/app_providers.dart';
 import '../state/session.dart';
 import '../utils/app_colors.dart';
+import '../utils/app_feedback.dart';
 import '../widgets/animated_space_background.dart';
 import '../widgets/app_buttons.dart';
 import '../widgets/app_cards.dart';
@@ -263,17 +264,13 @@ class _HrRequestsScreenState extends ConsumerState<HrRequestsScreen> {
       });
     } on RequestCancellationException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(_cancelErrorMessage(error))));
+      AppFeedback.showError(context, _cancelErrorMessage(error));
       setState(() {
         _future = RequestService.instance.fetchHrRequests();
       });
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to cancel request right now.')),
-      );
+      AppFeedback.showError(context, 'Unable to cancel request right now.');
     } finally {
       if (mounted) {
         setState(() {
@@ -415,6 +412,14 @@ class _HrRequestsScreenState extends ConsumerState<HrRequestsScreen> {
                         ? null
                         : () async {
                             if (selected == null) return;
+                            if (ref
+                                    .read(connectivityStatusProvider)
+                                    .asData
+                                    ?.value ==
+                                false) {
+                              AppFeedback.showOffline(context);
+                              return;
+                            }
                             setStateModal(() {
                               submitting = true;
                               submitError = null;

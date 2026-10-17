@@ -1,4 +1,7 @@
+import '../utils/safe_debug_log.dart';
+import '../utils/scan_local_media_cleanup.dart';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -114,6 +117,7 @@ class HomeData {
       'Low Focus': 0,
       'Elevated Fatigue': 0,
       'High Risk': 0,
+      'Unavailable - please retake the scan': 0,
     };
 
     for (final r in results) {
@@ -131,7 +135,10 @@ class HomeData {
       return 'Elevated Fatigue';
     }
     if (v == 'high risk' || v == 'high_risk') return 'High Risk';
-    return value.isEmpty ? 'Stable' : value;
+    if (v == 'retake_required') {
+      return 'Unavailable - please retake the scan';
+    }
+    return 'Unavailable - please retake the scan';
   }
 }
 
@@ -144,7 +151,7 @@ class ScanService {
   static const Duration _videoUploadConnectTimeout = Duration(seconds: 45);
   static const Duration _videoUploadSendTimeout = Duration(minutes: 3);
   static const Duration _videoUploadReceiveTimeout = Duration(minutes: 3);
-  static const int _maxVideoUploadBytes = 80 * 1024 * 1024;
+  static const int _maxVideoUploadBytes = 18 * 1024 * 1024;
   static const int _maxPreferredVideoUploadBytes = 5 * 1024 * 1024;
 
   // ================================
@@ -165,11 +172,11 @@ class ScanService {
                 : workspace?.businessProfileId.trim() ?? '')
             .trim();
 
-    debugPrint('[HISTORY] load start');
-    debugPrint(
+    safeDebugLog('[HISTORY] load start');
+    safeDebugLog(
       '[OWNER_SCAN_HISTORY] has_user=true scoped_profile=${profileId.isNotEmpty} limit=$limit completed_results_only=$completedResultsOnly',
     );
-    debugPrint(
+    safeDebugLog(
       '[HISTORY] wellness_scans has_user=true scoped_profile=${profileId.isNotEmpty} limit=$limit',
     );
 
@@ -179,8 +186,8 @@ class ScanService {
         profileId: profileId,
         limit: limit,
       );
-      debugPrint('[OWNER_SCAN_HISTORY] result_count=${resultEntries.length}');
-      debugPrint(
+      safeDebugLog('[OWNER_SCAN_HISTORY] result_count=${resultEntries.length}');
+      safeDebugLog(
         '[OWNER_SCAN_HISTORY] has_latest_scan_id=${resultEntries.isNotEmpty && resultEntries.first.scanId.trim().isNotEmpty}',
       );
       return resultEntries;
@@ -202,7 +209,7 @@ class ScanService {
         queryParameters: queryParameters,
       );
     } on DioException catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[HISTORY] wellness_scans status=${e.response?.statusCode} body_count=0',
       );
       rethrow;
@@ -211,21 +218,21 @@ class ScanService {
     final scanRows = scansData is List
         ? scansData.whereType<Map<String, dynamic>>().toList()
         : <Map<String, dynamic>>[];
-    debugPrint(
+    safeDebugLog(
       '[HISTORY] wellness_scans status=${scansResponse.statusCode} body_count=${scanRows.length}',
     );
-    debugPrint('[HISTORY_DATA] wellness_count=${scanRows.length}');
-    debugPrint(
+    safeDebugLog('[HISTORY_DATA] wellness_count=${scanRows.length}');
+    safeDebugLog(
       '[HISTORY_DATA] result_query_scoped_profile=${profileId.isNotEmpty}',
     );
 
     if (scanRows.isEmpty) {
-      debugPrint('[HISTORY] empty');
-      debugPrint('[HISTORY_DATA] scan_results_status=200');
-      debugPrint('[HISTORY_DATA] result_count=0');
-      debugPrint('[HISTORY_DATA] completed_with_result=0');
-      debugPrint('[HISTORY_DATA] processing_count=0');
-      debugPrint('[HISTORY_DATA] failed_count=0');
+      safeDebugLog('[HISTORY] empty');
+      safeDebugLog('[HISTORY_DATA] scan_results_status=200');
+      safeDebugLog('[HISTORY_DATA] result_count=0');
+      safeDebugLog('[HISTORY_DATA] completed_with_result=0');
+      safeDebugLog('[HISTORY_DATA] processing_count=0');
+      safeDebugLog('[HISTORY_DATA] failed_count=0');
       return const [];
     }
 
@@ -251,8 +258,8 @@ class ScanService {
         }
       }
     }
-    debugPrint('[HISTORY_DATA] scan_results_status=$scanResultsStatus');
-    debugPrint('[HISTORY_DATA] result_count=${byScan.length}');
+    safeDebugLog('[HISTORY_DATA] scan_results_status=$scanResultsStatus');
+    safeDebugLog('[HISTORY_DATA] result_count=${byScan.length}');
 
     final entries = scanRows.map((row) {
       final id = row['id']?.toString() ?? '';
@@ -267,7 +274,7 @@ class ScanService {
       );
     }).toList();
 
-    debugPrint('[HISTORY] success count=${entries.length}');
+    safeDebugLog('[HISTORY] success count=${entries.length}');
     final completedWithResult = entries
         .where(
           (entry) =>
@@ -286,13 +293,13 @@ class ScanService {
           (entry) => _isHistoryFailedStatus(entry.status) && !entry.hasResult,
         )
         .length;
-    debugPrint('[OWNER_SCAN_HISTORY] result_count=${byScan.length}');
-    debugPrint(
+    safeDebugLog('[OWNER_SCAN_HISTORY] result_count=${byScan.length}');
+    safeDebugLog(
       '[OWNER_SCAN_HISTORY] has_latest_scan_id=${entries.isNotEmpty && entries.first.scanId.trim().isNotEmpty}',
     );
-    debugPrint('[HISTORY_DATA] completed_with_result=$completedWithResult');
-    debugPrint('[HISTORY_DATA] processing_count=$processingCount');
-    debugPrint('[HISTORY_DATA] failed_count=$failedCount');
+    safeDebugLog('[HISTORY_DATA] completed_with_result=$completedWithResult');
+    safeDebugLog('[HISTORY_DATA] processing_count=$processingCount');
+    safeDebugLog('[HISTORY_DATA] failed_count=$failedCount');
     return entries;
   }
 
@@ -301,7 +308,7 @@ class ScanService {
     required String profileId,
     required int limit,
   }) async {
-    debugPrint(
+    safeDebugLog(
       '[OWNER_SCAN_HISTORY] query_keys=[wellness_scans + per-scan lookup] scoped_profile=${profileId.isNotEmpty}',
     );
     try {
@@ -314,7 +321,7 @@ class ScanService {
           .where((entry) => entry.hasResult)
           .where((entry) => entry.status.trim().toLowerCase() == 'completed')
           .toList();
-      debugPrint(
+      safeDebugLog(
         '[OWNER_HISTORY_SOURCE] endpoint=/items/wellness_scans + /items/scan_results raw_count=${rows.length} has_latest_scan_id=${rows.isNotEmpty && rows.first.scanId.trim().isNotEmpty}',
       );
       final seenScanIds = <String>{};
@@ -327,7 +334,7 @@ class ScanService {
         if (seenScanIds.contains(scanId)) continue;
         if (resultId.isNotEmpty && seenResultIds.contains(resultId)) continue;
         final result = row.result!;
-        debugPrint(
+        safeDebugLog(
           '[OWNER_HISTORY_RESULT] has_scan_id=${result.scanId.trim().isNotEmpty} has_risk_level=${(result.riskLevel ?? result.overallState).trim().isNotEmpty == true} has_readiness_score=${result.readinessScore != null} has_date_created=${result.dateCreated != null}',
         );
         seenScanIds.add(scanId);
@@ -337,7 +344,7 @@ class ScanService {
       return deduped;
     } on DioException catch (e) {
       final status = e.response?.statusCode ?? 0;
-      debugPrint(
+      safeDebugLog(
         '[OWNER_SCAN_HISTORY] result_count=0 direct_result_query_status=$status',
       );
       if (status == 400 || status == 403 || status == 422) {
@@ -352,7 +359,7 @@ class ScanService {
     if (userId == null) {
       return const HomeData(results: []);
     }
-    debugPrint(
+    safeDebugLog(
       '[HOME_DATA] start has_user=${userId.trim().isNotEmpty} limit=$limit',
     );
 
@@ -360,7 +367,7 @@ class ScanService {
       final scanIds = await _fetchUserScanIds(userId: userId, limit: limit);
 
       if (scanIds.isEmpty) {
-        debugPrint('[HOME_DATA] no scans found');
+        safeDebugLog('[HOME_DATA] no scans found');
         return const HomeData(results: []);
       }
 
@@ -374,11 +381,11 @@ class ScanService {
           userId: userId,
           limit: limit,
         );
-        debugPrint('[HOME_DATA] fallback results count=${fallback.length}');
+        safeDebugLog('[HOME_DATA] fallback results count=${fallback.length}');
         return HomeData(results: fallback);
       }
 
-      debugPrint('[HOME_DATA] success results count=${results.length}');
+      safeDebugLog('[HOME_DATA] success results count=${results.length}');
       return HomeData(results: results);
     } on DioException catch (e) {
       final status = e.response?.statusCode ?? 0;
@@ -391,11 +398,11 @@ class ScanService {
         return const HomeData(results: []);
       }
       if (_isTransientNetworkError(e)) {
-        debugPrint('[HOME_DATA] transient fail ${_extractMessage(e)}');
+        safeDebugLog('[HOME_DATA] transient fail ${_extractMessage(e)}');
         return const HomeData(results: []);
       }
       _logDioError('GET', '/items/wellness_scans|/items/scan_results', e);
-      debugPrint('[HOME_DATA] fail ${_extractMessage(e)}');
+      safeDebugLog('[HOME_DATA] fail ${_extractMessage(e)}');
       rethrow;
     }
   }
@@ -403,6 +410,83 @@ class ScanService {
   // ================================
   // SCANS
   // ================================
+  Future<String?> _findRecentInProgressWellnessScan({
+    required String memberId,
+    required String businessProfileId,
+  }) async {
+    final cutoff = DateTime.now()
+        .toUtc()
+        .subtract(const Duration(minutes: 10))
+        .toIso8601String();
+    const activeStatuses = 'pending,media_ready,processing,in_progress';
+    final query = <String, dynamic>{
+      'filter[member][_eq]': memberId,
+      'filter[business_profile][_eq]': businessProfileId,
+      'filter[status][_in]': activeStatuses,
+      'filter[date_created][_gte]': cutoff,
+      'sort': '-date_created',
+      'limit': 10,
+      'fields': 'id,status,date_created',
+    };
+
+    try {
+      await _logRequest(
+        method: 'GET',
+        path: '/items/wellness_scans',
+        query: query,
+      );
+      final response = await DirectusClient.instance.client.get(
+        '/items/wellness_scans',
+        queryParameters: query,
+      );
+      await _logResponse(
+        method: 'GET',
+        path: '/items/wellness_scans',
+        status: response.statusCode,
+        body: response.data,
+      );
+      final rows = response.data['data'];
+      if (rows is! List) {
+        throw const FormatException(
+          'Recent wellness scan lookup returned an invalid response.',
+        );
+      }
+
+      for (final row in rows) {
+        if (row is! Map) continue;
+        final status = row['status']?.toString().trim().toLowerCase() ?? '';
+        final createdAt = DateTime.tryParse(
+          row['date_created']?.toString() ?? '',
+        );
+        final id = row['id']?.toString().trim() ?? '';
+        if (id.isEmpty ||
+            !const {
+              'pending',
+              'media_ready',
+              'processing',
+              'in_progress',
+            }.contains(status) ||
+            createdAt == null ||
+            createdAt.isBefore(
+              DateTime.now().toUtc().subtract(const Duration(minutes: 10)),
+            )) {
+          continue;
+        }
+        safeDebugLog(
+          '[SCAN_CREATE_GUARD] recent_pending_scan_found has_scan_id=true status=$status',
+        );
+        return id;
+      }
+      return null;
+    } on DioException catch (error, stackTrace) {
+      await _logError(method: 'GET', path: '/items/wellness_scans', e: error);
+      safeDebugLog(
+        '[SCAN_CREATE_GUARD] recent_scan_lookup_failed error_type=${error.runtimeType} stack_present=${stackTrace.toString().isNotEmpty}',
+      );
+      rethrow;
+    }
+  }
+
   Future<String> createWellnessScan({
     bool consentGranted = true,
     Map<String, dynamic>? deviceInfo,
@@ -484,6 +568,12 @@ class ScanService {
     );
     final parsedMemberId = _parseMemberId(resolvedMemberIdRaw);
 
+    final recentScanId = await _findRecentInProgressWellnessScan(
+      memberId: parsedMemberId.toString(),
+      businessProfileId: resolvedBusinessProfileId,
+    );
+    if (recentScanId != null) return recentScanId;
+
     final payload = <String, dynamic>{
       'status': 'pending',
       'user': userId.trim(),
@@ -508,10 +598,10 @@ class ScanService {
         'shift_template_name_snapshot': resolvedShiftTemplateNameSnapshot,
     };
 
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] create wellness_scan context has_user=${userId.trim().isNotEmpty} has_member=${resolvedMemberIdRaw.trim().isNotEmpty} scoped_profile=${resolvedBusinessProfileId.trim().isNotEmpty} scoped_department=${resolvedDepartmentId.trim().isNotEmpty}',
     );
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] create wellness_scan payload_keys=${payload.keys.toList()}',
     );
 
@@ -531,19 +621,19 @@ class ScanService {
         status: response.statusCode,
         body: response.data,
       );
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] create wellness_scan status: ${response.statusCode}',
       );
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] create wellness_scan body_type=${response.data.runtimeType}',
       );
       return response.data['data']['id'].toString();
     } on DioException catch (e) {
       await _logError(method: 'POST', path: '/items/wellness_scans', e: e);
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] create wellness_scan status: ${e.response?.statusCode ?? 0}',
       );
-      debugPrint('[ScanFlow] create wellness_scan error_type=${e.type}');
+      safeDebugLog('[ScanFlow] create wellness_scan error_type=${e.type}');
       throw ScanServiceException(
         method: 'POST',
         path: '/items/wellness_scans',
@@ -556,7 +646,7 @@ class ScanService {
 
   Future<void> markWellnessScanMediaReady({required String scanId}) async {
     final payload = <String, dynamic>{'status': 'media_ready'};
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] status changed to media_ready has_scan_id=${scanId.trim().isNotEmpty} payload_keys=${payload.keys.toList()}',
     );
     try {
@@ -575,7 +665,7 @@ class ScanService {
         status: response.statusCode,
         body: response.data,
       );
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] status changed to media_ready has_scan_id=${scanId.trim().isNotEmpty} status=${response.statusCode} body_type=${response.data.runtimeType}',
       );
     } on DioException catch (e) {
@@ -602,7 +692,7 @@ class ScanService {
       'status': 'failed',
       'failure_reason': failureReason,
     };
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] status changed to failed has_scan_id=${scanId.trim().isNotEmpty} payload_keys=${payload.keys.toList()}',
     );
     try {
@@ -621,7 +711,7 @@ class ScanService {
         status: response.statusCode,
         body: response.data,
       );
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] status changed to failed has_scan_id=${scanId.trim().isNotEmpty} status=${response.statusCode} body_type=${response.data.runtimeType}',
       );
     } on DioException catch (e) {
@@ -642,36 +732,79 @@ class ScanService {
 
   Future<ProcessTriggerResponse> triggerAiServerProcess({
     required String scanId,
+    required String audioFileId,
+    required String videoFileId,
   }) async {
-    // Pre-flight check: require valid Directus access token
-    final accessToken = Session.instance.accessToken;
-    if (accessToken == null || accessToken.trim().isEmpty) {
+    final signedInUserId = Session.instance.userId?.trim();
+    final accessToken = Session.instance.accessToken?.trim();
+    if (signedInUserId == null || signedInUserId.isEmpty ||
+        accessToken == null || accessToken.isEmpty) {
       throw const UnauthenticatedException('Session expired. Please login.');
     }
 
-    final payload = <String, dynamic>{'scan_id': scanId};
-    final headers = <String, dynamic>{
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $accessToken',
-    };
-
-    final dio = Dio(
-      BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(seconds: 30),
-        sendTimeout: const Duration(seconds: 15),
-        headers: headers,
-      ),
+    // Read the exact metadata already persisted on this Directus scan. The
+    // shared Directus Dio attaches the session token and performs its normal
+    // one-time token refresh/retry on 401, including for the absolute AI URL.
+    final scanResponse = await DirectusClient.instance.client.get(
+      '/items/wellness_scans/${Uri.encodeComponent(scanId)}',
+      queryParameters: {
+        'fields': 'id,user,task_metrics,device_info,environment_info',
+      },
     );
-    debugPrint(
+    final scanData = scanResponse.data is Map
+        ? (scanResponse.data['data'] is Map
+              ? scanResponse.data['data'] as Map
+              : const <dynamic, dynamic>{})
+        : const <dynamic, dynamic>{};
+    final rawOwner = scanData['user'];
+    final scanOwnerId = (rawOwner is Map ? rawOwner['id'] : rawOwner)
+        ?.toString()
+        .trim();
+    if (scanOwnerId != signedInUserId) {
+      throw const PermissionDeniedException(
+        'Scan does not belong to the signed-in user.',
+      );
+    }
+
+    final payload = <String, dynamic>{
+      'scan_id': scanId.trim(),
+      'user_id': signedInUserId,
+      'video_file_id': videoFileId.trim(),
+      'audio_file_id': audioFileId.trim(),
+      'task_metrics': _boundedMetadata(scanData['task_metrics']),
+      'device_info': _boundedMetadata(scanData['device_info']),
+      'environment_info': _boundedMetadata(scanData['environment_info']),
+    };
+    while (utf8.encode(jsonEncode(payload)).length > 16 * 1024) {
+      final maps = <String>['task_metrics', 'device_info', 'environment_info'];
+      final mapName = maps.reversed.firstWhere(
+        (name) => (payload[name] as Map).isNotEmpty,
+        orElse: () => '',
+      );
+      if (mapName.isEmpty) {
+        throw const FormatException('V2 process request exceeds 16 KiB.');
+      }
+      (payload[mapName] as Map).remove((payload[mapName] as Map).keys.last);
+    }
+
+    safeDebugLog(
       '[ScanFlow] AI Server /process request has_scan_id=${scanId.trim().isNotEmpty}',
     );
     try {
-      final response = await dio.post(aiServerProcessUrl, data: payload);
+      final response = await DirectusClient.instance.client.post(
+        aiServerProcessUrl,
+        data: payload,
+        options: Options(
+          contentType: Headers.jsonContentType,
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(seconds: 30),
+          sendTimeout: const Duration(seconds: 15),
+        ),
+      );
       final body = response.data is Map<String, dynamic>
           ? response.data as Map<String, dynamic>
           : <String, dynamic>{'data': response.data};
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] AI Server /process response status=${response.statusCode} body_type=${body.runtimeType}',
       );
       return ProcessTriggerResponse(
@@ -680,7 +813,7 @@ class ScanService {
       );
     } on DioException catch (e) {
       final status = e.response?.statusCode ?? 0;
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] AI Server /process response status=$status error_type=${e.type}',
       );
       // Convert 401 to authentication exception (consistent with fetchHomeData pattern)
@@ -697,12 +830,29 @@ class ScanService {
     }
   }
 
+  Map<String, dynamic> _boundedMetadata(dynamic value) {
+    if (value is! Map) return <String, dynamic>{};
+    final result = <String, dynamic>{};
+    for (final entry in value.entries) {
+      if (result.length == 32) break;
+      final key = entry.key?.toString();
+      if (key == null || key.isEmpty) continue;
+      try {
+        jsonEncode(entry.value);
+        result[key] = entry.value;
+      } on Object {
+        continue;
+      }
+    }
+    return result;
+  }
+
   Future<WellnessScanStatus> fetchWellnessScanStatus(String scanId) async {
     try {
       const requestedFields =
           'id,status,failure_reason,completed_at,date_updated';
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_STATUS] request ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} fields_present=${requestedFields.isNotEmpty}',
         );
       }
@@ -716,7 +866,7 @@ class ScanService {
         queryParameters: {'fields': requestedFields},
       );
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_STATUS] response ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} http_status=${response.statusCode} body_type=${response.data.runtimeType}',
         );
       }
@@ -728,18 +878,18 @@ class ScanService {
       );
       final data = response.data['data'] as Map<String, dynamic>? ?? const {};
       final snapshot = WellnessScanStatus.fromJson(data);
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] polling status has_scan_id=${scanId.trim().isNotEmpty} status=${snapshot.status} has_failure_reason=${snapshot.failureReason?.trim().isNotEmpty == true} has_completed_at=${snapshot.completedAt != null}',
       );
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_STATUS] parsed ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} status=${snapshot.status} has_failure_reason=${snapshot.failureReason?.trim().isNotEmpty == true} has_completed_at=${snapshot.completedAt != null} has_date_updated=${snapshot.dateUpdated != null}',
         );
       }
       return snapshot;
     } on DioException catch (e) {
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_STATUS] error ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} http_status=${e.response?.statusCode ?? 0} error_type=${e.type}',
         );
       }
@@ -768,17 +918,19 @@ class ScanService {
     final fileLength = await _safeFileLength(file);
     final fileExists = fileLength != null && fileLength > 0;
 
-    debugPrint('[ScanFlow] upload request path=/files');
-    debugPrint('[ScanFlow] multipart field name: file');
-    debugPrint('[ScanFlow] upload file name_present=${name.trim().isNotEmpty}');
-    debugPrint(
+    safeDebugLog('[ScanFlow] upload request path=/files');
+    safeDebugLog('[ScanFlow] multipart field name: file');
+    safeDebugLog(
+      '[ScanFlow] upload file name_present=${name.trim().isNotEmpty}',
+    );
+    safeDebugLog(
       '[ScanFlow] upload file path_present=${filePath.trim().isNotEmpty}',
     );
-    debugPrint('[ScanFlow] upload file exists: $fileExists');
-    debugPrint('[ScanFlow] upload file size: ${fileLength ?? 0}');
+    safeDebugLog('[ScanFlow] upload file exists: $fileExists');
+    safeDebugLog('[ScanFlow] upload file size: ${fileLength ?? 0}');
 
     if (filePath.trim().isEmpty) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FILE_UPLOAD_PRECHECK] filename_present=${name.trim().isNotEmpty} file_path_empty=true file_exists=false file_size=0',
       );
       throw const ScanServiceException(
@@ -788,7 +940,7 @@ class ScanService {
       );
     }
     if (!fileExists) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FILE_UPLOAD_PRECHECK] filename_present=${name.trim().isNotEmpty} file_path_present=${filePath.trim().isNotEmpty} file_exists=$fileExists file_size=${fileLength ?? 0}',
       );
       throw ScanServiceException(
@@ -802,11 +954,19 @@ class ScanService {
 
     if (kIsWeb) {
       final bytes = await file.readAsBytes();
-      return uploadBytes(bytes, filename: name);
+      return uploadBytes(
+        bytes,
+        filename: name,
+        contentType: DioMediaType('audio', 'wav'),
+      );
     }
 
     final formData = FormData.fromMap({
-      'file': await MultipartFile.fromFile(file.path, filename: name),
+      'file': await MultipartFile.fromFile(
+        file.path,
+        filename: name,
+        contentType: DioMediaType('audio', 'wav'),
+      ),
     });
 
     try {
@@ -815,6 +975,7 @@ class ScanService {
         path: '/files',
         payload: {'file': name},
       );
+      safeDebugLog('[SCAN_AUDIO_FILE_POST_DISPATCH]');
       final response = await DirectusClient.instance.client.post(
         '/files',
         data: formData,
@@ -828,7 +989,7 @@ class ScanService {
       );
       _logScanUploadResponse(response);
       _logScanFileContract(response);
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] upload media status=${response.statusCode} body_type=${response.data.runtimeType}',
       );
 
@@ -854,7 +1015,7 @@ class ScanService {
         error: e,
         stackTrace: stackTrace,
       );
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] upload media status=${e.response?.statusCode} error_type=${e.type}',
       );
       throw ScanServiceException(
@@ -878,19 +1039,20 @@ class ScanService {
         file.mimeType ??
         MultipartFile.lookupMediaType(originalPath)?.mimeType ??
         'video/mp4';
+    XFile? temporaryUploadFile;
 
-    debugPrint('[ScanFlow] upload request path=/files');
-    debugPrint('[ScanFlow] multipart field name: file');
-    debugPrint(
+    safeDebugLog('[ScanFlow] upload request path=/files');
+    safeDebugLog('[ScanFlow] multipart field name: file');
+    safeDebugLog(
       '[ScanFlow] video file path_present=${originalPath.trim().isNotEmpty}',
     );
-    debugPrint('[ScanFlow] video mime type: $detectedMimeType');
+    safeDebugLog('[ScanFlow] video mime type: $detectedMimeType');
 
     try {
       if (kIsWeb) {
         final bytes = await file.readAsBytes();
-        debugPrint('[ScanFlow] video file exists: true');
-        debugPrint('[ScanFlow] video file size: ${bytes.length}');
+        safeDebugLog('[ScanFlow] video file exists: true');
+        safeDebugLog('[ScanFlow] video file size: ${bytes.length}');
         if (bytes.isEmpty) {
           throw const ScanServiceException(
             method: 'POST',
@@ -898,19 +1060,26 @@ class ScanService {
             message: 'Video file is empty.',
           );
         }
-        return uploadBytes(bytes, filename: uploadName);
+        return uploadBytes(
+          bytes,
+          filename: uploadName,
+          contentType: DioMediaType('video', 'mp4'),
+        );
       }
 
       final preparedVideo = await _prepareVideoUploadFile(
         file: file,
         scanId: scanId,
       );
+      temporaryUploadFile = preparedVideo.file.path == originalPath
+          ? null
+          : preparedVideo.file;
       final videoExists = preparedVideo.exists;
       final videoSize = preparedVideo.sizeBytes ?? 0;
 
-      debugPrint('[ScanFlow] video file exists: $videoExists');
-      debugPrint('[ScanFlow] video file size: $videoSize');
-      debugPrint('[ScanFlow] video safe file path_present=true');
+      safeDebugLog('[ScanFlow] video file exists: $videoExists');
+      safeDebugLog('[ScanFlow] video file size: $videoSize');
+      safeDebugLog('[ScanFlow] video safe file path_present=true');
 
       if (!videoExists) {
         throw const ScanServiceException(
@@ -946,7 +1115,7 @@ class ScanService {
           await Future.delayed(retryDelays[attempt]);
         }
         try {
-          debugPrint(
+          safeDebugLog(
             '[SCAN_VIDEO] upload attempt=${attempt + 1} '
             'has_scan_id=${scanId.trim().isNotEmpty} '
             'file_size=$videoSize '
@@ -966,6 +1135,7 @@ class ScanService {
               contentType: DioMediaType('video', 'mp4'),
             ),
           });
+          safeDebugLog('[SCAN_VIDEO_FILE_POST_DISPATCH]');
           final response = await DirectusClient.instance.client.post(
             '/files',
             data: formData,
@@ -993,7 +1163,7 @@ class ScanService {
           );
           _logScanUploadResponse(response);
           _logScanFileContract(response);
-          debugPrint(
+          safeDebugLog(
             '[ScanFlow] upload video status=${response.statusCode} body_type=${response.data.runtimeType}',
           );
           final fileId = _extractUploadedFileId(
@@ -1094,24 +1264,36 @@ class ScanService {
         path: '/files',
         message: 'Video upload failed before the request was completed: $e',
       );
+    } finally {
+      if (temporaryUploadFile != null) {
+        await deleteLocalScanFiles([temporaryUploadFile]);
+      }
     }
   }
 
   Future<String> uploadBytes(
     Uint8List bytes, {
     required String filename,
+    DioMediaType? contentType,
   }) async {
+    final lowerFilename = filename.toLowerCase();
+    final resolvedContentType = contentType ??
+        (lowerFilename.endsWith('.mp4')
+            ? DioMediaType('video', 'mp4')
+            : lowerFilename.endsWith('.wav')
+            ? DioMediaType('audio', 'wav')
+            : DioMediaType('image', 'jpeg'));
     final requestUrl = _absoluteUrl('/files');
-    debugPrint('[ScanFlow] upload request path=/files');
-    debugPrint('[ScanFlow] multipart field name: file');
-    debugPrint(
+    safeDebugLog('[ScanFlow] upload request path=/files');
+    safeDebugLog('[ScanFlow] multipart field name: file');
+    safeDebugLog(
       '[ScanFlow] upload file name_present=${filename.trim().isNotEmpty}',
     );
-    debugPrint('[ScanFlow] upload file source=bytes');
-    debugPrint('[ScanFlow] upload file exists: ${bytes.isNotEmpty}');
-    debugPrint('[ScanFlow] upload file size: ${bytes.length}');
+    safeDebugLog('[ScanFlow] upload file source=bytes');
+    safeDebugLog('[ScanFlow] upload file exists: ${bytes.isNotEmpty}');
+    safeDebugLog('[ScanFlow] upload file size: ${bytes.length}');
     if (bytes.isEmpty) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_FILE_UPLOAD_PRECHECK] filename_present=${filename.trim().isNotEmpty} file_source=bytes file_exists=false file_size=0',
       );
       throw const ScanServiceException(
@@ -1122,7 +1304,11 @@ class ScanService {
     }
 
     final formData = FormData.fromMap({
-      'file': MultipartFile.fromBytes(bytes, filename: filename),
+      'file': MultipartFile.fromBytes(
+        bytes,
+        filename: filename,
+        contentType: resolvedContentType,
+      ),
     });
 
     try {
@@ -1131,6 +1317,7 @@ class ScanService {
         path: '/files',
         payload: {'file': filename},
       );
+      safeDebugLog('[SCAN_BYTES_FILE_POST_DISPATCH]');
       final response = await DirectusClient.instance.client.post(
         '/files',
         data: formData,
@@ -1144,7 +1331,7 @@ class ScanService {
       );
       _logScanUploadResponse(response);
       _logScanFileContract(response);
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] upload media status=${response.statusCode} body_type=${response.data.runtimeType}',
       );
 
@@ -1170,7 +1357,7 @@ class ScanService {
         error: e,
         stackTrace: stackTrace,
       );
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] upload media status=${e.response?.statusCode} error_type=${e.type}',
       );
       throw ScanServiceException(
@@ -1196,7 +1383,7 @@ class ScanService {
     final queryParameters = {'fields': fields};
     try {
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_RESULTS] direct_request ts=${DateTime.now().toIso8601String()} has_result_id=${resultId.trim().isNotEmpty} path=/items/scan_results/:id query_keys=${queryParameters.keys.toList()}',
         );
       }
@@ -1210,7 +1397,7 @@ class ScanService {
         queryParameters: queryParameters,
       );
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_RESULTS] direct_response ts=${DateTime.now().toIso8601String()} has_result_id=${resultId.trim().isNotEmpty} http_status=${response.statusCode} body_type=${response.data.runtimeType}',
         );
       }
@@ -1232,7 +1419,7 @@ class ScanService {
       final status = e.response?.statusCode ?? 0;
       if (status != 400 && status != 403 && status != 422) {
         if (kDebugMode) {
-          debugPrint(
+          safeDebugLog(
             '[SCAN_RESULTS] direct_error ts=${DateTime.now().toIso8601String()} has_result_id=${resultId.trim().isNotEmpty} http_status=$status error_type=${e.type}',
           );
         }
@@ -1243,7 +1430,7 @@ class ScanService {
         queryParameters: {'fields': _scanResultFieldsMinimal},
       );
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_RESULTS] direct_fallback_response ts=${DateTime.now().toIso8601String()} has_result_id=${resultId.trim().isNotEmpty} http_status=${response.statusCode} body_type=${response.data.runtimeType}',
         );
       }
@@ -1270,7 +1457,7 @@ class ScanService {
     };
     try {
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_RESULTS] request ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} path=/items/scan_results query_keys=${queryParameters.keys.toList()}',
         );
       }
@@ -1284,7 +1471,7 @@ class ScanService {
         queryParameters: queryParameters,
       );
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_RESULTS] response ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} http_status=${response.statusCode} body_type=${response.data.runtimeType}',
         );
       }
@@ -1298,7 +1485,7 @@ class ScanService {
       await _logError(method: 'GET', path: '/items/scan_results', e: e);
       final status = e.response?.statusCode ?? 0;
       if (status != 400 && status != 403 && status != 422) {
-        debugPrint(
+        safeDebugLog(
           '[ScanFlow] wait for scan_results status=$status error_type=${e.type}',
         );
         rethrow;
@@ -1314,21 +1501,21 @@ class ScanService {
       final first = data.isNotEmpty && data.first is Map
           ? data.first as Map<dynamic, dynamic>
           : null;
-      debugPrint(
+      safeDebugLog(
         '[SCAN_RESULTS] has_scan_id=${scanId.trim().isNotEmpty} status=${response.statusCode} count=${data.length} has_first_result_id=${(first?['id']?.toString().trim() ?? '').isNotEmpty}',
       );
-      debugPrint(
+      safeDebugLog(
         '[SCAN_RESULTS] parsed ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} count=${data.length} has_first_id=${(first?['id']?.toString().trim() ?? '').isNotEmpty} has_risk_level=${(first?['risk_level']?.toString().trim() ?? '').isNotEmpty} has_readiness_score=${(first?['readiness_score']?.toString().trim() ?? '').isNotEmpty}',
       );
     }
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] wait for scan_results status/body: ${response.statusCode}/${data.length}',
     );
     if (data.isEmpty) {
       return const ScanResultLookup(result: null, count: 0);
     }
 
-    debugPrint('[SCAN_FLOW] result ready');
+    safeDebugLog('[SCAN_FLOW] result ready');
     final firstRow = data.first is Map<String, dynamic>
         ? data.first as Map<String, dynamic>
         : data.first is Map
@@ -1342,10 +1529,10 @@ class ScanService {
       parsedResult = ScanResult.fromJson(firstRow);
     } catch (e, s) {
       if (kDebugMode) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_RESULTS] list_parse_failed ts=${DateTime.now().toIso8601String()} has_scan_id=${scanId.trim().isNotEmpty} has_first_result_id=${firstResultId?.trim().isNotEmpty == true} error_type=${e.runtimeType}',
         );
-        debugPrint(
+        safeDebugLog(
           '[SCAN_RESULTS] list_parse_stack_present=${s.toString().isNotEmpty}',
         );
       }
@@ -1401,7 +1588,7 @@ class ScanService {
       'is_deleted': false,
     };
 
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] create scan_media payload_keys=${payload.keys.toList()} has_scan_id=${scanId.trim().isNotEmpty} has_video=${videoFileId?.trim().isNotEmpty == true} has_audio=${audioFileId?.trim().isNotEmpty == true} has_thumbnail=${thumbnailFileId?.trim().isNotEmpty == true} scoped_profile=${resolvedBusinessProfileId.isNotEmpty}',
     );
     try {
@@ -1420,13 +1607,13 @@ class ScanService {
         status: response.statusCode,
         body: response.data,
       );
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] create scan_media status=${response.statusCode} body_type=${response.data.runtimeType}',
       );
       return response.data['data']['id'].toString();
     } on DioException catch (e) {
       await _logError(method: 'POST', path: '/items/scan_media', e: e);
-      debugPrint(
+      safeDebugLog(
         '[ScanFlow] create scan_media status=${e.response?.statusCode ?? 0} error_type=${e.type}',
       );
       throw ScanServiceException(
@@ -1512,7 +1699,7 @@ class ScanService {
 
     final data = (response.data['data'] as List<dynamic>)
         .cast<Map<String, dynamic>>();
-    debugPrint('[WELLNESS_SCANS] query response count=${data.length}');
+    safeDebugLog('[WELLNESS_SCANS] query response count=${data.length}');
 
     return data.map((e) => e['id'].toString()).toList();
   }
@@ -1732,7 +1919,7 @@ class ScanService {
             .map((e) => (e['field'] ?? '').toString())
             .where((e) => e.isNotEmpty)
             .toSet();
-        debugPrint(
+        safeDebugLog(
           '[SCAN_RESULTS_SCHEMA] fields_found_count=${available.length}',
         );
         final selected = <String>{
@@ -1740,28 +1927,28 @@ class ScanService {
           ...preferred.where(available.contains),
         }..addAll(scanResultAssessmentFieldNames);
         if (selected.contains('id') && selected.contains('scan_id')) {
-          debugPrint(
+          safeDebugLog(
             '[SCAN_RESULTS_SCHEMA] has_ai_model_version=${selected.contains('ai_model_version')} has_baseline_used=${selected.contains('baseline_used')}',
           );
           _cachedScanResultsFields = selected.join(',');
-          debugPrint(
+          safeDebugLog(
             '[SCAN_RESULTS_SCHEMA] selected_field_count=${selected.length}',
           );
           return _cachedScanResultsFields!;
         }
       }
     } on DioException catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_RESULTS_SCHEMA] unable_to_read_fields status=${e.response?.statusCode} error_type=${e.type}',
       );
     } catch (e) {
-      debugPrint(
+      safeDebugLog(
         '[SCAN_RESULTS_SCHEMA] unexpected_error_type=${e.runtimeType}',
       );
     }
 
     _cachedScanResultsFields = _scanResultFieldsMinimal;
-    debugPrint(
+    safeDebugLog(
       '[SCAN_RESULTS_SCHEMA] fallback_field_count=${_cachedScanResultsFields!.split(',').length}',
     );
     return _cachedScanResultsFields!;
@@ -1935,7 +2122,7 @@ class ScanService {
         processedSource.path.trim() != sourcePath ||
         (processedSizeValue > 0 && processedSizeValue < sourceSize);
 
-    debugPrint(
+    safeDebugLog(
       '[SCAN_VIDEO] upload source selected '
       'has_scan_id=${scanId.trim().isNotEmpty} '
       'original_size=$sourceSize '
@@ -1954,6 +2141,9 @@ class ScanService {
         'scan_video_$safeScanId.mp4';
 
     await processedSource.saveTo(safePath);
+    if (processedSource.path.trim() != sourcePath) {
+      await deleteLocalScanFiles([processedSource]);
+    }
 
     final safeFile = XFile(
       safePath,
@@ -2002,30 +2192,34 @@ class ScanService {
     required DioException error,
     required StackTrace stackTrace,
   }) {
-    debugPrint('[ScanFlow] video file exists: $fileExists');
-    debugPrint('[ScanFlow] video file size: $fileSize');
-    debugPrint(
+    safeDebugLog('[ScanFlow] video file exists: $fileExists');
+    safeDebugLog('[ScanFlow] video file size: $fileSize');
+    safeDebugLog(
       '[ScanFlow] video file path_present=${sourcePath.trim().isNotEmpty}',
     );
-    debugPrint('[ScanFlow] video mime type: $mimeType');
-    debugPrint('[ScanFlow] video retry count: $retryCount');
-    debugPrint('[ScanFlow] video compression performed: $compressionPerformed');
-    debugPrint('[ScanFlow] multipart field name: file');
-    debugPrint(
+    safeDebugLog('[ScanFlow] video mime type: $mimeType');
+    safeDebugLog('[ScanFlow] video retry count: $retryCount');
+    safeDebugLog(
+      '[ScanFlow] video compression performed: $compressionPerformed',
+    );
+    safeDebugLog('[ScanFlow] multipart field name: file');
+    safeDebugLog(
       '[ScanFlow] upload request path=/files request_url_present=${requestUrl.trim().isNotEmpty}',
     );
-    debugPrint('[ScanFlow] video upload exception type: ${error.runtimeType}');
-    debugPrint('[ScanFlow] video upload dio type: ${error.type}');
-    debugPrint(
+    safeDebugLog(
+      '[ScanFlow] video upload exception type: ${error.runtimeType}',
+    );
+    safeDebugLog('[ScanFlow] video upload dio type: ${error.type}');
+    safeDebugLog(
       '[ScanFlow] video upload timeout details: '
       'connect=${error.requestOptions.connectTimeout} '
       'send=${error.requestOptions.sendTimeout} '
       'receive=${error.requestOptions.receiveTimeout}',
     );
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] upload video status=${error.response?.statusCode ?? 0} error_type=${error.type}',
     );
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] video upload stack_present=${stackTrace.toString().isNotEmpty}',
     );
   }
@@ -2041,21 +2235,25 @@ class ScanService {
     required Object error,
     required StackTrace stackTrace,
   }) {
-    debugPrint('[ScanFlow] video file exists: $fileExists');
-    debugPrint('[ScanFlow] video file size: $fileSize');
-    debugPrint(
+    safeDebugLog('[ScanFlow] video file exists: $fileExists');
+    safeDebugLog('[ScanFlow] video file size: $fileSize');
+    safeDebugLog(
       '[ScanFlow] video file path_present=${sourcePath.trim().isNotEmpty}',
     );
-    debugPrint('[ScanFlow] video mime type: $mimeType');
-    debugPrint('[ScanFlow] video retry count: $retryCount');
-    debugPrint('[ScanFlow] video compression performed: $compressionPerformed');
-    debugPrint('[ScanFlow] multipart field name: file');
-    debugPrint(
+    safeDebugLog('[ScanFlow] video mime type: $mimeType');
+    safeDebugLog('[ScanFlow] video retry count: $retryCount');
+    safeDebugLog(
+      '[ScanFlow] video compression performed: $compressionPerformed',
+    );
+    safeDebugLog('[ScanFlow] multipart field name: file');
+    safeDebugLog(
       '[ScanFlow] upload request path=/files request_url_present=${requestUrl.trim().isNotEmpty}',
     );
-    debugPrint('[ScanFlow] video upload exception type: ${error.runtimeType}');
-    debugPrint('[ScanFlow] upload video status=0');
-    debugPrint(
+    safeDebugLog(
+      '[ScanFlow] video upload exception type: ${error.runtimeType}',
+    );
+    safeDebugLog('[ScanFlow] upload video status=0');
+    safeDebugLog(
       '[ScanFlow] video upload stack_present=${stackTrace.toString().isNotEmpty}',
     );
   }
@@ -2070,13 +2268,13 @@ class ScanService {
     required DioException error,
     required StackTrace stackTrace,
   }) {
-    debugPrint(
+    safeDebugLog(
       '[SCAN_FILE_UPLOAD_ERROR] request_path=/files request_url_present=${requestUrl.trim().isNotEmpty} filename_present=${fileName.trim().isNotEmpty} file_path_present=${filePath.trim().isNotEmpty} file_exists=$fileExists file_size=$fileSize multipart_field_count=${multipartFields.length} dio_type=${error.type} status=${error.response?.statusCode}',
     );
-    debugPrint(
+    safeDebugLog(
       '[SCAN_FILE_UPLOAD_ERROR] timeouts connect=${error.requestOptions.connectTimeout} send=${error.requestOptions.sendTimeout} receive=${error.requestOptions.receiveTimeout}',
     );
-    debugPrint(
+    safeDebugLog(
       '[SCAN_FILE_UPLOAD_ERROR] stack_present=${stackTrace.toString().isNotEmpty}',
     );
   }
@@ -2183,7 +2381,7 @@ class ScanService {
 
   void _logDioError(String method, String endpoint, DioException e) {
     final status = e.response?.statusCode;
-    debugPrint(
+    safeDebugLog(
       '[API_ERROR] method=$method endpoint=$endpoint collection=wellness_scans/scan_results status=$status',
     );
   }
@@ -2197,17 +2395,17 @@ class ScanService {
     final workspace = await OrganizationService.instance
         .fetchActiveWorkspaceContext();
     final logPath = _redactedLogPath(path);
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] has_current_user=${Session.instance.userId?.trim().isNotEmpty == true}',
     );
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] scoped_profile=${workspace?.businessProfileId.trim().isNotEmpty == true}',
     );
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] role=${workspace?.finalEffectiveRole ?? workspace?.memberRole ?? Session.instance.roleName}',
     );
-    debugPrint('[ScanFlow] directus role=${workspace?.directusRoleName}');
-    debugPrint(
+    safeDebugLog('[ScanFlow] directus role=${workspace?.directusRoleName}');
+    safeDebugLog(
       '[API_REQ] method=$method path=$logPath query_keys=${query?.keys.toList()} payload_keys=${payload?.keys.toList()} '
       'has_user=${Session.instance.userId?.trim().isNotEmpty == true} '
       'scoped_profile=${workspace?.businessProfileId.trim().isNotEmpty == true} has_membership=${workspace?.membershipId.trim().isNotEmpty == true} '
@@ -2228,10 +2426,10 @@ class ScanService {
     final bodyType = body?.runtimeType.toString() ?? 'null';
     final bodyKeys = body is Map ? body.keys.toList() : null;
     final logPath = _redactedLogPath(path);
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] response method=$method path=$logPath status=$status body_type=$bodyType',
     );
-    debugPrint(
+    safeDebugLog(
       '[API_RES] method=$method path=$logPath status=$status body_type=$bodyType body_keys=$bodyKeys '
       'has_user=${session.userId?.trim().isNotEmpty == true} '
       'scoped_profile=${workspace?.businessProfileId.trim().isNotEmpty == true} has_membership=${workspace?.membershipId.trim().isNotEmpty == true} '
@@ -2244,7 +2442,7 @@ class ScanService {
     if (!kDebugMode) return;
     final hasFileId =
         _extractUploadedFileId(response, requestPath: '/files') != null;
-    debugPrint(
+    safeDebugLog(
       '[SCAN_UPLOAD_RESPONSE] status=${response.statusCode} body_type=${response.data.runtimeType} has_file_id=$hasFileId',
     );
   }
@@ -2255,7 +2453,7 @@ class ScanService {
     final responseHeaders = response.headers;
     final hasFileId =
         _extractUploadedFileId(response, requestPath: '/files') != null;
-    debugPrint(
+    safeDebugLog(
       '[SCAN_FILE_CONTRACT] '
       'request_prefer=${_headerLogValue(requestHeaders, 'Prefer')} '
       'request_accept=${_headerLogValue(requestHeaders, 'Accept')} '
@@ -2299,10 +2497,10 @@ class ScanService {
     final workspace = await OrganizationService.instance
         .fetchActiveWorkspaceContext();
     final logPath = _redactedLogPath(path);
-    debugPrint(
+    safeDebugLog(
       '[ScanFlow] error method=$method path=$logPath status=${e.response?.statusCode} error_type=${e.type}',
     );
-    debugPrint(
+    safeDebugLog(
       '[API_ERR] method=$method path=$logPath status=${e.response?.statusCode} error_type=${e.type} '
       'has_user=${session.userId?.trim().isNotEmpty == true} '
       'scoped_profile=${workspace?.businessProfileId.trim().isNotEmpty == true} has_membership=${workspace?.membershipId.trim().isNotEmpty == true} '

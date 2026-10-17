@@ -1,11 +1,9 @@
-import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
-
+import '../utils/safe_debug_log.dart';
 import '../models/request_item.dart';
-import 'directus_client.dart';
 import 'member_identity_service.dart';
 import 'organization_service.dart';
 import 'request_service.dart';
+import 'wellar_workforce_service.dart';
 import '../state/session.dart';
 
 class RequestMemberOption {
@@ -35,8 +33,6 @@ class AdminRequestService {
 
   static final AdminRequestService instance = AdminRequestService._();
 
-  Dio get _client => DirectusClient.instance.client;
-
   Future<List<RequestItem>> fetchWorkspaceRequests({
     String? statusFilter,
   }) async {
@@ -49,7 +45,7 @@ class AdminRequestService {
     final directusRole =
         workspace?.directusRoleName?.trim().toLowerCase() ?? '';
 
-    debugPrint(
+    safeDebugLog(
       '[REQUESTS_PAGE_OPEN] currentUserId=${session.userId} currentUserEmail=${session.userEmail} effectiveRole=$effectiveRole directusRole=${workspace?.directusRoleName} membershipId=${workspace?.membershipId} membershipRole=${workspace?.memberRole} businessProfileId=${workspace?.businessProfileId} departmentId=${workspace?.departmentId}',
     );
 
@@ -81,38 +77,62 @@ class AdminRequestService {
     if (workspace == null || workspace.businessProfileId.isEmpty) {
       return const [];
     }
-    final rows = await MemberIdentityService.instance
-        .fetchBusinessProfileMembers(
-          screen: 'RequestsForm',
-          businessProfileId: workspace.businessProfileId,
-          limit: 300,
-          activeOnly: true,
-        );
+    final workforce = await WellarWorkforceService.instance
+        .fetchWorkforceFromWellar();
+    late final List<Map<String, dynamic>> rows;
+    if (workforce.networkError) {
+      rows = await MemberIdentityService.instance.fetchBusinessProfileMembers(
+        screen: 'RequestsForm',
+        businessProfileId: workspace.businessProfileId,
+        limit: 300,
+        activeOnly: true,
+      );
+    } else if (workforce.isSuccessful) {
+      rows = workforce.memberRows;
+    } else {
+      throw workforce.asFailure();
+    }
     final members = rows
         .map((m) {
-          final user = m['user'];
+          final isWellar = m.containsKey('member_id');
           final dep = m['department'];
-          final departmentName = dep is Map ? dep['name']?.toString() : null;
-          final identity = MemberIdentityService.instance
-              .resolveFromUserRelation(
-                user,
-                context: 'request_member_selector',
-                memberId: m['id']?.toString() ?? '',
-                role: m['member_role']?.toString(),
-                departmentRaw: dep,
-                employeeCode: m['employee_code']?.toString(),
-              );
+          final departmentName = isWellar
+              ? m['department_name']?.toString()
+              : (dep is Map ? dep['name']?.toString() : null);
+          final identity = isWellar
+              ? null
+              : MemberIdentityService.instance.resolveFromUserRelation(
+                  m['user'],
+                  context: 'request_member_selector',
+                  memberId: m['id']?.toString() ?? '',
+                  role: m['member_role']?.toString(),
+                  departmentRaw: dep,
+                  employeeCode: m['employee_code']?.toString(),
+                );
+          final userId = isWellar
+              ? m['user_id']?.toString() ?? ''
+              : identity!.userId;
+          final memberId = isWellar
+              ? m['member_id']?.toString() ?? m['id']?.toString() ?? ''
+              : m['id']?.toString() ?? '';
+          final email = isWellar
+              ? m['email']?.toString() ?? ''
+              : identity!.displayEmail;
           return RequestMemberOption(
-            memberId: m['id']?.toString() ?? '',
-            userId: identity.userId,
-            name: identity.name,
-            email: identity.displayEmail,
+            memberId: memberId,
+            userId: userId,
+            name: isWellar
+                ? m['display_name']?.toString() ?? ''
+                : identity!.name,
+            email: email,
             role: m['member_role']?.toString() ?? '',
             status: m['status']?.toString() ?? '',
-            departmentId: dep is Map ? dep['id']?.toString() : dep?.toString(),
+            departmentId: isWellar
+                ? m['department_id']?.toString()
+                : (dep is Map ? dep['id']?.toString() : dep?.toString()),
             departmentName: departmentName?.trim().isNotEmpty == true
                 ? departmentName!.trim()
-                : identity.departmentName,
+                : (isWellar ? null : identity!.departmentName),
           );
         })
         .where(

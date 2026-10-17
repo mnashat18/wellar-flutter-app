@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 
 import '../i18n/tr.dart';
 import '../state/session.dart';
@@ -7,6 +8,7 @@ import '../models/history_entry.dart';
 import '../services/organization_service.dart';
 import '../services/manager_ops_service.dart';
 import '../utils/page_transition.dart';
+import '../utils/app_feedback.dart';
 import '../state/app_providers.dart';
 import '../state/app_language_state.dart';
 import 'manager_scan_requests_screen.dart';
@@ -28,6 +30,7 @@ import '../widgets/wellar_button.dart';
 import '../widgets/responsive_card_grid.dart';
 import '../widgets/readiness_distribution_card.dart';
 import '../utils/readiness_distribution.dart';
+import '../utils/safe_debug_log.dart';
 
 class ManagerHomeScreen extends ConsumerStatefulWidget {
   const ManagerHomeScreen({super.key});
@@ -38,6 +41,7 @@ class ManagerHomeScreen extends ConsumerStatefulWidget {
 
 class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
   late Future<ManagerSnapshot> _snapshotFuture;
+  bool _snapshotFailureLogged = false;
 
   @override
   void initState() {
@@ -47,9 +51,35 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
 
   void _reloadSnapshot() {
     if (!mounted) return;
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
+      return;
+    }
     setState(() {
+      _snapshotFailureLogged = false;
       _snapshotFuture = ManagerOpsService.instance.fetchSnapshot();
     });
+  }
+
+  void _logSnapshotFailure(AsyncSnapshot<ManagerSnapshot> snapshot) {
+    if (_snapshotFailureLogged) return;
+    _snapshotFailureLogged = true;
+    final error = snapshot.error;
+    if (error is DioException) {
+      safeDebugLog(
+        '[MANAGER] step=snapshot status=${error.response?.statusCode ?? 0} dio_type=${error.type.name} error_type=${error.runtimeType}',
+      );
+      return;
+    }
+    if (error != null) {
+      safeDebugLog(
+        '[MANAGER] step=snapshot status=0 dio_type=none error_type=${error.runtimeType}',
+      );
+      return;
+    }
+    safeDebugLog(
+      '[MANAGER] step=workspace_check status=0 dio_type=none error_type=incomplete_snapshot',
+    );
   }
 
   @override
@@ -72,6 +102,10 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
         showBackground: false,
         child: RefreshIndicator(
           onRefresh: () async {
+            if (ref.read(connectivityStatusProvider).asData?.value == false) {
+              AppFeedback.showOffline(context);
+              return;
+            }
             ref.read(refreshTickProvider.notifier).state++;
             ref.invalidate(profileProvider);
             ref.invalidate(notificationsProvider);
@@ -89,6 +123,7 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                   child: PageHeaderActions(
                     unreadCount: unreadNotifications,
                     showAlertsTab: false,
+                    showNotificationBell: true,
                   ),
                 ),
               ),
@@ -177,14 +212,32 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                     );
                   }
                   final d = snap.data;
+                  if (d?.noDepartmentAssigned == true) {
+                    return const WellarCard(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'No department assigned to your manager account. Ask an admin to assign one.',
+                          style: TextStyle(
+                            color: WellarTheme.textMuted,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    );
+                  }
+                  final workforceUnavailable =
+                      d?.workforceUnavailableMessage != null;
                   if (snap.hasError ||
                       d == null ||
-                      d.teamMembers < 0 ||
                       d.pendingRequests < 0 ||
-                      d.checksCompletedToday < 0 ||
-                      d.missingChecks < 0 ||
-                      d.attentionOutcomes < 0 ||
-                      d.openAlerts < 0) {
+                      d.openAlerts < 0 ||
+                      (!workforceUnavailable &&
+                          (d.teamMembers < 0 ||
+                              d.checksCompletedToday < 0 ||
+                              d.missingChecks < 0 ||
+                              d.attentionOutcomes < 0))) {
+                    _logSnapshotFailure(snap);
                     return WellarErrorState(
                       title: Tr.t(lang, 'snapshot_unavailable'),
                       body: Tr.t(lang, 'team_overview_unavailable'),
@@ -195,6 +248,18 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                     delay: const Duration(milliseconds: 90),
                     child: Column(
                       children: [
+                        if (d.workforceUnavailableMessage != null) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Text(
+                              d.workforceUnavailableMessage!,
+                              style: const TextStyle(
+                                color: WellarTheme.textMuted,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
                         ResponsiveCardGrid(
                           spacing: 10,
                           runSpacing: 10,
@@ -294,10 +359,20 @@ class _ManagerHomeScreenState extends ConsumerState<ManagerHomeScreen> {
                       const SizedBox(height: 10),
                       WellarButton.primary(
                         text: Tr.t(lang, 'start_self_readiness_scan'),
-                        onPressed: () => Navigator.push(
-                          context,
-                          fadeSlideRoute(const WellnessCheckScreen()),
-                        ),
+                        onPressed: () {
+                          if (ref
+                                  .read(connectivityStatusProvider)
+                                  .asData
+                                  ?.value ==
+                              false) {
+                            AppFeedback.showOffline(context);
+                            return;
+                          }
+                          Navigator.push(
+                            context,
+                            fadeSlideRoute(const WellnessCheckScreen()),
+                          );
+                        },
                       ),
                       const SizedBox(height: 8),
                       WellarButton.secondary(

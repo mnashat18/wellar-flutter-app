@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
+import '../utils/safe_debug_log.dart';
 
 import 'directus_client.dart';
 
@@ -50,12 +50,12 @@ class ReadinessResultService {
         final recoverable = status == 400 || status == 403 || status == 404;
         if (status == 403) {
           _scanResultsReadDenied = true;
-          debugPrint(
+          safeDebugLog(
             '[SCAN_RESULTS] permission unavailable status=403 fields=$fields',
           );
           return const {};
         }
-        debugPrint(
+        safeDebugLog(
           '[SCAN_RESULTS] label attempt failed fields=$fields status=$status',
         );
         if (!recoverable) rethrow;
@@ -65,7 +65,12 @@ class ReadinessResultService {
   }
 
   String _extractLabel(Map<String, dynamic> row) {
-    final keys = ['readiness_label', 'readiness_state', 'overall_state', 'state'];
+    final keys = [
+      'readiness_label',
+      'readiness_state',
+      'overall_state',
+      'state',
+    ];
     for (final key in keys) {
       final value = row[key]?.toString().trim() ?? '';
       if (value.isNotEmpty) return value;

@@ -6,6 +6,7 @@ import '../state/session.dart';
 import '../state/app_providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/page_transition.dart';
+import '../utils/app_feedback.dart';
 import '../widgets/readiness_chip.dart';
 import '../widgets/animated_wellar_screen.dart';
 import '../widgets/animated_wellar_card.dart';
@@ -53,6 +54,10 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
         showBackground: false,
         child: RefreshIndicator(
           onRefresh: () async {
+            if (ref.read(connectivityStatusProvider).asData?.value == false) {
+              AppFeedback.showOffline(context);
+              return;
+            }
             ref.read(refreshTickProvider.notifier).state++;
             ref.invalidate(homeDataProvider);
             ref.invalidate(incomingRequestsProvider);
@@ -74,6 +79,7 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
                       PageHeaderActions(
                         unreadCount: unreadNotifications,
                         showAlertsTab: false,
+                        showNotificationBell: true,
                       ),
                       const SizedBox(width: 8),
                       _roleChip(Tr.t(lang, 'employee')),
@@ -180,10 +186,20 @@ class _EmployeeHomeScreenState extends ConsumerState<EmployeeHomeScreen> {
                       const SizedBox(height: 12),
                       WellarButton.primary(
                         text: Tr.t(lang, 'start_preshift_scan'),
-                        onPressed: () => Navigator.push(
-                          context,
-                          fadeSlideRoute(const WellnessCheckScreen()),
-                        ),
+                        onPressed: () {
+                          if (ref
+                                  .read(connectivityStatusProvider)
+                                  .asData
+                                  ?.value ==
+                              false) {
+                            AppFeedback.showOffline(context);
+                            return;
+                          }
+                          Navigator.push(
+                            context,
+                            fadeSlideRoute(const WellnessCheckScreen()),
+                          );
+                        },
                       ),
                       const SizedBox(height: 8),
                       Text(

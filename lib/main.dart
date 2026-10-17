@@ -5,13 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:app_links/app_links.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'utils/app_colors.dart';
+import 'utils/safe_debug_log.dart';
 import 'state/app_providers.dart';
 import 'state/app_language_state.dart';
 import 'state/session.dart';
@@ -30,15 +30,19 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations(const [
+    DeviceOrientation.portraitUp,
+  ]);
 
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
-    debugPrint('[FLUTTER_ERROR] ${details.exceptionAsString()}');
-    debugPrint(details.stack.toString());
+    safeDebugLog(
+      '[FLUTTER_ERROR] error_type=${details.exception.runtimeType} stack_present=${details.stack != null}',
+    );
   };
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('[ASYNC_ERROR] $error');
-    debugPrint(stack.toString());
+    safeDebugLog('[ASYNC_ERROR] error_type=${error.runtimeType}');
+    safeDebugLog('[ASYNC_ERROR] stack_present=true');
     return false;
   };
 
@@ -278,6 +282,9 @@ class _AppRootState extends ConsumerState<_AppRoot> {
             brightness: Brightness.dark,
             useMaterial3: true,
             scaffoldBackgroundColor: Colors.transparent,
+            splashColor: WellarTheme.primaryOverlay,
+            focusColor: WellarTheme.primaryOverlay,
+            hoverColor: WellarTheme.primaryOverlay,
             cardTheme: CardThemeData(
               color: WellarTheme.surface,
               margin: EdgeInsets.zero,
@@ -306,13 +313,29 @@ class _AppRootState extends ConsumerState<_AppRoot> {
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
             ),
-            textTheme: GoogleFonts.manropeTextTheme().apply(
+            snackBarTheme: SnackBarThemeData(
+              backgroundColor: WellarTheme.surfaceSoft,
+              contentTextStyle: WellarTheme.body.copyWith(
+                color: WellarTheme.text,
+              ),
+              actionTextColor: WellarTheme.primary,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+                side: BorderSide(color: WellarTheme.border),
+              ),
+            ),
+            textTheme: WellarTheme.textTheme.apply(
               bodyColor: Colors.white,
               displayColor: Colors.white,
             ),
             colorScheme: ColorScheme.fromSeed(
-              seedColor: AppColors.primary,
+              seedColor: WellarTheme.primary,
               brightness: Brightness.dark,
+              primary: WellarTheme.primary,
+              surface: WellarTheme.surface,
+              surfaceContainerLowest: WellarTheme.bg,
+              error: WellarTheme.danger,
             ),
           ),
           home: const SplashScreen(),

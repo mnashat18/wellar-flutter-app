@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../i18n/tr.dart';
 import '../models/business_profile.dart';
 import '../models/business_profile_member.dart';
 import '../services/organization_service.dart';
@@ -29,6 +30,7 @@ class _BusinessMembersManageScreenState
   String? _errorMessage;
   List<BusinessProfileMember> _members = const [];
   bool _loading = true;
+  bool _showMemberForm = true;
   bool _subscriptionExpired = false;
   String? _myRole;
   String? _myStatus;
@@ -80,8 +82,8 @@ class _BusinessMembersManageScreenState
           businessProfileId: profile.id,
           limit: 200,
         );
-      } catch (e) {
-        membersError = e.toString();
+      } catch (_) {
+        membersError = 'i18n:generic_load_error';
       }
 
       final selfAccess = await _resolveSelfAccess(
@@ -108,7 +110,7 @@ class _BusinessMembersManageScreenState
         _loading = false;
         _errorMessage = membersError;
       });
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
         _members = const [];
@@ -116,14 +118,52 @@ class _BusinessMembersManageScreenState
         _myStatus = null;
         _subscriptionExpired = false;
         _loading = false;
-        _errorMessage = e.toString();
+        _errorMessage = 'i18n:generic_load_error';
       });
     }
   }
 
   Future<void> _saveMember() async {
     if (!mounted) return;
-    _showComingSoonDialog();
+    final email = _emailController.text.trim();
+    if (email.isEmpty ||
+        !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(email)) {
+      setState(() {
+        _errorMessage = 'Enter a valid email address for a registered user.';
+      });
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _errorMessage = null;
+    });
+    try {
+      await OrganizationService.instance.upsertBusinessMemberByEmail(
+        email: email,
+        memberRole: _selectedRole,
+      );
+      if (!mounted) return;
+      _emailController.clear();
+      setState(() {
+        _selectedRole = _roles.last;
+        _showMemberForm = false;
+      });
+      await _load(force: true);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Member saved successfully.'),
+          backgroundColor: AppColors.stable,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _errorMessage = 'i18n:generic_action_error');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -189,7 +229,7 @@ class _BusinessMembersManageScreenState
                     else if (_errorMessage != null && _members.isEmpty)
                       StatusCard(
                         title: 'Unable to load members',
-                        message: _errorMessage!,
+                        message: _displayErrorMessage(_errorMessage!),
                         icon: Icons.warning_amber_rounded,
                         iconColor: AppColors.highRisk,
                         actionText: 'Retry',
@@ -198,7 +238,20 @@ class _BusinessMembersManageScreenState
                     else ...[
                       _buildMembersTable(),
                       const SizedBox(height: 12),
-                      _buildForm(),
+                      if (_showMemberForm)
+                        _buildForm()
+                      else
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton.icon(
+                            onPressed: () => setState(() {
+                              _showMemberForm = true;
+                              _errorMessage = null;
+                            }),
+                            icon: const Icon(Icons.person_add_alt_1_rounded),
+                            label: const Text('Add / Update Member'),
+                          ),
+                        ),
                     ],
                   ],
                 ),
@@ -427,13 +480,13 @@ class _BusinessMembersManageScreenState
           ),
           const SizedBox(height: 8),
           const Text(
-            'Role selection is disabled for now. Team management is coming soon.',
+            'Only users with an existing Wellar account can be added. This screen cannot invite new users.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
           ),
           if (_errorMessage != null) ...[
             const SizedBox(height: 8),
             Text(
-              _errorMessage!,
+              _displayErrorMessage(_errorMessage!),
               style: const TextStyle(
                 color: AppColors.highRisk,
                 fontSize: 12,
@@ -450,6 +503,13 @@ class _BusinessMembersManageScreenState
         ],
       ),
     );
+  }
+
+  String _displayErrorMessage(String message) {
+    const prefix = 'i18n:';
+    return message.startsWith(prefix)
+        ? Tr.localized(context, message.substring(prefix.length))
+        : message;
   }
 
   Widget _fieldShell({required Widget child}) {
@@ -750,41 +810,6 @@ class _BusinessMembersManageScreenState
     return 'Your role: ${_titleCase(role)}';
   }
 
-  void _showComingSoonDialog() {
-    showDialog<void>(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          backgroundColor: AppColors.card,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-          ),
-          title: const Text(
-            'Coming Soon',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
-          ),
-          content: const Text(
-            'Team member invitations will be available in a future update.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'OK',
-                style: TextStyle(
-                  color: AppColors.primarySoft,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
 }
 
 class _SelfAccess {

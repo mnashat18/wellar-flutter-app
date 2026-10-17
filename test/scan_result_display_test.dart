@@ -35,7 +35,18 @@ void main() {
       expect(displayRiskLevelLabel('low_focus'), 'Low focus');
       expect(displayRiskLevelLabel('elevated_fatigue'), 'Elevated fatigue');
       expect(displayRiskLevelLabel('high_risk'), 'High risk');
-      expect(displayRiskLevelLabel('high'), 'High risk');
+      expect(
+        displayRiskLevelLabel('retake_required'),
+        'Unavailable - please retake the scan',
+      );
+      expect(
+        displayRiskLevelLabel(null),
+        'Unavailable - please retake the scan',
+      );
+      expect(
+        displayRiskLevelLabel('unknown'),
+        'Unavailable - please retake the scan',
+      );
     });
   });
 

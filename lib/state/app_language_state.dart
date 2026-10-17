@@ -12,7 +12,9 @@ enum AppLanguage {
   Locale get locale => Locale(code);
 
   static AppLanguage fromCode(String? code) {
-    return AppLanguage.english;
+    return code?.trim().toLowerCase() == 'ar'
+        ? AppLanguage.arabic
+        : AppLanguage.english;
   }
 }
 
@@ -26,8 +28,8 @@ class AppLanguageController extends ChangeNotifier {
   AppLanguageController({
     AppLanguage initialLanguage = AppLanguage.english,
     bool loaded = false,
-  })  : _language = initialLanguage,
-        _loaded = loaded;
+  }) : _language = initialLanguage,
+       _loaded = loaded;
 
   AppLanguage get language => _language;
   bool get isLoaded => _loaded;
@@ -36,11 +38,8 @@ class AppLanguageController extends ChangeNotifier {
     try {
       final saved = await _storage.read(key: storageKey);
       final normalized = AppLanguage.fromCode(saved);
-      if (saved?.trim().toLowerCase() != AppLanguage.english.code) {
-        await _storage.write(
-          key: storageKey,
-          value: AppLanguage.english.code,
-        );
+      if (saved?.trim().toLowerCase() != normalized.code) {
+        await _storage.write(key: storageKey, value: normalized.code);
       }
       return normalized;
     } catch (_) {
@@ -55,10 +54,10 @@ class AppLanguageController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setLanguage(AppLanguage _) async {
-    _language = AppLanguage.english;
+  Future<void> setLanguage(AppLanguage language) async {
+    _language = language;
     try {
-      await _storage.write(key: storageKey, value: AppLanguage.english.code);
+      await _storage.write(key: storageKey, value: language.code);
     } catch (_) {}
     _loaded = true;
     notifyListeners();

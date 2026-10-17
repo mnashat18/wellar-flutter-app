@@ -1,0 +1,44 @@
+[
+  {
+    "modified_file": "lib/config/app_config.dart",
+    "modified_sha256": "7faea3f9dd2eb96e7a4240ab50361e1f2cb65975c6584012e79f19892de9fc9c",
+    "backup_file": ".backups/stage-5.1-20261015-221819/lib/config/app_config.dart",
+    "backup_sha256": "3fbc3b9f9a3535e260b2dd4623177371fe9964aded2f4f0828f19337973bbae1"
+  },
+  {
+    "modified_file": "lib/services/wellar_v2_client.dart",
+    "modified_sha256": "70eb04ad1a4a691db37ace0ce8b1f0296b9fb65ddcd77c2d8c0fefee85892688",
+    "backup_file": ".backups/stage-5.1-20261015-221819/lib/services/wellar_v2_client.dart",
+    "backup_sha256": "5b8459fc44b77d458b0ba3d684c2c98ac9eb0903de689c3a0b50414ec193cd7a"
+  },
+  {
+    "modified_file": "lib/screens/scan_flow_impl_normalized.dart",
+    "modified_sha256": "8d3228811ee96f63dec25ea1942827f2be2a8a91a5991d4f0ec75d745be7ddc1",
+    "backup_file": ".backups/stage-5.1-20261015-221819/lib/screens/scan_flow_impl_normalized.dart",
+    "backup_sha256": "f500f27a8fc333da259e9c6ed8e62983c382da7bce3dbc969479d0498bde7807"
+  },
+  {
+    "modified_file": "lib/screens/wellar_v2_processing_screen.dart",
+    "modified_sha256": "95b7b7f71a07cedc651864bdb0ce069d06f6f090238335351fa9afd29b067b84",
+    "backup_file": ".backups/stage-5.1-20261015-221819/lib/screens/wellar_v2_processing_screen.dart",
+    "backup_sha256": "7e1804bc505608773195bbd6bc4e9b5613f1a8a2910e1fcb594db54554559c8d"
+  },
+  {
+    "modified_file": "lib/screens/wellar_v2_result_screen.dart",
+    "modified_sha256": "2bc0ab7516a98773c8de5e74439f9f8d2ad3023ee1dda847b9ad91dcb63be94f",
+    "backup_file": ".backups/stage-5.1-20261015-221819/lib/screens/wellar_v2_result_screen.dart",
+    "backup_sha256": "0174424953f4754ffc43d3bd7ffc862de6b98986fae2fe48948dd4d4b1868eed"
+  },
+  {
+    "modified_file": "test/wellar_v2_client_test.dart",
+    "modified_sha256": "5b5c083c9e68788bb86e0409bfc06202fd0790ab826d2402c845db8a6329ba37",
+    "backup_file": ".backups/stage-5.1-tests-20261015-222203/wellar_v2_client_test.dart",
+    "backup_sha256": "1c203e881f011f2b3824d42b4ceb4bdd662788e1af66ae7c564524f63e61f4e5"
+  },
+  {
+    "modified_file": "test/wellar_v2_live_http_test.dart",
+    "modified_sha256": "f0cf7d415b685bafbe29b09971d17d52c35b6b8ba5d37ff583e80cf2d1cbfb88",
+    "backup_file": ".backups/stage-5.1-tests-20261015-222203/wellar_v2_live_http_test.dart",
+    "backup_sha256": "cbe9c9e1e76d4dc9b98d3270aaf156ec372a8f1f58f25d7f31d93d2af713f64c"
+  }
+]

@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import '../../utils/safe_debug_log.dart';
+import 'package:flutter/material.dart';
+import '../../i18n/tr.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/scan_result.dart';
@@ -77,9 +79,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('[HOME] loading shell');
-    final unread = ref.watch(unreadNotificationsProvider);
-
+    safeDebugLog('[HOME] loading shell');
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Stack(
@@ -88,13 +88,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           SafeArea(
             bottom: false,
             child: Padding(
-      padding: (_index == 3 || _index == 4)
-              ? EdgeInsets.zero
-              : const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              padding: (_index == 3 || _index == 4)
+                  ? EdgeInsets.zero
+                  : const EdgeInsets.fromLTRB(20, 20, 20, 24),
               child: _buildPage(context),
             ),
           ),
-          if (_index == 0) _buildTopActions(unread),
+          if (_index == 0) _buildTopActions(),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -109,7 +109,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   // TOP ACTIONS
   // ===============================
 
-  Widget _buildTopActions(int unread) {
+  Widget _buildTopActions() {
     return SafeArea(
       bottom: false,
       child: Align(
@@ -119,13 +119,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _NotificationBell(
-                count: unread,
-                onTap: () {
-                  _pushWhenReady(const NotificationsScreen());
-                },
-              ),
-              const SizedBox(width: 10),
               _ProfileBadge(
                 onTap: () {
                   _pushWhenReady(const ProfileScreen());
@@ -165,7 +158,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildHome() {
     final async = ref.watch(homeDataProvider);
-    debugPrint('[HOME] data load start');
+    safeDebugLog('[HOME] data load start');
     final pendingCount = ref
         .watch(incomingRequestsProvider)
         .maybeWhen(
@@ -178,10 +171,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return async.when(
       loading: () => const SkeletonList(),
       error: (e, _) {
-        debugPrint('[HOME] data load fail $e');
+        safeDebugLog('[HOME] data load fail $e');
         return StatusCard(
           title: 'Failed to load',
-          message: e.toString(),
+          message: Tr.localized(context, 'generic_load_error'),
           icon: Icons.warning_amber_rounded,
           iconColor: AppColors.highRisk,
           actionText: 'Retry',
@@ -189,7 +182,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         );
       },
       data: (data) {
-        debugPrint('[HOME] data load success count=${data.results.length}');
+        safeDebugLog('[HOME] data load success count=${data.results.length}');
         _scheduleHomeEffects(latest: data.latest, hasPending: pendingCount > 0);
         return HomeDashboard(
           data: data,
@@ -239,6 +232,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   void _openWellnessCheck() {
+    safeDebugLog('[SCAN_START_BUTTON_TAP]');
     _pushWhenReady(const WellnessCheckScreen());
   }
 
@@ -671,38 +665,6 @@ class _NavItem {
   const _NavItem(this.icon, this.label);
 }
 
-class _NotificationBell extends StatelessWidget {
-  final int count;
-  final VoidCallback onTap;
-
-  const _NotificationBell({required this.count, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      child: Stack(
-        children: [
-          const Icon(Icons.notifications_none, color: Colors.white70),
-          if (count > 0)
-            Positioned(
-              right: -2,
-              top: -2,
-              child: CircleAvatar(
-                radius: 8,
-                backgroundColor: AppColors.highRisk,
-                child: Text(
-                  count.toString(),
-                  style: const TextStyle(fontSize: 10, color: Colors.white),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ProfileBadge extends StatelessWidget {
   final VoidCallback onTap;
 
@@ -721,5 +683,3 @@ class _ProfileBadge extends StatelessWidget {
     );
   }
 }
-
-

@@ -4,18 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../theme/app_theme.dart';
+
 class ScanTheme {
-  static const Color background = Color(0xFF050B16);
-  static const Color backgroundMid = Color(0xFF07111F);
-  static const Color backgroundSoft = Color(0xFF0B1628);
-  static const Color surface = Color.fromRGBO(255, 255, 255, 0.06);
-  static const Color surfaceStrong = Color.fromRGBO(255, 255, 255, 0.08);
-  static const Color border = Color.fromRGBO(255, 255, 255, 0.10);
-  static const Color textPrimary = Color(0xFFF8FAFC);
-  static const Color textSecondary = Color(0xFF94A3B8);
-  static const Color primaryBlue = Color(0xFF3B82F6);
-  static const Color cyan = Color(0xFF22D3EE);
-  static const Color teal = Color(0xFF2DD4BF);
+  static const Color background = WellarTheme.bg;
+  static const Color backgroundMid = WellarTheme.bg;
+  static const Color backgroundSoft = WellarTheme.surfaceSoft;
+  static const Color surface = WellarTheme.surface;
+  static const Color surfaceStrong = WellarTheme.surfaceSoft;
+  static const Color border = WellarTheme.border;
+  static const Color textPrimary = WellarTheme.text;
+  static const Color textSecondary = WellarTheme.textMuted;
+  static const Color primaryBlue = WellarTheme.primary;
+  static const Color cyan = WellarTheme.primary;
+  static const Color teal = WellarTheme.primary;
   static const Color warning = Color(0xFFF59E0B);
   static const Color danger = Color(0xFFEF4444);
 }
@@ -52,18 +54,12 @@ class ScanBackground extends StatelessWidget {
           Positioned(
             top: 180,
             left: -90,
-            child: _GlowOrb(
-              size: 220,
-              color: ScanTheme.cyan.withOpacity(0.12),
-            ),
+            child: _GlowOrb(size: 220, color: ScanTheme.cyan.withOpacity(0.12)),
           ),
           Positioned(
             bottom: -120,
             right: -20,
-            child: _GlowOrb(
-              size: 260,
-              color: ScanTheme.teal.withOpacity(0.10),
-            ),
+            child: _GlowOrb(size: 260, color: ScanTheme.teal.withOpacity(0.10)),
           ),
           child,
         ],
@@ -96,28 +92,37 @@ class PremiumScanScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final appTheme = Theme.of(context);
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: ScanBackground(
-        child: SafeArea(
-          child: Padding(
-            padding: padding,
-            child: Column(
-              children: [
-                ScanStepHeader(
-                  stepLabel: stepLabel,
-                  step: step,
-                  totalSteps: totalSteps,
-                  onBack: onBack,
-                  showSecureBadge: showSecureBadge,
-                ),
-                const SizedBox(height: 18),
-                Expanded(child: body),
-                if (footer != null) ...[
-                  const SizedBox(height: 16),
-                  footer!,
+      body: Theme(
+        data: appTheme.copyWith(
+          colorScheme: appTheme.colorScheme.copyWith(
+            primary: WellarTheme.primary,
+            secondary: WellarTheme.primary,
+          ),
+          progressIndicatorTheme: const ProgressIndicatorThemeData(
+            color: WellarTheme.primary,
+          ),
+        ),
+        child: ScanBackground(
+          child: SafeArea(
+            child: Padding(
+              padding: padding,
+              child: Column(
+                children: [
+                  ScanStepHeader(
+                    stepLabel: stepLabel,
+                    step: step,
+                    totalSteps: totalSteps,
+                    onBack: onBack,
+                    showSecureBadge: showSecureBadge,
+                  ),
+                  const SizedBox(height: 18),
+                  Expanded(child: body),
+                  if (footer != null) ...[const SizedBox(height: 16), footer!],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -408,12 +413,19 @@ class _ScanPrimaryButtonState extends State<ScanPrimaryButton> {
                 borderRadius: BorderRadius.circular(18),
                 onTap: widget.onPressed,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 16,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       if (widget.icon != null) ...[
-                        Icon(widget.icon, color: ScanTheme.textPrimary, size: 18),
+                        Icon(
+                          widget.icon,
+                          color: ScanTheme.textPrimary,
+                          size: 18,
+                        ),
                         const SizedBox(width: 10),
                       ],
                       Text(
@@ -440,11 +452,7 @@ class ScanSecondaryButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
 
-  const ScanSecondaryButton({
-    super.key,
-    required this.label,
-    this.onPressed,
-  });
+  const ScanSecondaryButton({super.key, required this.label, this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -559,7 +567,9 @@ class ProcessingPipelineView extends StatelessWidget {
                 ? PipelineState.active
                 : step.state;
             return Padding(
-              padding: EdgeInsets.only(bottom: index == steps.length - 1 ? 0 : 12),
+              padding: EdgeInsets.only(
+                bottom: index == steps.length - 1 ? 0 : 12,
+              ),
               child: _PipelineRow(
                 title: step.title,
                 subtitle: step.subtitle,
@@ -656,7 +666,10 @@ class FailureStateView extends StatelessWidget {
           const SizedBox(height: 20),
           ScanPrimaryButton(label: primaryLabel, onPressed: primaryAction),
           const SizedBox(height: 10),
-          ScanSecondaryButton(label: secondaryLabel, onPressed: secondaryAction),
+          ScanSecondaryButton(
+            label: secondaryLabel,
+            onPressed: secondaryAction,
+          ),
         ],
       ),
     );
@@ -687,10 +700,7 @@ class ReadinessGauge extends StatelessWidget {
         children: [
           CustomPaint(
             size: const Size.square(176),
-            painter: _GaugePainter(
-              value: value.clamp(0, 1),
-              color: color,
-            ),
+            painter: _GaugePainter(value: value.clamp(0, 1), color: color),
           ),
           Column(
             mainAxisSize: MainAxisSize.min,
@@ -825,9 +835,7 @@ class _GlowOrb extends StatelessWidget {
         height: size,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color, color.withOpacity(0)],
-          ),
+          gradient: RadialGradient(colors: [color, color.withOpacity(0)]),
         ),
       ),
     );

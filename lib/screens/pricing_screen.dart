@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/plan.dart';
 import '../models/user_subscription.dart';
-import '../services/organization_service.dart';
 import '../state/app_providers.dart';
 import '../utils/app_colors.dart';
 import '../utils/page_transition.dart';
@@ -12,9 +11,7 @@ import '../widgets/app_buttons.dart';
 import '../widgets/app_cards.dart';
 import '../widgets/fade_slide.dart';
 import '../widgets/state_views.dart';
-import 'business_profile_wizard_screen.dart';
 import 'subscription_management_screen.dart';
-import 'subscription_success_screen.dart';
 
 class PricingScreen extends ConsumerStatefulWidget {
   const PricingScreen({super.key});
@@ -56,8 +53,7 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
                 ],
               ),
               data: (plans) {
-                final source = plans.isNotEmpty ? plans : _fallbackPlans();
-                final normalized = [...source]
+                final normalized = [...plans]
                   ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
                 final hasSubscription = subscriptionAsync.maybeWhen(
                   data: (sub) => sub != null,
@@ -68,6 +64,17 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                   children: [
                     FadeSlide(child: _header(context, hasSubscription)),
+                    if (normalized.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 16),
+                        child: StatusCard(
+                          title: 'Plans currently unavailable',
+                          message: 'Please try again later. No subscription can be started until plans are available.',
+                          icon: Icons.info_outline,
+                          iconColor: AppColors.lowFocus,
+                        ),
+                      )
+                    else ...[
                     const SizedBox(height: 12),
                     FadeSlide(
                       delay: const Duration(milliseconds: 70),
@@ -102,6 +109,7 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
                         ),
                       );
                     }),
+                    ],
                   ],
                 );
               },
@@ -235,6 +243,14 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
     Plan plan, {
     required UserSubscription? currentSubscription,
   }) async {
+    // SECURITY: the protected entitlement action must verify provider webhooks.
+    // Keep this purchase entry point fail-closed until that backend exists.
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Subscriptions are not available yet.')),
+    );
+    return;
+    /* Restore the flow only after wiring a verified payment backend.
     final code = plan.code.trim().toLowerCase();
     if (code == 'free') {
       if (!mounted) return;
@@ -327,6 +343,7 @@ class _PricingScreenState extends ConsumerState<PricingScreen> {
         setState(() => _processing = false);
       }
     }
+    */
   }
 
   bool _isCurrentPlan(String? currentCode, String planCode) {
@@ -517,41 +534,3 @@ class _PlanCard extends StatelessWidget {
   }
 }
 
-List<Plan> _fallbackPlans() {
-  return const [
-    Plan(
-      id: 'free',
-      name: 'Free',
-      code: 'free',
-      description: 'Basic access for individual users.',
-      monthlyPrice: 0,
-      yearlyPrice: 0,
-      trialDays: 0,
-      maxMembers: 1,
-      isBusiness: false,
-      features: ['Personal dashboard', 'Scan history'],
-      isPopular: false,
-      isActive: true,
-      sortOrder: 1,
-    ),
-    Plan(
-      id: 'business',
-      name: 'Business',
-      code: 'business',
-      description: 'Team collaboration and premium reporting.',
-      monthlyPrice: 29,
-      yearlyPrice: 299,
-      trialDays: 14,
-      maxMembers: 25,
-      isBusiness: true,
-      features: [
-        'Add and manage members',
-        'Business reports and exports',
-        'Priority support',
-      ],
-      isPopular: true,
-      isActive: true,
-      sortOrder: 2,
-    ),
-  ];
-}

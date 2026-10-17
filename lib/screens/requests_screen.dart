@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../i18n/tr.dart';
 import '../models/request_item.dart';
 import '../state/app_providers.dart';
+import '../utils/app_feedback.dart';
 import '../theme/app_theme.dart';
 import '../utils/page_transition.dart';
 import '../widgets/wellar_button.dart';
@@ -37,7 +38,14 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
       backgroundColor: WellarTheme.bg,
       body: AnimatedWellarScreen(
         child: RefreshIndicator(
-          onRefresh: () async => ref.invalidate(incomingRequestsProvider),
+          onRefresh: () async {
+            if (ref.read(connectivityStatusProvider).asData?.value == false) {
+              AppFeedback.showOffline(context);
+              return;
+            }
+            ref.invalidate(incomingRequestsProvider);
+            await ref.read(incomingRequestsProvider.future);
+          },
           child: ListView(
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
@@ -101,13 +109,21 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
       }).toList();
     }
     if (_filter == completed) {
-      return input.where((r) => (r.scanId ?? '').trim().isNotEmpty || r.displayStatus.toLowerCase() == 'completed').toList();
+      return input
+          .where(
+            (r) =>
+                (r.scanId ?? '').trim().isNotEmpty ||
+                r.displayStatus.toLowerCase() == 'completed',
+          )
+          .toList();
     }
     if (_filter == overdue) {
       final now = DateTime.now();
       return input.where((r) {
         if (r.dueAt == null) return false;
-        final completed = (r.scanId ?? '').trim().isNotEmpty || r.displayStatus.toLowerCase() == 'completed';
+        final completed =
+            (r.scanId ?? '').trim().isNotEmpty ||
+            r.displayStatus.toLowerCase() == 'completed';
         return !completed && r.dueAt!.toLocal().isBefore(now);
       }).toList();
     }
@@ -122,9 +138,7 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
           padding: EdgeInsets.only(bottom: 12),
           child: AnimatedWellarCard(
             delay: Duration(milliseconds: 80 * i),
-            child: const WellarCard(
-              child: WellarSkeletonShimmer(height: 92),
-            ),
+            child: const WellarCard(child: WellarSkeletonShimmer(height: 92)),
           ),
         ),
       ),
@@ -144,7 +158,13 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
     return WellarErrorState(
       title: Tr.t(lang, 'unable_load_requests'),
       body: Tr.t(lang, 'unable_load_scan_requests'),
-      onRetry: () => ref.invalidate(incomingRequestsProvider),
+      onRetry: () {
+        if (ref.read(connectivityStatusProvider).asData?.value == false) {
+          AppFeedback.showOffline(context);
+          return;
+        }
+        ref.invalidate(incomingRequestsProvider);
+      },
     );
   }
 
@@ -161,10 +181,12 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
       children: items
           .asMap()
           .entries
-          .map((e) => AnimatedWellarCard(
-                delay: Duration(milliseconds: 65 * e.key),
-                child: _card(e.value),
-              ))
+          .map(
+            (e) => AnimatedWellarCard(
+              delay: Duration(milliseconds: 65 * e.key),
+              child: _card(e.value),
+            ),
+          )
           .toList(),
     );
   }
@@ -172,8 +194,14 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
   Widget _card(RequestItem item) {
     final lang = ref.watch(appLanguageControllerProvider).language;
     final status = item.displayStatus.toLowerCase();
-    final isCompleted = (item.scanId ?? '').trim().isNotEmpty || status == 'completed';
-    final canStart = !isCompleted && (status == 'pending' || status == 'requested' || status == 'assigned' || status.isEmpty);
+    final isCompleted =
+        (item.scanId ?? '').trim().isNotEmpty || status == 'completed';
+    final canStart =
+        !isCompleted &&
+        (status == 'pending' ||
+            status == 'requested' ||
+            status == 'assigned' ||
+            status.isEmpty);
     final due = item.dueAt?.toLocal();
     final requestedAt = item.timestamp?.toLocal();
     final requestedBy = item.requestedByUserName?.trim().isNotEmpty == true
@@ -191,18 +219,43 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 Expanded(
                   child: Text(
                     Tr.t(lang, 'preshift_readiness_check'),
-                    style: const TextStyle(color: WellarTheme.text, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      color: WellarTheme.text,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-                StatusChip(isCompleted ? Tr.t(lang, 'completed') : (status.isEmpty ? Tr.t(lang, 'pending') : _cap(status))),
+                StatusChip(
+                  isCompleted
+                      ? Tr.t(lang, 'completed')
+                      : (status.isEmpty ? Tr.t(lang, 'pending') : _cap(status)),
+                ),
               ],
             ),
             const SizedBox(height: 8),
-            Text('${Tr.t(lang, 'requested_by')}: $requestedBy', style: const TextStyle(color: WellarTheme.textMuted, fontSize: 12)),
+            Text(
+              '${Tr.t(lang, 'requested_by')}: $requestedBy',
+              style: const TextStyle(
+                color: WellarTheme.textMuted,
+                fontSize: 12,
+              ),
+            ),
             if (requestedAt != null)
-              Text('${Tr.t(lang, 'requested_at')}: ${_fmt(requestedAt)}', style: const TextStyle(color: WellarTheme.textMuted, fontSize: 12)),
+              Text(
+                '${Tr.t(lang, 'requested_at')}: ${_fmt(requestedAt)}',
+                style: const TextStyle(
+                  color: WellarTheme.textMuted,
+                  fontSize: 12,
+                ),
+              ),
             if (due != null)
-              Text('${Tr.t(lang, 'due')}: ${_fmt(due)}', style: const TextStyle(color: WellarTheme.textMuted, fontSize: 12)),
+              Text(
+                '${Tr.t(lang, 'due')}: ${_fmt(due)}',
+                style: const TextStyle(
+                  color: WellarTheme.textMuted,
+                  fontSize: 12,
+                ),
+              ),
             const SizedBox(height: 12),
             if (canStart)
               WellarButton.primary(
@@ -210,14 +263,19 @@ class _RequestsScreenState extends ConsumerState<RequestsScreen> {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    fadeSlideRoute(ScanFlowScreen(requestId: item.id, forceCompletion: true)),
+                    fadeSlideRoute(
+                      ScanFlowScreen(requestId: item.id, forceCompletion: true),
+                    ),
                   ).then((_) => ref.invalidate(incomingRequestsProvider));
                 },
               )
             else
               Text(
                 Tr.t(lang, 'completed'),
-                style: const TextStyle(color: WellarTheme.success, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  color: WellarTheme.success,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
           ],
         ),

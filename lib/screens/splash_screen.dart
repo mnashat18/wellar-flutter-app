@@ -1,18 +1,21 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../services/auth_service.dart';
 import '../services/organization_service.dart';
+import '../state/app_language_state.dart';
 import '../state/session.dart';
+import '../i18n/tr.dart';
 import '../utils/app_colors.dart';
 import '../utils/page_transition.dart';
+import '../widgets/welcome_galaxy_background.dart';
 import 'login_screen.dart';
 import 'public_entry_screen.dart';
 import 'workspace_access_screen.dart';
 import 'role_based_shells.dart';
+import 'workspace_picker_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -24,10 +27,10 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   static const List<String> _slowLoadingStates = [
-    'Authenticating',
-    'Restoring workspace',
-    'Loading dashboard',
-    'Preparing experience',
+    'authenticating',
+    'restoring_workspace',
+    'loading_dashboard',
+    'preparing_experience',
   ];
 
   // If startup exceeds this window, morph the bottom into the premium
@@ -51,6 +54,7 @@ class _SplashScreenState extends State<SplashScreen>
   bool _reduceMotion = false;
   bool _navigationCommitted = false;
   bool _navigationScheduled = false;
+  Widget? _resolvedTarget;
 
   @override
   void initState() {
@@ -108,13 +112,21 @@ class _SplashScreenState extends State<SplashScreen>
     if (reduce != _reduceMotion) {
       _reduceMotion = reduce;
       if (_reduceMotion) {
+        _intro.stop();
+        _intro.value = 1;
         _ambient.stop();
         _ambient.value = 0.5;
-      } else if (!_ambient.isAnimating) {
-        _ambient.repeat(reverse: true);
+      } else {
+        if (_intro.status != AnimationStatus.completed) _intro.forward();
+        if (!_ambient.isAnimating) _ambient.repeat(reverse: true);
       }
     }
   }
+
+  String _tr(BuildContext context, String key) => Tr.t(
+    AppLanguage.fromCode(Localizations.localeOf(context).languageCode),
+    key,
+  );
 
   @override
   void dispose() {
@@ -138,7 +150,9 @@ class _SplashScreenState extends State<SplashScreen>
     _statusRotator = null;
     _slowTimer = Timer(_slowStateThreshold, _enterSlowMode);
 
-    if (_intro.status == AnimationStatus.completed) {
+    if (_reduceMotion) {
+      _intro.value = 1;
+    } else if (_intro.status == AnimationStatus.completed) {
       _intro.forward(from: 0);
     }
     debugPrint('[STARTUP_ROUTE] start');
@@ -153,9 +167,9 @@ class _SplashScreenState extends State<SplashScreen>
       return;
     }
     try {
-      final sessionState = await AuthService.instance
-          .validateSession()
-          .timeout(_startupHardTimeout);
+      final sessionState = await AuthService.instance.validateSession().timeout(
+        _startupHardTimeout,
+      );
       if (!mounted) return;
       switch (sessionState) {
         case SessionValidationState.unauthenticated:
@@ -173,8 +187,9 @@ class _SplashScreenState extends State<SplashScreen>
           break;
       }
 
-      final result = await resolveVerifiedRouteResult(validateSession: false)
-          .timeout(_startupHardTimeout);
+      final result = await resolveVerifiedRouteResult(
+        validateSession: false,
+      ).timeout(_startupHardTimeout);
       if (!mounted) return;
       late final Widget target;
       switch (result.kind) {
@@ -195,6 +210,12 @@ class _SplashScreenState extends State<SplashScreen>
           debugPrint('[STARTUP_ROUTE] user_verified=true');
           debugPrint('[STARTUP_ROUTE] resolved=role_shell');
           target = RoleShellRouter(initialContext: result.context);
+          break;
+        case VerifiedRouteKind.workspaceSelection:
+          target = WorkspacePickerScreen(
+            memberships: result.memberships,
+            mandatory: true,
+          );
           break;
         case VerifiedRouteKind.workspaceAccess:
           debugPrint('[STARTUP_ROUTE] user_verified=true');
@@ -224,13 +245,7 @@ class _SplashScreenState extends State<SplashScreen>
     } on TimeoutException {
       debugPrint('[STARTUP_ROUTE] timeout=true');
       debugPrint('[STARTUP_ROUTE] resolved=splash_fallback');
-      if (!mounted) return;
-      _slowTimer?.cancel();
-      _statusRotator?.cancel();
-      setState(() {
-        _startupFailed = true;
-        _slowMode = false;
-      });
+      _showStartupFailure();
     } on FirebaseException catch (e) {
       debugPrint('[STARTUP_ROUTE] firebase_exception_non_fatal=true');
       debugPrint('[STARTUP_ROUTE] startup_error_type=${e.runtimeType}');
@@ -238,8 +253,9 @@ class _SplashScreenState extends State<SplashScreen>
       _slowTimer?.cancel();
       _statusRotator?.cancel();
       try {
-        final result = await resolveVerifiedRouteResult(validateSession: false)
-            .timeout(_startupHardTimeout);
+        final result = await resolveVerifiedRouteResult(
+          validateSession: false,
+        ).timeout(_startupHardTimeout);
         if (!mounted) return;
         late final Widget target;
         switch (result.kind) {
@@ -260,6 +276,12 @@ class _SplashScreenState extends State<SplashScreen>
             debugPrint('[STARTUP_ROUTE] user_verified=true');
             debugPrint('[STARTUP_ROUTE] resolved=role_shell');
             target = RoleShellRouter(initialContext: result.context);
+            break;
+          case VerifiedRouteKind.workspaceSelection:
+            target = WorkspacePickerScreen(
+              memberships: result.memberships,
+              mandatory: true,
+            );
             break;
           case VerifiedRouteKind.workspaceAccess:
             debugPrint('[STARTUP_ROUTE] user_verified=true');
@@ -287,61 +309,88 @@ class _SplashScreenState extends State<SplashScreen>
       } on TimeoutException {
         debugPrint('[STARTUP_ROUTE] timeout=true');
         debugPrint('[STARTUP_ROUTE] resolved=splash_fallback');
-        if (!mounted) return;
-        _slowTimer?.cancel();
-        _statusRotator?.cancel();
-        setState(() {
-          _startupFailed = true;
-          _slowMode = false;
-        });
+        _showStartupFailure();
       } catch (inner) {
         debugPrint('[STARTUP_ROUTE] startup_error_type=${inner.runtimeType}');
+        _showStartupFailure();
       }
     } catch (e) {
       debugPrint('[STARTUP_ROUTE] startup_error_type=${e.runtimeType}');
+      _showStartupFailure();
     }
+  }
+
+  void _showStartupFailure() {
+    if (!mounted) return;
+    _slowTimer?.cancel();
+    _statusRotator?.cancel();
+    setState(() {
+      _startupFailed = true;
+      _slowMode = false;
+    });
   }
 
   void _scheduleStartupNavigation(Widget target) {
     if (_navigationCommitted || _navigationScheduled) return;
     if (!mounted) return;
+    _resolvedTarget = target;
     _navigationScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _navigationCommitted) return;
-      _navigationCommitted = true;
-      Navigator.of(context, rootNavigator: true).pushReplacement(
-        impactRoute(target),
-      );
+      _navigateToResolvedTarget();
     });
+  }
+
+  void _skipToResolvedTarget() => _navigateToResolvedTarget();
+
+  void _navigateToResolvedTarget() {
+    final target = _resolvedTarget;
+    if (!mounted || _navigationCommitted || target == null) return;
+    _navigationCommitted = true;
+    Navigator.of(
+      context,
+      rootNavigator: true,
+    ).pushReplacement(impactRoute(target));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          const _SplashBackdrop(),
-          _AmbientNebula(
-            animation: _ambient,
-            reduceMotion: _reduceMotion,
-          ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(
-                children: [
-                  Expanded(child: _buildBrandBlock()),
-                  _buildBottomBlock(),
-                  const SizedBox(height: 22),
-                  _buildFooter(),
-                  const SizedBox(height: 20),
-                ],
+      backgroundColor: const Color(0xFF03070D),
+      body: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _skipToResolvedTarget,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            WelcomeGalaxyBackground(reduceMotion: _reduceMotion),
+            SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) => SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: constraints.maxHeight,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(height: constraints.maxHeight * 0.12),
+                          _buildBrandBlock(),
+                          const SizedBox(height: 24),
+                          _buildBottomBlock(),
+                          const SizedBox(height: 22),
+                          _buildFooter(),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -373,6 +422,21 @@ class _SplashScreenState extends State<SplashScreen>
               const SizedBox(height: 12),
               Opacity(
                 opacity: _subtitleOpacity.value,
+                child: Text(
+                  _greetingText(),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.spaceGrotesk(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 25,
+                    height: 1.16,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Opacity(
+                opacity: _subtitleOpacity.value,
                 child: _buildSubtitle(context),
               ),
             ],
@@ -380,6 +444,14 @@ class _SplashScreenState extends State<SplashScreen>
         },
       ),
     );
+  }
+
+  String _greetingText() {
+    final savedName = Session.instance.userName?.trim() ?? '';
+    final firstName = savedName.isEmpty
+        ? ''
+        : savedName.split(RegExp(r'\s+')).first.trim();
+    return firstName.isEmpty ? 'Welcome back' : 'Welcome back, $firstName';
   }
 
   Widget _buildSubtitle(BuildContext context) {
@@ -391,7 +463,7 @@ class _SplashScreenState extends State<SplashScreen>
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Preparing your workspace',
+            _tr(context, 'preparing_workspace'),
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -406,7 +478,7 @@ class _SplashScreenState extends State<SplashScreen>
           ),
           const SizedBox(height: 6),
           Text(
-            'Securing your session and loading your organization data',
+            _tr(context, 'securing_workspace'),
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -425,17 +497,26 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Widget _buildBottomBlock() {
-    return AnimatedSize(
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-      alignment: Alignment.bottomCenter,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 380),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: _startupFailed
-            ? _startupErrorState()
-            : (_slowMode ? _preparingPanel() : _idleIndicator()),
+    if (_startupFailed) return _startupErrorState();
+    return SizedBox(
+      height: 48,
+      child: Center(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 260),
+          child: _slowMode
+              ? Text(
+                  _tr(context, _slowLoadingStates[_statusIndex]),
+                  key: ValueKey<int>(_statusIndex),
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
+                    color: Colors.white.withValues(alpha: .68),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: .25,
+                  ),
+                )
+              : _idleIndicator(),
+        ),
       ),
     );
   }
@@ -461,74 +542,6 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  Widget _preparingPanel() {
-    return Container(
-      key: const ValueKey('preparing-panel'),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Preparing your workspace',
-            style: GoogleFonts.spaceGrotesk(
-              color: Colors.white,
-              fontSize: 15.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.2,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Securing your session and loading your organization data.',
-            style: GoogleFonts.inter(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-              height: 1.4,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _PulsingDots(controller: _ambient, reduceMotion: _reduceMotion),
-              const SizedBox(width: 14),
-              Expanded(
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 280),
-                  transitionBuilder: (child, anim) => FadeTransition(
-                    opacity: anim,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0, 0.18),
-                        end: Offset.zero,
-                      ).animate(anim),
-                      child: child,
-                    ),
-                  ),
-                  child: Text(
-                    _slowLoadingStates[_statusIndex],
-                    key: ValueKey<int>(_statusIndex),
-                    style: GoogleFonts.inter(
-                      color: Colors.white.withValues(alpha: 0.82),
-                      fontSize: 12,
-                      letterSpacing: 0.4,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildFooter() {
     return AnimatedBuilder(
       animation: _intro,
@@ -536,7 +549,7 @@ class _SplashScreenState extends State<SplashScreen>
         return Opacity(
           opacity: 0.55 * _footerOpacity.value,
           child: Text(
-            'WORKFORCE WELLNESS INTELLIGENCE',
+            _tr(context, 'workforce_wellness_intelligence'),
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -586,7 +599,7 @@ class _SplashScreenState extends State<SplashScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Connection is taking longer than expected',
+                      _tr(context, 'connection_slow'),
                       style: GoogleFonts.spaceGrotesk(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
@@ -596,7 +609,7 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Check your connection, then try again.',
+                      _tr(context, 'check_connection_retry'),
                       style: GoogleFonts.inter(
                         color: AppColors.textSecondary,
                         fontSize: 12,
@@ -622,7 +635,7 @@ class _SplashScreenState extends State<SplashScreen>
                 ),
               ),
               child: Text(
-                'Try again',
+                _tr(context, 'try_again'),
                 style: GoogleFonts.inter(
                   fontWeight: FontWeight.w700,
                   fontSize: 13.5,
@@ -652,8 +665,8 @@ class _SplashScreenState extends State<SplashScreen>
               ),
               child: Text(
                 Session.instance.isLoggedIn
-                    ? 'Use another account'
-                    : 'Go to login',
+                    ? _tr(context, 'use_another_account')
+                    : _tr(context, 'go_to_login'),
                 style: GoogleFonts.inter(
                   fontWeight: FontWeight.w700,
                   fontSize: 13.5,
@@ -668,108 +681,11 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-class _SplashBackdrop extends StatelessWidget {
-  const _SplashBackdrop();
-
-  @override
-  Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment(0, -0.15),
-          radius: 1.25,
-          colors: [
-            Color(0xFF0F1A38),
-            Color(0xFF080D22),
-            Color(0xFF04060F),
-          ],
-          stops: [0.0, 0.55, 1.0],
-        ),
-      ),
-      child: SizedBox.expand(),
-    );
-  }
-}
-
-class _AmbientNebula extends StatelessWidget {
-  final Animation<double> animation;
-  final bool reduceMotion;
-
-  const _AmbientNebula({
-    required this.animation,
-    required this.reduceMotion,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: AnimatedBuilder(
-        animation: animation,
-        builder: (context, _) {
-          final t = reduceMotion ? 0.5 : animation.value;
-          return Stack(
-            children: [
-              Positioned(
-                top: 60 + 12 * t,
-                left: -70,
-                child: _GlowOrb(
-                  size: 260,
-                  colors: [
-                    AppColors.primary.withValues(
-                      alpha: 0.22 * (0.7 + 0.3 * t),
-                    ),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-              Positioned(
-                bottom: 90 - 14 * t,
-                right: -80,
-                child: _GlowOrb(
-                  size: 220,
-                  colors: [
-                    AppColors.primarySoft.withValues(
-                      alpha: 0.14 * (0.6 + 0.4 * (1 - t)),
-                    ),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-class _GlowOrb extends StatelessWidget {
-  final double size;
-  final List<Color> colors;
-
-  const _GlowOrb({required this.size, required this.colors});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(colors: colors),
-      ),
-    );
-  }
-}
-
 class _ShimmerLine extends StatelessWidget {
   final AnimationController controller;
   final bool reduceMotion;
 
-  const _ShimmerLine({
-    required this.controller,
-    required this.reduceMotion,
-  });
+  const _ShimmerLine({required this.controller, required this.reduceMotion});
 
   @override
   Widget build(BuildContext context) {
@@ -816,45 +732,6 @@ class _ShimmerLine extends StatelessWidget {
           );
         },
       ),
-    );
-  }
-}
-
-class _PulsingDots extends StatelessWidget {
-  final AnimationController controller;
-  final bool reduceMotion;
-
-  const _PulsingDots({
-    required this.controller,
-    required this.reduceMotion,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (context, _) {
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: List.generate(3, (i) {
-            final phase = ((controller.value * 2) + i * 0.18) % 1.0;
-            final wave = 0.5 - (phase - 0.5).abs();
-            final scale = reduceMotion ? 1.0 : 0.75 + 0.6 * wave;
-            final alpha = reduceMotion ? 0.55 : (0.35 + wave * 1.3).clamp(0.0, 1.0);
-            return Padding(
-              padding: EdgeInsets.only(right: i == 2 ? 0 : 6),
-              child: Container(
-                width: 6 * scale,
-                height: 6 * scale,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.primarySoft.withValues(alpha: alpha),
-                ),
-              ),
-            );
-          }),
-        );
-      },
     );
   }
 }

@@ -7,8 +7,10 @@ import '../i18n/tr.dart';
 import '../models/alert_item.dart';
 import '../models/notification_item.dart';
 import '../models/organization_invitation.dart';
+import '../services/notification_service.dart';
 import '../state/app_providers.dart';
 import '../theme/app_theme.dart';
+import '../utils/app_feedback.dart';
 import '../widgets/animated_wellar_card.dart';
 import '../widgets/animated_wellar_screen.dart';
 import '../widgets/status_chip.dart';
@@ -651,9 +653,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             children: [
               TextButton(
                 onPressed: () => _openAlertTarget(item),
-                child: Text(
-                  Tr.t(lang, 'view_alert'),
-                ),
+                child: Text(Tr.t(lang, 'view_alert')),
               ),
               const SizedBox(width: 8),
               if (isOpen)
@@ -697,6 +697,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   void _markReadOptimistically(NotificationItem item) {
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
+      return;
+    }
     if (!item.isUnread) return;
     final previous = {...ref.read(notificationReadOverrideProvider)};
     final overrides = {...previous};
@@ -714,26 +718,38 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     Set<String> previousOverrides,
   ) async {
     try {
-      await ref.read(notificationServiceProvider).markRead(item.id);
+      final result = await ref
+          .read(notificationServiceProvider)
+          .markRead(item.id);
+      if (result == NotificationReadResult.alreadyGone) {
+        _restoreReadOverride(item, previousOverrides);
+        ref.read(refreshTickProvider.notifier).state++;
+        return;
+      }
       ref.read(refreshTickProvider.notifier).state++;
     } catch (_) {
-      final current = {...ref.read(notificationReadOverrideProvider)};
-      if (!previousOverrides.contains(item.id)) {
-        current.remove(item.id);
-      }
-      final linkKey = item.linkId?.trim();
-      if (linkKey != null &&
-          linkKey.isNotEmpty &&
-          !previousOverrides.contains('link:$linkKey')) {
-        current.remove('link:$linkKey');
-      }
-      ref.read(notificationReadOverrideProvider.notifier).state = current;
+      _restoreReadOverride(item, previousOverrides);
       if (!mounted) return;
       final lang = ref.read(appLanguageControllerProvider).language;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(Tr.t(lang, 'mark_read_failed'))));
+      _showActionError(Tr.t(lang, 'mark_read_failed'));
     }
+  }
+
+  void _restoreReadOverride(
+    NotificationItem item,
+    Set<String> previousOverrides,
+  ) {
+    final current = {...ref.read(notificationReadOverrideProvider)};
+    if (!previousOverrides.contains(item.id)) {
+      current.remove(item.id);
+    }
+    final linkKey = item.linkId?.trim();
+    if (linkKey != null &&
+        linkKey.isNotEmpty &&
+        !previousOverrides.contains('link:$linkKey')) {
+      current.remove('link:$linkKey');
+    }
+    ref.read(notificationReadOverrideProvider.notifier).state = current;
   }
 
   Future<void> _handleNotificationTap(NotificationItem item) async {
@@ -780,7 +796,19 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         linkType == 'result' ||
         linkType == 'scan_result';
     if (isResultNotification) {
-      final scanId = await _resolveResultNotificationScanId(linkId);
+      String scanId;
+      try {
+        scanId = await _resolveResultNotificationScanId(linkId);
+      } catch (_) {
+        if (!mounted) return;
+        _showActionError(
+          Tr.t(
+            ref.read(appLanguageControllerProvider).language,
+            'linked_scan_unavailable',
+          ),
+        );
+        return;
+      }
       if (!mounted) return;
       if (scanId.isNotEmpty) {
         Navigator.of(context).push(
@@ -831,6 +859,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     final normalizedLinkId = linkId.trim();
     if (normalizedLinkId.isEmpty) return '';
 
+    Object? directLookupError;
     try {
       final directResult = await ref
           .read(scanServiceProvider)
@@ -838,17 +867,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       if (directResult != null) {
         return normalizedLinkId;
       }
-    } catch (_) {}
-
-    try {
-      final result = await ref.read(scanServiceProvider).fetchScanResultById(
-        normalizedLinkId,
-      );
-      final scanId = result?.scanId.trim() ?? '';
-      return scanId;
-    } catch (_) {
-      return '';
+    } catch (error) {
+      directLookupError = error;
     }
+
+    final result = await ref
+        .read(scanServiceProvider)
+        .fetchScanResultById(normalizedLinkId);
+    final scanId = result?.scanId.trim() ?? '';
+    if (scanId.isNotEmpty) return scanId;
+    if (directLookupError != null) throw directLookupError;
+    return '';
   }
 
   Future<void> _openOrganizationInvitation(
@@ -867,32 +896,43 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   Future<void> _openAlertTarget(AlertItem item) async {
     if (!mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => AlertDetailScreen(item: item)),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => AlertDetailScreen(item: item)));
   }
 
   Future<void> _markAlertSeen(AlertItem item) async {
     final lang = ref.read(appLanguageControllerProvider).language;
-    final ok = await ref.read(alertServiceProvider).markAlertClosed(item.id);
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
+      return;
+    }
+    var ok = false;
+    try {
+      ok = await ref.read(alertServiceProvider).markAlertClosed(item.id);
+    } catch (_) {
+      ok = false;
+    }
     if (ok) {
       ref.read(refreshTickProvider.notifier).state++;
       return;
     }
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(Tr.t(lang, 'alert_update_failed'))));
+    _showActionError(Tr.t(lang, 'alert_update_failed'));
   }
 
   Future<void> _markAllRead() async {
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
+      return;
+    }
     setState(() => _markingAll = true);
     final previous = {...ref.read(notificationReadOverrideProvider)};
     try {
       final items = ref
           .read(notificationsProvider)
           .maybeWhen(
-            data: (rows) => rows,
+            data: (rows) => rows.where((item) => item.isUnread).toList(),
             orElse: () => const <NotificationItem>[],
           );
       if (items.isNotEmpty) {
@@ -906,8 +946,45 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         }
         ref.read(notificationReadOverrideProvider.notifier).state = overrides;
       }
-      await ref.read(notificationServiceProvider).markAllRead();
+      final result = await ref
+          .read(notificationServiceProvider)
+          .markAllRead(items);
+      final resolvedIds = <String>{
+        ...result.succeededIds,
+        ...result.skippedIds,
+      };
+      final finalOverrides = {...previous};
+      for (final item in items) {
+        final link = item.linkId?.trim();
+        if (resolvedIds.contains(item.id)) {
+          finalOverrides.add(item.id);
+          if (link != null && link.isNotEmpty) {
+            finalOverrides.add('link:$link');
+          }
+        } else {
+          if (!previous.contains(item.id)) {
+            finalOverrides.remove(item.id);
+          }
+          if (link != null &&
+              link.isNotEmpty &&
+              !previous.contains('link:$link')) {
+            finalOverrides.remove('link:$link');
+          }
+        }
+      }
+      ref.read(notificationReadOverrideProvider.notifier).state =
+          finalOverrides;
       ref.read(refreshTickProvider.notifier).state++;
+
+      if (result.failedIds.isNotEmpty && mounted) {
+        final lang = ref.read(appLanguageControllerProvider).language;
+        final message = result.succeededIds.isEmpty && result.skippedIds.isEmpty
+            ? Tr.t(lang, 'mark_read_failed')
+            : lang.isRtl
+            ? 'تعذّر تحديد بعض الإشعارات كمقروءة. يُرجى المحاولة مرة أخرى.'
+            : 'Some notifications could not be marked as read. Please try again.';
+        _showActionError(message);
+      }
     } catch (_) {
       final items = ref
           .read(notificationsProvider)
@@ -915,24 +992,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             data: (rows) => rows,
             orElse: () => const <NotificationItem>[],
           );
-      final current = {...ref.read(notificationReadOverrideProvider)};
       for (final item in items) {
-        if (!previous.contains(item.id)) {
-          current.remove(item.id);
-        }
-        final link = item.linkId?.trim();
-        if (link != null &&
-            link.isNotEmpty &&
-            !previous.contains('link:$link')) {
-          current.remove('link:$link');
-        }
+        _restoreReadOverride(item, previous);
       }
-      ref.read(notificationReadOverrideProvider.notifier).state = current;
       final lang = ref.read(appLanguageControllerProvider).language;
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(Tr.t(lang, 'mark_read_failed'))));
+        _showActionError(Tr.t(lang, 'mark_read_failed'));
       }
     } finally {
       if (mounted) setState(() => _markingAll = false);
@@ -1002,11 +1067,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   }
 
   void _showFallbackSnack() {
-    final lang = ref.read(appLanguageControllerProvider).language;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(
-      const SnackBar(content: Text('No linked detail was provided.')),
-    );
+    _showActionError('No linked detail was provided.');
+  }
+
+  void _showActionError(String message) {
+    if (!mounted) return;
+    if (ref.read(connectivityStatusProvider).asData?.value == false) {
+      AppFeedback.showOffline(context);
+    } else {
+      AppFeedback.showError(context, message);
+    }
   }
 }

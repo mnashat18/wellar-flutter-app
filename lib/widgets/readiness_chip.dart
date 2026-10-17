@@ -11,8 +11,8 @@ class ReadinessChip extends StatelessWidget {
     final normalized = _normalize(label);
     final color = switch (normalized) {
       'Stable' => WellarTheme.success,
-      'Low Focus' => WellarTheme.warning,
-      'Elevated Fatigue' => const Color(0xFFFFA07A),
+      'Low Focus' => WellarTheme.info,
+      'Elevated Fatigue' => WellarTheme.warning,
       'High Risk' => WellarTheme.danger,
       _ => WellarTheme.textMuted,
     };

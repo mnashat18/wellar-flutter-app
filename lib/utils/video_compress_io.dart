@@ -3,7 +3,8 @@ import 'package:video_compress/video_compress.dart';
 import 'package:image_picker/image_picker.dart';
 
 final IVideoCompress _compressor = VideoCompress;
-const int _targetBitrate = 3500000;
+// Five-second capture at 2 Mbps targets about 1.2 MiB before container overhead.
+const int _targetBitrate = 2000000;
 const int _targetFrameRate = 30;
 const String _targetResolution = '1280x720';
 const int _maxUploadBytesWithoutRecompress = 5 * 1024 * 1024;

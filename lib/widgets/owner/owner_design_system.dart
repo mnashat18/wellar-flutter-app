@@ -280,8 +280,10 @@ class ReadinessStatusChip extends StatelessWidget {
       color = const Color(0xFFFFC46B);
     } else if (lower.contains('low focus')) {
       color = const Color(0xFF7DBBFF);
-    } else {
+    } else if (lower.trim() == 'stable') {
       color = const Color(0xFF6EE7A8);
+    } else {
+      color = const Color(0xFF9AA4B2);
     }
     return _pill(label, color);
   }

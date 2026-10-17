@@ -26,6 +26,8 @@ class _AnimatedWellarScreenState extends State<AnimatedWellarScreen>
   late final AnimationController _controller;
   late final Animation<double> _fade;
   late final Animation<Offset> _slide;
+  bool _reduceMotion = false;
+  bool _motionPreferenceRead = false;
 
   @override
   void initState() {
@@ -40,6 +42,21 @@ class _AnimatedWellarScreenState extends State<AnimatedWellarScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = MediaQuery.of(context).disableAnimations;
+    if (reduce != _reduceMotion || !_motionPreferenceRead) {
+      _reduceMotion = reduce;
+      _motionPreferenceRead = true;
+      if (reduce) {
+        _controller.value = 1;
+      } else if (!_controller.isAnimating) {
+        _controller.forward(from: 0);
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();
@@ -47,27 +64,27 @@ class _AnimatedWellarScreenState extends State<AnimatedWellarScreen>
 
   @override
   Widget build(BuildContext context) {
+    final content = Padding(
+      padding:
+          widget.padding ??
+          EdgeInsets.fromLTRB(
+            WellarTheme.pagePadding,
+            20,
+            WellarTheme.pagePadding,
+            8,
+          ),
+      child: widget.child,
+    );
     return Stack(
       children: [
         if (widget.showBackground) const AppAnimatedBackground(),
         SafeArea(
-          child: FadeTransition(
-            opacity: _fade,
-            child: SlideTransition(
-              position: _slide,
-              child: Padding(
-                padding:
-                    widget.padding ??
-                    EdgeInsets.fromLTRB(
-                      WellarTheme.pagePadding,
-                      20,
-                      WellarTheme.pagePadding,
-                      8,
-                    ),
-                child: widget.child,
-              ),
-            ),
-          ),
+          child: _reduceMotion
+              ? content
+              : FadeTransition(
+                  opacity: _fade,
+                  child: SlideTransition(position: _slide, child: content),
+                ),
         ),
       ],
     );

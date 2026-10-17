@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../models/organization_invitation.dart';
 import '../state/session.dart';
@@ -39,8 +38,8 @@ class OrganizationInvitationService {
   Future<List<OrganizationInvitation>> fetchPendingInvitations({
     int limit = 50,
   }) async {
-    final currentUser =
-        await OrganizationService.instance.fetchAuthenticatedCurrentUserProfile();
+    final currentUser = await OrganizationService.instance
+        .fetchAuthenticatedCurrentUserProfile();
     final email =
         currentUser?.email.trim().toLowerCase() ??
         Session.instance.userEmail?.trim().toLowerCase() ??
@@ -94,10 +93,6 @@ class OrganizationInvitationService {
     final user = await _requireCurrentUser();
     _validateInvitationRecipient(invitation, user.email);
 
-    final beforeCanonical = await OrganizationService.instance
-        .fetchCanonicalWorkspaceContext(forceRefresh: true);
-    final originalMembershipId = _restorableMembershipId(beforeCanonical);
-
     try {
       await _client.patch(
         '/items/request_invites/${invitation.id}',
@@ -113,12 +108,11 @@ class OrganizationInvitationService {
 
     final refreshed = await _refreshWorkspaceStateAfterAccept(
       invitedBusinessProfileId: invitation.businessProfileId,
-      restoreMembershipId: originalMembershipId,
     );
 
     return OrganizationInvitationActionResult(
       message: refreshed.invitedMembershipVisible
-          ? 'Invitation accepted. The organization is now available in Switch Organization.'
+          ? 'Invitation accepted. The organization will appear in Switch Organization; workspace switching is coming soon.'
           : 'Invitation accepted. Organization access is still syncing. Refresh Switch Organization in a moment.',
       activeWorkspaceContext: refreshed.context,
       restoredOriginalWorkspace: refreshed.restored,
@@ -174,7 +168,6 @@ class OrganizationInvitationService {
 
   Future<_RefreshWorkspaceResult> _refreshWorkspaceStateAfterAccept({
     required String invitedBusinessProfileId,
-    required String? restoreMembershipId,
   }) async {
     OrganizationService.instance.clearWorkspaceSessionSyncState();
     CanonicalWorkspaceContextResult canonical = await OrganizationService
@@ -186,13 +179,14 @@ class OrganizationInvitationService {
       invitedBusinessProfileId,
     );
 
-    for (var attempt = 1;
-        attempt < _acceptRefreshAttempts && !invitedMembershipVisible;
-        attempt++) {
+    for (
+      var attempt = 1;
+      attempt < _acceptRefreshAttempts && !invitedMembershipVisible;
+      attempt++
+    ) {
       await Future<void>.delayed(_acceptRefreshDelay);
-      canonical = await OrganizationService.instance.fetchCanonicalWorkspaceContext(
-        forceRefresh: true,
-      );
+      canonical = await OrganizationService.instance
+          .fetchCanonicalWorkspaceContext(forceRefresh: true);
       snapshot = canonical.snapshot;
       invitedMembershipVisible = _hasEligibleMembershipForBusinessProfile(
         snapshot?.memberships ?? const <WorkspaceMembershipChoice>[],
@@ -212,30 +206,6 @@ class OrganizationInvitationService {
     final activeContext = snapshot.activeContext;
     final hasValidCurrent = _isValidActiveContext(activeContext);
 
-    if (restoreMembershipId != null &&
-        restoreMembershipId.isNotEmpty &&
-        invitedMembershipVisible &&
-        hasValidCurrent &&
-        snapshot.activeMembershipId.trim().isNotEmpty &&
-        snapshot.activeMembershipId.trim() != restoreMembershipId &&
-        _isMembershipEligible(snapshot.memberships, restoreMembershipId)) {
-      try {
-        final restored = await OrganizationService.instance.syncWorkspaceSession(
-          membershipId: restoreMembershipId,
-          trigger: 'organization_invitation_accept_restore',
-        );
-        return _RefreshWorkspaceResult(
-          context: restored,
-          restored: true,
-          invitedMembershipVisible: true,
-        );
-      } on OrganizationServiceException catch (error) {
-        debugPrint('[ORG_INVITE_RESTORE_FAILED] message=${error.message}');
-      } catch (error) {
-        debugPrint('[ORG_INVITE_RESTORE_FAILED] error=$error');
-      }
-    }
-
     if (hasValidCurrent) {
       OrganizationService.instance.applyActiveWorkspaceContext(activeContext!);
       return _RefreshWorkspaceResult(
@@ -251,21 +221,6 @@ class OrganizationInvitationService {
       restored: false,
       invitedMembershipVisible: invitedMembershipVisible,
     );
-  }
-
-  bool _isMembershipEligible(
-    List<WorkspaceMembershipChoice> memberships,
-    String membershipId,
-  ) {
-    for (final membership in memberships) {
-      final status = membership.status.trim().toLowerCase();
-      if (membership.membershipId == membershipId &&
-          membership.businessProfileId.trim().isNotEmpty &&
-          (status.isEmpty || status == 'active' || status == 'accepted')) {
-        return true;
-      }
-    }
-    return false;
   }
 
   bool _hasEligibleMembershipForBusinessProfile(
@@ -295,27 +250,10 @@ class OrganizationInvitationService {
         (membershipStatus == 'active' || membershipStatus == 'accepted');
   }
 
-  String? _restorableMembershipId(CanonicalWorkspaceContextResult canonical) {
-    final snapshot = canonical.snapshot;
-    final context = snapshot?.activeContext;
-    if (canonical.status != CanonicalWorkspaceContextStatus.ok ||
-        snapshot == null ||
-        !_isValidActiveContext(context)) {
-      return null;
-    }
-    final membershipId = snapshot.activeMembershipId.trim();
-    if (membershipId.isEmpty) return null;
-    return _isMembershipEligible(snapshot.memberships, membershipId)
-        ? membershipId
-        : null;
-  }
-
   Future<AuthenticatedCurrentUserProfile> _requireCurrentUser() async {
-    final user =
-        await OrganizationService.instance.fetchAuthenticatedCurrentUserProfile();
-    if (user == null ||
-        user.id.trim().isEmpty ||
-        user.email.trim().isEmpty) {
+    final user = await OrganizationService.instance
+        .fetchAuthenticatedCurrentUserProfile();
+    if (user == null || user.id.trim().isEmpty || user.email.trim().isEmpty) {
       throw const OrganizationInvitationException(
         'Your session expired. Please sign in again.',
       );

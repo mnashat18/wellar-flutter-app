@@ -1,3 +1,4 @@
+import '../utils/safe_debug_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,6 +8,7 @@ import '../services/organization_service.dart';
 import '../state/app_providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/page_transition.dart';
+import '../utils/app_feedback.dart';
 import '../widgets/animated_wellar_screen.dart';
 import '../widgets/notification_bell_button.dart';
 import '../widgets/owner/owner_design_system.dart';
@@ -61,7 +63,7 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
     final workspace = ref.watch(activeWorkspaceContextProvider);
     final activeRole = _workspaceRole(workspace);
     if (activeRole != 'owner') {
-      debugPrint(
+      safeDebugLog(
         '[STALE_ROLE_WIDGET_BLOCKED] widget=OwnerHomeScreen expected=owner actual=$activeRole',
       );
       return const Scaffold(
@@ -96,7 +98,12 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
       backgroundColor: Colors.transparent,
       body: AnimatedWellarScreen(
         showBackground: false,
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        padding: const EdgeInsets.fromLTRB(
+          WellarTheme.pagePadding,
+          16,
+          WellarTheme.pagePadding,
+          WellarTheme.pagePadding,
+        ),
         child: FutureBuilder<OwnerSnapshot>(
           future: _future,
           builder: (context, snap) {
@@ -107,6 +114,11 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
                 : (data?.openAlerts ?? 0);
             return RefreshIndicator(
               onRefresh: () async {
+                if (ref.read(connectivityStatusProvider).asData?.value ==
+                    false) {
+                  AppFeedback.showOffline(context);
+                  return;
+                }
                 ref.read(refreshTickProvider.notifier).state++;
               },
               child: ListView(
@@ -180,8 +192,10 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 22),
-                  if (isLoading || data == null)
+                  const SizedBox(height: WellarTheme.sectionGap),
+                  if (snap.hasError)
+                    _snapshotRetryState(lang)
+                  else if (isLoading || data == null)
                     const OwnerSurfaceCard(
                       child: SizedBox(
                         height: 130,
@@ -195,10 +209,26 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
                     )
                   else
                     _primaryMetricsGrid(data, role, effectiveOpenAlerts),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: WellarTheme.sectionGap),
+                  if (!snap.hasError &&
+                      !isLoading &&
+                      data?.workforceUnavailableMessage != null) ...[
+                    OwnerSurfaceCard(
+                      child: Text(
+                        data!.workforceUnavailableMessage!,
+                        style: const TextStyle(
+                          color: WellarTheme.textMuted,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: WellarTheme.sectionGap),
+                  ],
                   const _SectionTitle('Priority items'),
                   const SizedBox(height: 10),
-                  if (isLoading || data == null)
+                  if (snap.hasError)
+                    _snapshotRetryState(lang)
+                  else if (isLoading || data == null)
                     const OwnerSurfaceCard(
                       child: Center(
                         child: CircularProgressIndicator(
@@ -233,7 +263,7 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
                         ),
                       ],
                     ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   const _SectionTitle('Primary actions'),
                   const SizedBox(height: 10),
                   ResponsiveCardGrid(
@@ -254,10 +284,20 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
                         child: QuickActionButton(
                           title: 'Start my scan',
                           icon: Icons.play_circle_outline_rounded,
-                          onTap: () => Navigator.push(
-                            context,
-                            fadeSlideRoute(const WellnessCheckScreen()),
-                          ),
+                          onTap: () {
+                            if (ref
+                                    .read(connectivityStatusProvider)
+                                    .asData
+                                    ?.value ==
+                                false) {
+                              AppFeedback.showOffline(context);
+                              return;
+                            }
+                            Navigator.push(
+                              context,
+                              fadeSlideRoute(const WellnessCheckScreen()),
+                            );
+                          },
                         ),
                       ),
                       ResponsiveCardGridItem.fullWidth(
@@ -273,10 +313,12 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   const _SectionTitle('Readiness summary'),
                   const SizedBox(height: 10),
-                  if (isLoading || data == null)
+                  if (snap.hasError)
+                    _snapshotRetryState(lang)
+                  else if (isLoading || data == null)
                     const OwnerSurfaceCard(
                       child: Center(
                         child: CircularProgressIndicator(
@@ -287,7 +329,7 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
                     )
                   else
                     _readinessDistributionCard(data),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   const _SectionTitle('Recent activity'),
                   const SizedBox(height: 10),
                   if (snap.hasError)
@@ -296,10 +338,20 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
                       title: Tr.t(lang, 'snapshot_unavailable'),
                       subtitle: Tr.t(lang, 'company_overview_unavailable'),
                       actionLabel: Tr.t(lang, 'retry'),
-                      onAction: () => setState(
-                        () =>
-                            _future = OwnerOpsService.instance.fetchSnapshot(),
-                      ),
+                      onAction: () {
+                        if (ref
+                                .read(connectivityStatusProvider)
+                                .asData
+                                ?.value ==
+                            false) {
+                          AppFeedback.showOffline(context);
+                          return;
+                        }
+                        final next = OwnerOpsService.instance.fetchSnapshot();
+                        setState(() {
+                          _future = next;
+                        });
+                      },
                     )
                   else
                     _activityFeed(data, effectiveOpenAlerts),
@@ -309,6 +361,36 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
           },
         ),
       ),
+    );
+  }
+
+  Widget _snapshotRetryState(dynamic lang) {
+    return SmartEmptyState(
+      icon: Icons.error_outline_rounded,
+      title: Tr.t(lang, 'snapshot_unavailable'),
+      subtitle: Tr.t(lang, 'company_overview_unavailable'),
+      actionLabel: Tr.t(lang, 'retry'),
+      onAction: () async {
+        if (ref.read(connectivityStatusProvider).asData?.value == false) {
+          AppFeedback.showOffline(context);
+          return;
+        }
+        final retry = _loadSnapshotForCurrentRole(forceRefresh: true);
+        try {
+          final snapshot = await retry;
+          if (mounted) {
+            setState(() {
+              _future = Future.value(snapshot);
+            });
+          }
+        } catch (error, stackTrace) {
+          if (mounted) {
+            setState(() {
+              _future = Future.error(error, stackTrace);
+            });
+          }
+        }
+      },
     );
   }
 
@@ -323,7 +405,9 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
     final cards = <_MetricTileData>[
       _MetricTileData(
         icon: Icons.people_alt_outlined,
-        value: '${data.activeMembers}',
+        value: data.workforceUnavailableMessage == null
+            ? '${data.activeMembers}'
+            : '—',
         label: 'Active members',
       ),
       _MetricTileData(
@@ -340,7 +424,7 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
         icon: Icons.notification_important_outlined,
         value: '$effectiveOpenAlerts',
         label: 'Open alerts',
-        accent: const Color(0xFFF4BE68),
+        accent: WellarTheme.warning,
         onTap: () => _openNotificationCenter(role: role, openAlerts: true),
       ),
     ];
@@ -359,22 +443,27 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
       _ReadinessDistributionRow(
         label: 'Stable',
         keyName: 'Stable',
-        accent: const Color(0xFF72D8A0),
+        accent: WellarTheme.success,
       ),
       _ReadinessDistributionRow(
         label: 'Low Focus',
         keyName: 'Low Focus',
-        accent: const Color(0xFF6DAFEA),
+        accent: WellarTheme.info,
       ),
       _ReadinessDistributionRow(
         label: 'Elevated Fatigue',
         keyName: 'Elevated Fatigue',
-        accent: const Color(0xFFDFB35D),
+        accent: WellarTheme.warning,
       ),
       _ReadinessDistributionRow(
         label: 'High Risk',
         keyName: 'High Risk',
-        accent: const Color(0xFFE38654),
+        accent: WellarTheme.danger,
+      ),
+      _ReadinessDistributionRow(
+        label: 'Unavailable - please retake the scan',
+        keyName: 'Unavailable - please retake the scan',
+        accent: WellarTheme.neutral,
       ),
     ];
     final total = rows.fold<int>(
@@ -569,7 +658,10 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: OwnerSurfaceCard(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(
+              horizontal: WellarTheme.cardPadding,
+              vertical: 12,
+            ),
             child: Row(
               children: [
                 Icon(item.icon, color: WellarTheme.primary, size: 20),
@@ -634,7 +726,7 @@ class _OwnerHomeScreenState extends ConsumerState<OwnerHomeScreen> {
     final workspace = ref.read(activeWorkspaceContextProvider);
     final activeRole = _workspaceRole(workspace);
     if (activeRole != 'owner') {
-      debugPrint(
+      safeDebugLog(
         '[STALE_ROLE_WIDGET_BLOCKED] widget=OwnerHomeScreen expected=owner actual=$activeRole',
       );
       return _idleSnapshotFuture();
@@ -731,7 +823,7 @@ class _MetricTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return OwnerSurfaceCard(
       onTap: data.onTap,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(WellarTheme.cardPadding),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

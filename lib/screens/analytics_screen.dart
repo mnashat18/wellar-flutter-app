@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import '../i18n/tr.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/request_item.dart';
@@ -202,10 +203,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
           const AnimatedSpaceBackground(),
           SafeArea(
             child: hasError
-                ? _buildErrorState(
-                    historyAsync,
-                    exportsAsync,
-                  )
+                ? _buildErrorState(historyAsync, exportsAsync)
                 : isLoading
                 ? const SkeletonList()
                 : FadeTransition(
@@ -238,10 +236,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     );
   }
 
-  Widget _buildErrorState(
-    AsyncValue a,
-    AsyncValue b,
-  ) {
+  Widget _buildErrorState(AsyncValue a, AsyncValue b) {
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
@@ -249,14 +244,14 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
         const SizedBox(height: 80),
         StatusCard(
           title: 'Analytics unavailable',
-          message:
-              a.error?.toString() ??
-              b.error?.toString() ??
-              'Unknown error',
+          message: Tr.localized(context, 'generic_load_error'),
           icon: Icons.warning_amber_rounded,
           iconColor: AppColors.highRisk,
           actionText: 'Retry',
-          onAction: () {},
+          onAction: () {
+            ref.invalidate(historyProvider);
+            ref.invalidate(exportsProvider);
+          },
         ),
       ],
     );
@@ -295,22 +290,24 @@ class _AnalyticsViewModel {
   int get totalScans => history.length;
   int get previousTotalScans => previousHistory.length;
 
-  double get averageConfidenceNormalized {
+  double? get averageConfidenceNormalized {
     final values = history
         .map((e) => e.confidence)
         .whereType<double>()
+        .where((value) => value.isFinite && value >= 0)
         .toList();
-    if (values.isEmpty) return 0;
+    if (values.isEmpty) return null;
     final avg = values.reduce((a, b) => a + b) / values.length;
     return (avg <= 1 ? avg : avg / 100).clamp(0, 1);
   }
 
-  double get previousAverageConfidenceNormalized {
+  double? get previousAverageConfidenceNormalized {
     final values = previousHistory
         .map((e) => e.confidence)
         .whereType<double>()
+        .where((value) => value.isFinite && value >= 0)
         .toList();
-    if (values.isEmpty) return 0;
+    if (values.isEmpty) return null;
     final avg = values.reduce((a, b) => a + b) / values.length;
     return (avg <= 1 ? avg : avg / 100).clamp(0, 1);
   }
@@ -333,11 +330,13 @@ class _AnalyticsViewModel {
     return approved / all.length;
   }
 
-  double get performanceIndex =>
-      (averageConfidenceNormalized + approvalRate) / 2;
+  double? get performanceIndex => averageConfidenceNormalized == null
+      ? null
+      : (averageConfidenceNormalized! + approvalRate) / 2;
 
-  double get previousPerformanceIndex =>
-      (previousAverageConfidenceNormalized + previousApprovalRate) / 2;
+  double? get previousPerformanceIndex => previousAverageConfidenceNormalized == null
+      ? null
+      : (previousAverageConfidenceNormalized! + previousApprovalRate) / 2;
 
   double get riskRate {
     if (history.isEmpty) return 0;
@@ -361,6 +360,7 @@ class _AnalyticsViewModel {
       'Attention Needed': 0,
       'Readiness Concern': 0,
       'Action Required': 0,
+      'Unavailable - please retake the scan': 0,
     };
 
     for (final r in history) {
@@ -376,11 +376,11 @@ class _AnalyticsViewModel {
     if (v.contains('low')) return 'Attention Needed';
     if (v.contains('elevated')) return 'Readiness Concern';
     if (v.contains('high')) return 'Action Required';
-    return 'Stable';
+    return 'Unavailable - please retake the scan';
   }
 
-  double? deltaPercent(double current, double previous) {
-    if (previous == 0) return null;
+  double? deltaPercent(double? current, double? previous) {
+    if (current == null || previous == null || previous == 0) return null;
     return (current - previous) / previous;
   }
 }
@@ -654,15 +654,18 @@ class _PerformanceHero extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Row(
         children: [
-          _RadialGauge(
-            value: vm.performanceIndex,
-            label: '${(vm.performanceIndex * 100).round()}%',
-          ),
+          if (vm.performanceIndex case final performance?)
+            _RadialGauge(
+              value: performance,
+              label: '${(performance * 100).round()}%',
+            )
+          else
+            const Text('Performance unavailable'),
           const SizedBox(width: 16),
           Expanded(
-              child: Text(
-                'Performance Index blends departure-readiness confidence '
-                'and supervisor response quality.',
+            child: Text(
+              'Performance Index blends departure-readiness confidence '
+              'and supervisor response quality.',
               style: const TextStyle(
                 color: AppColors.textSecondary,
                 fontSize: 12,
@@ -701,7 +704,9 @@ class _StatsGrid extends StatelessWidget {
         ResponsiveCardGridItem(
           child: _StatTile(
             label: 'Avg Confidence',
-            value: '${(vm.averageConfidenceNormalized * 100).round()}%',
+            value: vm.averageConfidenceNormalized == null
+                ? '-'
+                : '${(vm.averageConfidenceNormalized! * 100).round()}%',
             color: AppColors.stable,
           ),
         ),
@@ -715,7 +720,11 @@ class _StatsGrid extends StatelessWidget {
         ResponsiveCardGridItem.fullWidth(
           child: _StatTile(
             label: 'Operational Status',
-            value: vm.performanceIndex > 0.7 ? 'On Track' : 'Watch',
+            value: vm.performanceIndex == null
+                ? 'Unavailable'
+                : vm.performanceIndex! > 0.7
+                ? 'On Track'
+                : 'Watch',
             color: AppColors.lowFocus,
           ),
         ),
@@ -1153,7 +1162,9 @@ class _CompareSection extends StatelessWidget {
           const SizedBox(height: 10),
           _CompareRow(
             label: 'Avg Confidence',
-            current: '${(vm.averageConfidenceNormalized * 100).round()}%',
+            current: vm.averageConfidenceNormalized == null
+                ? '-'
+                : '${(vm.averageConfidenceNormalized! * 100).round()}%',
             delta: _formatDelta(
               vm.deltaPercent(
                 vm.averageConfidenceNormalized,

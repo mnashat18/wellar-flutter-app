@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../i18n/tr.dart';
 import '../../models/audit_log.dart';
 import '../../services/audit_log_service.dart';
 import '../../state/session.dart';
@@ -321,7 +322,7 @@ class _AuditMetaCard extends StatelessWidget {
                     border: Border.all(color: Colors.white12),
                   ),
                   child: Text(
-                    snapshot.error.toString(),
+                    Tr.localized(context, 'generic_load_error'),
                     style: const TextStyle(
                       color: AppColors.highRisk,
                       fontSize: 12,

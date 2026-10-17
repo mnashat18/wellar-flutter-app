@@ -1,10 +1,14 @@
 import '../state/app_language_state.dart';
+import 'package:flutter/widgets.dart';
 
 class Tr {
   Tr._();
 
   static const Map<String, Map<String, String>> _k = {
     'en': {
+      'today': 'Today',
+      'scan': 'Scan',
+      'results': 'Results',
       'home': 'Home',
       'requests': 'Requests',
       'history': 'History',
@@ -40,6 +44,22 @@ class Tr {
       'back_to_home': 'Back to Home',
       'refresh_result': 'Refresh Result',
       'loading': 'Loading...',
+      'authenticating': 'Authenticating',
+      'restoring_workspace': 'Restoring workspace',
+      'loading_dashboard': 'Loading dashboard',
+      'preparing_experience': 'Preparing experience',
+      'preparing_workspace': 'Preparing your workspace',
+      'securing_workspace':
+          'Securing your session and loading your organization data.',
+      'connection_slow': 'Connection is taking longer than expected',
+      'check_connection_retry': 'Check your connection, then try again.',
+      'no_internet_connection': 'No internet connection',
+      'offline_action_unavailable': 'Connect to the internet to continue.',
+      'linked_scan_unavailable':
+          'Could not load the linked scan result. Try again.',
+      'use_another_account': 'Use another account',
+      'go_to_login': 'Go to login',
+      'workforce_wellness_intelligence': 'Workforce wellness intelligence',
       'unavailable': 'Unavailable',
       'unknown_user': 'Unknown User',
       'workspace_default': 'Workspace',
@@ -137,7 +157,7 @@ class Tr {
       'continue': 'Continue',
       'consent_required': 'Consent Required',
       'consent_text':
-          'This readiness check uses your camera, microphone, and a short focus task to estimate operational readiness. It is not a diagnosis.',
+          'This scan analyzes eye and face signals for an indicative, non-diagnostic wellbeing indicator. It captures face video, voice, and an optional photo. Media is deleted after analysis and is not used for research or training.',
       'i_consent_start': 'I Consent & Start',
       'permissions_check': 'Permissions Check',
       'permissions_required_body':
@@ -389,6 +409,8 @@ class Tr {
       'mark_seen': 'Mark seen',
       'mark_read_failed': 'Unable to update notification right now.',
       'alert_update_failed': 'Unable to update alert right now.',
+      'request_scan_link_update_failed':
+          'Your result was saved, but we could not confirm your request was updated. Check your Requests tab shortly.',
       'view_request': 'View request',
       'view_alert': 'View alert',
       'open': 'Open',
@@ -409,6 +431,9 @@ class Tr {
       'role_info_unavailable':
           'This information is not available for your role.',
       'connection_issue_try_again': 'Connection issue. Please try again.',
+      'generic_load_error': "We couldn't load this. Please try again.",
+      'generic_action_error': "We couldn't complete this action. Please try again.",
+      'partial_data_notice': 'Some data may be incomplete.',
       'longer_than_expected':
           'This is taking longer than expected. Please try again.',
       'information_unavailable_now':
@@ -517,6 +542,9 @@ class Tr {
       'pw_match': 'Passwords match',
     },
     'ar': {
+      'today': 'اليوم',
+      'scan': 'الفحص',
+      'results': 'النتائج',
       'home': 'الرئيسية',
       'requests': 'الطلبات',
       'history': 'السجل',
@@ -552,6 +580,21 @@ class Tr {
       'back_to_home': 'العودة للرئيسية',
       'refresh_result': 'تحديث النتيجة',
       'loading': 'جارٍ التحميل...',
+      'authenticating': 'جارٍ التحقق من الهوية',
+      'restoring_workspace': 'جارٍ استعادة مساحة العمل',
+      'loading_dashboard': 'جارٍ تحميل لوحة التحكم',
+      'preparing_experience': 'جارٍ تجهيز التجربة',
+      'preparing_workspace': 'جارٍ تجهيز مساحة العمل',
+      'securing_workspace': 'جارٍ تأمين جلستك وتحميل بيانات المؤسسة.',
+      'connection_slow': 'يستغرق الاتصال وقتًا أطول من المتوقع',
+      'check_connection_retry': 'تحقق من اتصالك ثم حاول مرة أخرى.',
+      'no_internet_connection': 'لا يوجد اتصال بالإنترنت',
+      'offline_action_unavailable': 'اتصل بالإنترنت للمتابعة.',
+      'linked_scan_unavailable':
+          'تعذر تحميل نتيجة الفحص المرتبطة. حاول مرة أخرى.',
+      'use_another_account': 'استخدام حساب آخر',
+      'go_to_login': 'الانتقال إلى تسجيل الدخول',
+      'workforce_wellness_intelligence': 'ذكاء العافية للقوى العاملة',
       'unavailable': 'غير متاح',
       'unknown_user': 'مستخدم غير معروف',
       'workspace_default': 'مساحة العمل',
@@ -640,7 +683,7 @@ class Tr {
       'continue': 'متابعة',
       'consent_required': 'موافقة مطلوبة',
       'consent_text':
-          'يستخدم هذا الفحص الكاميرا والميكروفون ومهمة تركيز قصيرة لتقدير الجاهزية التشغيلية. وهو ليس تشخيصًا.',
+          'يحلل هذا الفحص إشارات العين والوجه لإعطاء مؤشر رفاهية استرشادي غير تشخيصي. يلتقط فيديو للوجه والصوت وصورة اختيارية. تُحذف الوسائط بعد التحليل ولا تُستخدم للبحث أو التدريب.',
       'i_consent_start': 'أوافق وابدأ',
       'permissions_check': 'فحص الأذونات',
       'permissions_required_body':
@@ -838,6 +881,8 @@ class Tr {
       'notifications_section_subtitle': 'إشعارات وتحديثات حسابك.',
       'mark_seen': 'تحديد كمُشاهد',
       'mark_read_failed': 'تعذر تحديث الإشعار حالياً.',
+      'request_scan_link_update_failed':
+          'تم حفظ نتيجتك، لكن تعذر تأكيد تحديث طلبك. يُرجى مراجعة تبويب الطلبات بعد قليل.',
       'view_request': 'عرض الطلب',
       'view_alert': 'عرض التنبيه',
       'open': 'فتح',
@@ -857,6 +902,9 @@ class Tr {
           'انتهت صلاحية الجلسة. يرجى تسجيل الدخول مرة أخرى.',
       'role_info_unavailable': 'هذه المعلومات غير متاحة لدورك.',
       'connection_issue_try_again': 'مشكلة في الاتصال. يرجى المحاولة مرة أخرى.',
+      'generic_load_error': 'تعذر تحميل البيانات. يرجى المحاولة مرة أخرى.',
+      'generic_action_error': 'تعذر إكمال هذه العملية. يرجى المحاولة مرة أخرى.',
+      'partial_data_notice': 'قد تكون بعض البيانات غير مكتملة.',
       'longer_than_expected':
           'يستغرق هذا وقتاً أطول من المتوقع. يرجى المحاولة مرة أخرى.',
       'information_unavailable_now': 'بعض المعلومات غير متاحة حالياً.',
@@ -966,4 +1014,9 @@ class Tr {
   static String withCount(AppLanguage lang, String key, {required int count}) {
     return t(lang, key).replaceAll('{count}', '$count');
   }
+
+  static String localized(BuildContext context, String key) => t(
+    AppLanguage.fromCode(Localizations.localeOf(context).languageCode),
+    key,
+  );
 }

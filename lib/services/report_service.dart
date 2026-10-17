@@ -1,7 +1,7 @@
+import '../utils/safe_debug_log.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/report_export.dart';
@@ -27,7 +27,8 @@ class ReportService {
     }
     final businessProfileId = await OrganizationService.instance
         .fetchPrimaryBusinessProfileId();
-    final workspace = await OrganizationService.instance.fetchActiveWorkspaceContext();
+    final workspace = await OrganizationService.instance
+        .fetchActiveWorkspaceContext();
     final trace = OrganizationService.instance.activeSwitchTrace ?? 'none';
 
     final payload = <String, dynamic>{
@@ -38,7 +39,7 @@ class ReportService {
       'status': 'pending',
       if (filters != null) 'filters': filters,
     };
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_REQUEST] feature=reports operation=create_export method=POST endpoint_or_collection=/items/reports_exports membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${businessProfileId ?? ''} department=${workspace?.departmentId?.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} context_source=${OrganizationService.instance.activeWorkspaceContextSource} workspace_revision=${OrganizationService.instance.workspaceRevision} filter_summary=format=$format;status=pending started=true trace=$trace',
     );
     Response response;
@@ -56,7 +57,7 @@ class ReportService {
       }
     }
     final data = response.data['data'] as Map<String, dynamic>;
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_RESPONSE] feature=reports operation=create_export http_status=${response.statusCode ?? 0} result_count=1 duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${businessProfileId ?? ''} workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true returned_business_profile_ids=[${businessProfileId ?? ''}] returned_membership_ids=[${workspace?.membershipId.trim() ?? ''}] empty_result=false trace=$trace',
     );
     return data['id'].toString();
@@ -107,7 +108,8 @@ class ReportService {
     final isAdmin = Session.instance.isAdmin;
     final businessProfileId = await OrganizationService.instance
         .fetchPrimaryBusinessProfileId();
-    final workspace = await OrganizationService.instance.fetchActiveWorkspaceContext();
+    final workspace = await OrganizationService.instance
+        .fetchActiveWorkspaceContext();
     final trace = OrganizationService.instance.activeSwitchTrace ?? 'none';
     final query = <String, dynamic>{
       'sort': '-date_created',
@@ -127,7 +129,7 @@ class ReportService {
         query['filter[user][_eq]'] = userId;
       }
     }
-    debugPrint(
+    safeDebugLog(
       '[SCOPED_DATA_REQUEST] feature=reports operation=fetch_exports method=GET endpoint_or_collection=/items/reports_exports membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${businessProfileId ?? ''} department=${workspace?.departmentId?.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} context_source=${OrganizationService.instance.activeWorkspaceContextSource} workspace_revision=${OrganizationService.instance.workspaceRevision} filter_summary=${query.entries.map((e) => '${e.key}=${e.value}').toList()} started=true trace=$trace',
     );
     try {
@@ -137,7 +139,7 @@ class ReportService {
       );
       final data = response.data['data'];
       if (data is List) {
-        debugPrint(
+        safeDebugLog(
           '[SCOPED_DATA_RESPONSE] feature=reports operation=fetch_exports http_status=${response.statusCode ?? 0} result_count=${data.length} duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${businessProfileId ?? ''} workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true returned_business_profile_ids=${data.whereType<Map<String, dynamic>>().map((row) => row['business_profile']?.toString().trim() ?? '').where((v) => v.isNotEmpty).toSet().toList()} returned_membership_ids=${data.whereType<Map<String, dynamic>>().map((row) => row['user']?.toString().trim() ?? '').where((v) => v.isNotEmpty).toSet().toList()} empty_result=${data.isEmpty} trace=$trace',
         );
         return data
@@ -145,14 +147,18 @@ class ReportService {
             .map(ReportExport.fromJson)
             .toList();
       }
-      debugPrint(
+      safeDebugLog(
         '[SCOPED_DATA_RESPONSE] feature=reports operation=fetch_exports http_status=${response.statusCode ?? 0} result_count=0 duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${businessProfileId ?? ''} workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true returned_business_profile_ids=[] returned_membership_ids=[] empty_result=true trace=$trace',
       );
       return const [];
     } on DioException catch (e) {
       final status = e.response?.statusCode ?? 0;
-      debugPrint(
-        '[SCOPED_DATA_ERROR] feature=reports operation=fetch_exports http_status=$status error_type=${e.type} failure_code=${status == 403 ? 'scoped_data_403' : status == 401 ? 'scoped_data_401' : 'scoped_data_network_error'} duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${businessProfileId ?? ''} membership_role=${workspace?.memberRole ?? ''} workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true trace=$trace',
+      safeDebugLog(
+        '[SCOPED_DATA_ERROR] feature=reports operation=fetch_exports http_status=$status error_type=${e.type} failure_code=${status == 403
+            ? 'scoped_data_403'
+            : status == 401
+            ? 'scoped_data_401'
+            : 'scoped_data_network_error'} duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${businessProfileId ?? ''} membership_role=${workspace?.memberRole ?? ''} workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true trace=$trace',
       );
       if (status == 400 || status == 403 || status == 404 || status == 405) {
         return const [];
@@ -162,10 +168,11 @@ class ReportService {
   }
 
   Future<ReportExport?> fetchExportById(String exportId) async {
-    final workspace = await OrganizationService.instance.fetchActiveWorkspaceContext();
+    final workspace = await OrganizationService.instance
+        .fetchActiveWorkspaceContext();
     final trace = OrganizationService.instance.activeSwitchTrace ?? 'none';
     try {
-      debugPrint(
+      safeDebugLog(
         '[SCOPED_DATA_REQUEST] feature=reports operation=fetch_export_by_id method=GET endpoint_or_collection=/items/reports_exports/$exportId membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${workspace?.businessProfileId.trim() ?? ''} department=${workspace?.departmentId?.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} context_source=${OrganizationService.instance.activeWorkspaceContextSource} workspace_revision=${OrganizationService.instance.workspaceRevision} filter_summary=fields=id,format,status,file,user,business_profile started=true trace=$trace',
       );
       final response = await _client.get(
@@ -178,19 +185,23 @@ class ReportService {
       );
       final data = response.data['data'];
       if (data is Map<String, dynamic>) {
-        debugPrint(
+        safeDebugLog(
           '[SCOPED_DATA_RESPONSE] feature=reports operation=fetch_export_by_id http_status=${response.statusCode ?? 0} result_count=1 duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${workspace?.businessProfileId.trim() ?? ''} workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true returned_business_profile_ids=${data['business_profile'] == null ? const [] : [data['business_profile'].toString().trim()]} returned_membership_ids=${data['user'] == null ? const [] : [data['user'].toString().trim()]} empty_result=false trace=$trace',
         );
         return ReportExport.fromJson(data);
       }
-      debugPrint(
+      safeDebugLog(
         '[SCOPED_DATA_RESPONSE] feature=reports operation=fetch_export_by_id http_status=${response.statusCode ?? 0} result_count=0 duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${workspace?.businessProfileId.trim() ?? ''} workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true returned_business_profile_ids=[] returned_membership_ids=[] empty_result=true trace=$trace',
       );
       return null;
     } on DioException catch (e) {
       final status = e.response?.statusCode ?? 0;
-      debugPrint(
-        '[SCOPED_DATA_ERROR] feature=reports operation=fetch_export_by_id http_status=$status error_type=${e.type} failure_code=${status == 403 ? 'scoped_data_403' : status == 401 ? 'scoped_data_401' : 'scoped_data_network_error'} duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${workspace?.businessProfileId.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true trace=$trace',
+      safeDebugLog(
+        '[SCOPED_DATA_ERROR] feature=reports operation=fetch_export_by_id http_status=$status error_type=${e.type} failure_code=${status == 403
+            ? 'scoped_data_403'
+            : status == 401
+            ? 'scoped_data_401'
+            : 'scoped_data_network_error'} duration_ms=0 membership_id=${workspace?.membershipId.trim() ?? ''} business_profile=${workspace?.businessProfileId.trim() ?? ''} membership_role=${workspace?.memberRole ?? ''} workspace_revision_before=${OrganizationService.instance.workspaceRevision} workspace_revision_after=${OrganizationService.instance.workspaceRevision} context_unchanged=true trace=$trace',
       );
       if (status == 400 || status == 403 || status == 404 || status == 405) {
         return null;
@@ -284,7 +295,9 @@ class ReportService {
         throw const UnauthenticatedException('Session expired. Please login.');
       }
       if (status == 403) {
-        throw const ReportFileOpenException('You do not have access to this export file.');
+        throw const ReportFileOpenException(
+          'You do not have access to this export file.',
+        );
       }
       if (status == 404) {
         throw const ReportFileOpenException('Export file was not found.');
@@ -304,7 +317,10 @@ class ReportService {
     required _DirectusFileMetadata? metadata,
   }) async {
     final directory = await getTemporaryDirectory();
-    final filename = _resolveDownloadFilename(fileId: fileId, metadata: metadata);
+    final filename = _resolveDownloadFilename(
+      fileId: fileId,
+      metadata: metadata,
+    );
     final file = File('${directory.path}${Platform.pathSeparator}$filename');
     await file.writeAsBytes(bytes, flush: true);
     return file;

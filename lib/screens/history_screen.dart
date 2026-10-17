@@ -1,3 +1,4 @@
+import '../utils/safe_debug_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ import '../widgets/animated_wellar_screen.dart';
 import '../widgets/wellar_card.dart';
 import '../widgets/wellar_empty_state.dart';
 import '../widgets/wellar_error_state.dart';
+import '../widgets/wellar_skeleton_shimmer.dart';
 import 'scan_details_screen.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
@@ -35,7 +37,12 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       backgroundColor: Colors.transparent,
       body: AnimatedWellarScreen(
         showBackground: false,
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+        padding: const EdgeInsets.fromLTRB(
+          WellarTheme.pagePadding,
+          16,
+          WellarTheme.pagePadding,
+          WellarTheme.pagePadding,
+        ),
         child: RefreshIndicator(
           onRefresh: () async {
             ref.read(refreshTickProvider.notifier).state++;
@@ -49,7 +56,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 canPop: canPop,
                 onBack: canPop ? () => Navigator.maybePop(context) : null,
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: WellarTheme.sectionGap),
               async.when(
                 loading: () => const _HistoryLoadingState(),
                 error: (error, _) => WellarErrorState(
@@ -168,7 +175,9 @@ class _HistoryLoadingState extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 12),
           child: AnimatedWellarCard(
             delay: Duration(milliseconds: 55 * index),
-            child: const WellarCard(child: SizedBox(height: 88)),
+            child: const WellarCard(
+              child: WellarSkeletonShimmer(height: 88),
+            ),
           ),
         ),
       ),
@@ -200,7 +209,7 @@ class _HistoryContent extends StatelessWidget {
     for (final group in groups) {
       if (group.entries.isEmpty) continue;
       if (widgets.isNotEmpty) {
-        widgets.add(const SizedBox(height: 18));
+        widgets.add(const SizedBox(height: WellarTheme.sectionGap));
       }
       widgets.add(
         Padding(
@@ -246,7 +255,7 @@ class _HistoryContent extends StatelessWidget {
         visible.add(entry);
         continue;
       }
-      debugPrint(
+      safeDebugLog(
         '[HISTORY_FILTERED_ORPHAN] scan_id=${entry.scanId.trim().isNotEmpty ? entry.scanId : 'missing'} result_id=${entry.result?.id.trim().isNotEmpty == true ? entry.result!.id : 'missing'} status=${entry.status.trim().isNotEmpty ? entry.status.trim() : 'missing'}',
       );
     }
@@ -339,7 +348,7 @@ class _HistoryCard extends StatelessWidget {
           ),
           borderRadius: BorderRadius.circular(WellarTheme.cardRadius),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(WellarTheme.cardPadding),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
@@ -418,6 +427,10 @@ class _HistoryCard extends StatelessWidget {
           normalized == 'High Risk') {
         return normalized;
       }
+      if (normalized == 'Unavailable - please retake the scan' ||
+          result.riskLevel?.trim().toLowerCase() == 'retake_required') {
+        return 'Unavailable - please retake the scan';
+      }
     }
     final status = entry.status.trim().toLowerCase();
     if (!entry.hasResult &&
@@ -435,7 +448,7 @@ class _HistoryCard extends StatelessWidget {
       return 'Processing assessment';
     }
     return entry.hasResult
-        ? 'Processing assessment'
+        ? 'Unavailable - please retake the scan'
         : 'Assessment could not be completed';
   }
 
@@ -444,22 +457,22 @@ class _HistoryCard extends StatelessWidget {
       case 'Stable':
         return const _HistoryTone(
           icon: Icons.check_circle_outline_rounded,
-          color: Color(0xFF72D8A0),
+          color: WellarTheme.success,
         );
       case 'Low Focus':
         return const _HistoryTone(
           icon: Icons.center_focus_strong_rounded,
-          color: Color(0xFFDAA94F),
+          color: WellarTheme.info,
         );
       case 'Elevated Fatigue':
         return const _HistoryTone(
           icon: Icons.battery_alert_rounded,
-          color: Color(0xFFE08A52),
+          color: WellarTheme.warning,
         );
       case 'High Risk':
         return const _HistoryTone(
           icon: Icons.warning_amber_rounded,
-          color: Color(0xFFE05D63),
+          color: WellarTheme.danger,
         );
       case 'Processing assessment':
         return const _HistoryTone(
@@ -469,7 +482,12 @@ class _HistoryCard extends StatelessWidget {
       case 'Assessment could not be completed':
         return const _HistoryTone(
           icon: Icons.restart_alt_rounded,
-          color: Color(0xFF97A0B3),
+          color: WellarTheme.neutral,
+        );
+      case 'Unavailable - please retake the scan':
+        return const _HistoryTone(
+          icon: Icons.restart_alt_rounded,
+          color: WellarTheme.neutral,
         );
       default:
         return const _HistoryTone(
@@ -487,6 +505,9 @@ class _HistoryCard extends StatelessWidget {
       return 'Elevated Fatigue';
     }
     if (v == 'high risk' || v == 'high_risk') return 'High Risk';
+    if (v == 'retake_required') {
+      return 'Unavailable - please retake the scan';
+    }
     if (v == 'processing assessment') return 'Processing assessment';
     if (v == 'assessment could not be completed') {
       return 'Assessment could not be completed';
@@ -494,7 +515,7 @@ class _HistoryCard extends StatelessWidget {
     if (v == 'no completed readiness result yet.') {
       return 'No completed readiness result yet.';
     }
-    return value.trim().isEmpty ? 'Processing assessment' : value;
+    return 'Unavailable - please retake the scan';
   }
 
   String _formatDateTime(DateTime? date) {

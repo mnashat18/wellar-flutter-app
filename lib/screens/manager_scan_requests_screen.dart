@@ -114,7 +114,7 @@ class _ManagerScanRequestsScreenState
                     title: Tr.t(lang, 'team_requests_title'),
                     subtitle: Tr.t(lang, 'team_requests_subtitle'),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   WellarCard(
                     child: WellarButton.secondary(
                       text: Tr.t(lang, 'start_self_readiness_scan'),
@@ -124,7 +124,7 @@ class _ManagerScanRequestsScreenState
                       ),
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   Wrap(
                     spacing: 8,
                     children: [
@@ -134,7 +134,7 @@ class _ManagerScanRequestsScreenState
                       _chip(lang, 'overdue', Tr.t(lang, 'overdue')),
                     ],
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: WellarTheme.sectionGap),
                   if (items.isEmpty)
                     WellarEmptyState(
                       icon: Icons.assignment_outlined,

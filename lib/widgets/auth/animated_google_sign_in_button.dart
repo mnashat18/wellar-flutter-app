@@ -29,6 +29,8 @@ class _AnimatedGoogleSignInButtonState extends State<AnimatedGoogleSignInButton>
   late final AnimationController _borderController;
   bool _pressed = false;
   bool _hovered = false;
+  bool _reduceMotion = false;
+  bool _motionPreferenceRead = false;
 
   @override
   void initState() {
@@ -36,7 +38,25 @@ class _AnimatedGoogleSignInButtonState extends State<AnimatedGoogleSignInButton>
     _borderController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2800),
-    )..repeat();
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = MediaQuery.of(context).disableAnimations;
+    if (reduce != _reduceMotion || !_motionPreferenceRead) {
+      _reduceMotion = reduce;
+      _motionPreferenceRead = true;
+      if (reduce) {
+        _borderController.stop();
+        _borderController.value = 0;
+        _pressed = false;
+        _hovered = false;
+      } else {
+        _borderController.repeat();
+      }
+    }
   }
 
   @override
@@ -48,15 +68,19 @@ class _AnimatedGoogleSignInButtonState extends State<AnimatedGoogleSignInButton>
   @override
   Widget build(BuildContext context) {
     final enabled = widget.onPressed != null && !widget.isLoading;
-    final scale = _pressed
+    final scale = _reduceMotion
+        ? 1.0
+        : _pressed
         ? 0.986
         : _hovered
-            ? 1.01
-            : 1.0;
+        ? 1.01
+        : 1.0;
 
     return AnimatedScale(
       scale: scale,
-      duration: const Duration(milliseconds: 150),
+      duration: _reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 150),
       curve: Curves.easeOutCubic,
       child: MouseRegion(
         onEnter: (_) => setState(() => _hovered = true),
@@ -68,7 +92,8 @@ class _AnimatedGoogleSignInButtonState extends State<AnimatedGoogleSignInButton>
           child: AnimatedBuilder(
             animation: _borderController,
             builder: (context, _) {
-              final angle = _borderController.value * 2 * math.pi;
+              final angle =
+                  (_reduceMotion ? 0 : _borderController.value) * 2 * math.pi;
               return Container(
                 height: widget.height,
                 width: double.infinity,
@@ -107,7 +132,9 @@ class _AnimatedGoogleSignInButtonState extends State<AnimatedGoogleSignInButton>
                       child: Ink(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(20.5),
-                          color: const Color(0xFF0D1731).withValues(alpha: 0.88),
+                          color: const Color(
+                            0xFF0D1731,
+                          ).withValues(alpha: 0.88),
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.11),
                           ),
@@ -124,13 +151,17 @@ class _AnimatedGoogleSignInButtonState extends State<AnimatedGoogleSignInButton>
                                   borderRadius: BorderRadius.circular(11),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.2),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.2,
+                                      ),
                                       blurRadius: 12,
                                       offset: const Offset(0, 4),
                                     ),
                                   ],
                                 ),
-                                child: const Center(child: GoogleMark(size: 19)),
+                                child: const Center(
+                                  child: GoogleMark(size: 19),
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(

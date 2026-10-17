@@ -58,7 +58,7 @@ class HomeDashboard extends StatelessWidget {
     final lowFocus = counts['Attention Needed'] ?? 0;
     final elevated = counts['Readiness Concern'] ?? 0;
     final highRisk = counts['Action Required'] ?? 0;
-    final readiness = _readinessScore(latest, stable, total);
+    final readiness = _readinessScore(latest);
 
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -134,20 +134,14 @@ class HomeDashboard extends StatelessWidget {
     );
   }
 
-  double _readinessScore(ScanResult? latest, int stable, int total) {
-    double score = 0;
-    if (latest?.confidence != null) {
-      score = latest!.confidence!;
-    } else if (total > 0) {
-      score = stable / total;
-    }
+  double? _readinessScore(ScanResult? latest) {
+    final raw = latest?.readinessScore;
+    if (raw == null || !raw.isFinite || raw < 0) return null;
+    var score = raw;
     if (score > 1) {
       score = score / 100;
     }
-    if (score.isNaN || score.isInfinite) {
-      return 0;
-    }
-    return score.clamp(0, 1);
+    return score.clamp(0, 1).toDouble();
   }
 
   double _ratio(int part, int total) {
@@ -177,7 +171,7 @@ class HomeDashboard extends StatelessWidget {
   Widget _buildHero(
     String name,
     String role,
-    double readiness,
+    double? readiness,
     int total,
     int pendingRequests,
   ) {
@@ -217,7 +211,9 @@ class HomeDashboard extends StatelessWidget {
                       children: [
                         _MetricPill(
                           label: 'Readiness',
-                          value: '${(readiness * 100).round()}%',
+                          value: readiness == null
+                              ? '-'
+                              : '${(readiness * 100).round()}%',
                           color: AppColors.primarySoft,
                         ),
                         _MetricPill(
@@ -237,7 +233,7 @@ class HomeDashboard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              _ReadinessRing(value: readiness),
+              if (readiness != null) _ReadinessRing(value: readiness),
             ],
           ),
           const SizedBox(height: 16),
@@ -491,7 +487,9 @@ class HomeDashboard extends StatelessWidget {
                 ),
                 _MetaTag(
                   icon: Icons.bolt,
-                  text: latest.confidence != null
+                text: latest.confidence != null &&
+                        latest.confidence!.isFinite &&
+                        latest.confidence! >= 0
                       ? '${(latest.confidence! * 100).round()}% confidence'
                       : 'Confidence n/a',
                 ),

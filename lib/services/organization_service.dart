@@ -1,5 +1,6 @@
-﻿import 'package:dio/dio.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import '../models/business_profile.dart';
 import '../models/business_profile_member.dart';
 import '../models/organization.dart';
@@ -7,6 +8,7 @@ import '../state/session.dart';
 import 'directus_client.dart';
 import 'hr_ops_service.dart';
 import 'owner_ops_service.dart';
+import 'wellar_workforce_service.dart';
 
 class OrganizationServiceException implements Exception {
   final String message;
@@ -161,12 +163,7 @@ class CanonicalWorkspaceContextSnapshot {
   }
 }
 
-enum CanonicalWorkspaceContextStatus {
-  ok,
-  unauthenticated,
-  forbidden,
-  error,
-}
+enum CanonicalWorkspaceContextStatus { ok, unauthenticated, forbidden, error }
 
 class CanonicalWorkspaceContextResult {
   final CanonicalWorkspaceContextStatus status;
@@ -200,10 +197,7 @@ class _WorkspaceContextDepartment {
   final String id;
   final String name;
 
-  const _WorkspaceContextDepartment({
-    required this.id,
-    required this.name,
-  });
+  const _WorkspaceContextDepartment({required this.id, required this.name});
 }
 
 class _WorkspaceContextMembership {
@@ -250,6 +244,8 @@ class OrganizationService {
   int get workspaceRevision => _workspaceRevision;
   String get activeWorkspaceContextSource => _activeWorkspaceContextSource;
   String? get activeSwitchTrace => _activeSwitchTrace;
+  ActiveWorkspaceContext? get cachedActiveWorkspaceContext =>
+      _cachedWorkspaceContext;
   String get workspaceSignature {
     final context = _cachedWorkspaceContext;
     if (context == null) return '';
@@ -267,8 +263,8 @@ class OrganizationService {
     final previousSignature = workspaceSignature;
     if (_cachedWorkspaceContext != null || previousSignature.isNotEmpty) {
       _workspaceRevision++;
-      debugPrint('[WORKSPACE_GUARD] revision_incremented=true');
-      debugPrint(
+      _wsDebug('[WORKSPACE_GUARD] revision_incremented=true');
+      _wsDebug(
         '[WORKSPACE_GUARD] signature_changed=${previousSignature.isNotEmpty}',
       );
     }
@@ -300,9 +296,43 @@ class OrganizationService {
   String _nextSwitchTrace() => 'ws_${DateTime.now().microsecondsSinceEpoch}';
 
   void _wsDebug(String message) {
-    if (kDebugMode) {
-      debugPrint(message);
-    }
+    if (!kDebugMode) return;
+    final tag = RegExp(r'^\[([^\]]+)\]').firstMatch(message)?.group(1);
+    const safeFields = {
+      'stage',
+      'method',
+      'status',
+      'http_status',
+      'duration_ms',
+      'network_error_type',
+      'network_error_status',
+      'started',
+      'revision_incremented',
+      'signature_changed',
+      'target_verified',
+      'context_applied',
+      'diagnostic_only',
+      'visible',
+      'member_count',
+      'count',
+      'success',
+      'available',
+      'present',
+      'token_role_claim_present',
+      'token_role_matches_users_me_role',
+      'token_replaced_by_refresh',
+      'users_me_active_business_profile_matches_target',
+      'membership_status',
+    };
+    final fields = RegExp(r'\b([A-Za-z][A-Za-z0-9_]*)=([^\s,]+)')
+        .allMatches(message)
+        .where((match) => safeFields.contains(match.group(1)!.toLowerCase()))
+        .map((match) => '${match.group(1)}=${match.group(2)}')
+        .toList();
+    final safeMessage = tag == null ? '[WORKSPACE] diagnostic' : '[$tag]';
+    debugPrint(
+      fields.isEmpty ? safeMessage : '$safeMessage ${fields.join(' ')}',
+    );
   }
 
   void applyActiveWorkspaceContext(
@@ -314,11 +344,11 @@ class OrganizationService {
     final nextSignature = _signatureFromContext(context);
     if (previousSignature != nextSignature) {
       _workspaceRevision++;
-      debugPrint('[WORKSPACE_GUARD] revision_incremented=true');
-      debugPrint('[WORKSPACE_GUARD] signature_changed=true');
+      _wsDebug('[WORKSPACE_GUARD] revision_incremented=true');
+      _wsDebug('[WORKSPACE_GUARD] signature_changed=true');
     }
-    final previousBusinessProfileId =
-        _cachedWorkspaceContext?.businessProfileId.trim();
+    final previousBusinessProfileId = _cachedWorkspaceContext?.businessProfileId
+        .trim();
     final nextBusinessProfileId = context.businessProfileId.trim();
     final activeProfileChanged =
         previousBusinessProfileId != nextBusinessProfileId;
@@ -335,24 +365,22 @@ class OrganizationService {
     OwnerOpsService.instance.clearOrganizationScopedCaches();
     HrOpsService.instance.clearOrganizationScopedCaches();
 
-    debugPrint(
+    _wsDebug(
       '[ORG_SWITCH_CACHE] owner_ops_cleared=true hr_ops_cleared=true '
       'active_profile_changed=$activeProfileChanged',
     );
-    debugPrint(
+    _wsDebug(
       '[ACTIVE_CONTEXT_AFTER_SWITCH] business_profile=${context.businessProfileId}',
     );
-    debugPrint(
+    _wsDebug(
       '[ACTIVE_CONTEXT_AFTER_SWITCH] membership_id=${context.membershipId}',
     );
-    debugPrint(
-      '[ACTIVE_CONTEXT_AFTER_SWITCH] member_role=${context.memberRole}',
-    );
-    debugPrint('[ACTIVE_CONTEXT_AFTER_SWITCH] source=$source');
-    debugPrint(
+    _wsDebug('[ACTIVE_CONTEXT_AFTER_SWITCH] member_role=${context.memberRole}');
+    _wsDebug('[ACTIVE_CONTEXT_AFTER_SWITCH] source=$source');
+    _wsDebug(
       '[ACTIVE_CONTEXT_AFTER_SWITCH] services_role=${context.finalEffectiveRole}',
     );
-    debugPrint(
+    _wsDebug(
       '[ACTIVE_CONTEXT_AFTER_SWITCH] directus_role=${context.directusRoleName ?? ''}',
     );
     _wsDebug(
@@ -380,7 +408,7 @@ class OrganizationService {
       if (cached != null &&
           sessionUserId.isNotEmpty &&
           cached.currentUserId == sessionUserId) {
-        debugPrint(
+        _wsDebug(
           '[WorkspaceResolver] using cached workspace context user=$sessionUserId business_profile=${cached.businessProfileId}',
         );
         return cached;
@@ -392,7 +420,8 @@ class OrganizationService {
     return result.context;
   }
 
-  Future<AuthenticatedCurrentUserProfile?> fetchAuthenticatedCurrentUserProfile() async {
+  Future<AuthenticatedCurrentUserProfile?>
+  fetchAuthenticatedCurrentUserProfile() async {
     final me = await _loadCurrentUser();
     if (me == null) return null;
     return AuthenticatedCurrentUserProfile(
@@ -594,10 +623,32 @@ class OrganizationService {
     _workspaceSessionSyncInFlight = future;
     try {
       return await future;
+    } catch (_) {
+      // The server may have applied the switch before a later client-side
+      // verification failed. Reconcile to its active workspace before
+      // propagating the original error to the picker.
+      await reconcileWorkspaceContextAfterSwitchFailure();
+      rethrow;
     } finally {
       if (identical(_workspaceSessionSyncInFlight, future)) {
         _workspaceSessionSyncInFlight = null;
       }
+    }
+  }
+
+  Future<ActiveWorkspaceContext?>
+  reconcileWorkspaceContextAfterSwitchFailure() async {
+    try {
+      final result = await fetchCanonicalWorkspaceContext(forceRefresh: true);
+      final context = result.snapshot?.activeContext;
+      if (context == null) return null;
+      applyActiveWorkspaceContext(
+        context,
+        source: 'workspace_switch_reconcile',
+      );
+      return context;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -613,11 +664,14 @@ class OrganizationService {
     );
 
     final switchResponseRoot = _asMap(response.data);
-    final switchResponseData = _asMap(switchResponseRoot?['data']) ?? switchResponseRoot;
-    final switchResponseWorkspace = _asMap(switchResponseData?['workspace']) ??
+    final switchResponseData =
+        _asMap(switchResponseRoot?['data']) ?? switchResponseRoot;
+    final switchResponseWorkspace =
+        _asMap(switchResponseData?['workspace']) ??
         _asMap(switchResponseData?['business_profile']) ??
         _asMap(switchResponseData?['businessProfile']);
-    final switchResponseMembership = _asMap(switchResponseData?['membership']) ??
+    final switchResponseMembership =
+        _asMap(switchResponseData?['membership']) ??
         _asMap(switchResponseData?['active_membership']) ??
         _asMap(switchResponseData?['business_profile_member']) ??
         _asMap(switchResponseData?['member']);
@@ -635,58 +689,103 @@ class OrganizationService {
         _stringValue(switchResponseData?['refresh_token']) != null;
     final preSwitchAccessToken = Session.instance.accessToken;
     final preSwitchRefreshToken = Session.instance.refreshToken;
-    final switchCredentialsInstalled =
-        await _installPostSwitchSessionCredentials(response.data);
-    debugPrint('[WORKSPACE_SWITCH] web_parity_payload=true');
-    debugPrint(
-      '[WORKSPACE_SWITCH] tokens_rotated=$switchCredentialsInstalled',
+    final switchSessionReady = await _installPostSwitchSessionCredentials(
+      response.data,
     );
-    debugPrint(
-      '[WORKSPACE_SWITCH_SESSION] switch_access_token_present=$switchAccessTokenPresent switch_refresh_token_present=$switchRefreshTokenPresent fresh_session_attempted=true',
+    _wsDebug('[WORKSPACE_SWITCH] web_parity_payload=true');
+    _wsDebug('[WORKSPACE_SWITCH] switch_response_accepted=$switchSessionReady');
+    _wsDebug(
+      '[WORKSPACE_SWITCH_SESSION] switch_access_token_present=$switchAccessTokenPresent switch_refresh_token_present=$switchRefreshTokenPresent',
     );
+    final storedRefreshToken = Session.instance.refreshToken?.trim();
+    final accessTokenBeforeRefresh = Session.instance.accessToken;
+    var refreshSucceeded = false;
+    var refreshAttempted = false;
+    if (storedRefreshToken != null && storedRefreshToken.isNotEmpty) {
+      refreshAttempted = true;
+      try {
+        refreshSucceeded = await DirectusClient.instance
+            .refreshSessionAfterWorkspaceSwitch();
+      } catch (_) {
+        refreshSucceeded = false;
+      }
+      _wsDebug(
+        '[WS_TOKEN_REFRESH] attempted=true available=true success=$refreshSucceeded',
+      );
+    } else {
+      _wsDebug(
+        '[WS_TOKEN_REFRESH] attempted=false available=false success=false',
+      );
+    }
     final postSwitchAccessToken = Session.instance.accessToken;
     final postSwitchRefreshToken = Session.instance.refreshToken;
     bool tokenChanged(String? before, String? after) {
       return (before?.trim() ?? '') != (after?.trim() ?? '');
     }
-    final normalizedPostSwitchAccessToken =
-        postSwitchAccessToken?.trim() ?? '';
-    final liveAuthHeaderValue =
-        DirectusClient.instance.client.options.headers['Authorization']
-            ?.toString()
-            .trim();
+
+    final normalizedPostSwitchAccessToken = postSwitchAccessToken?.trim() ?? '';
+    final liveAuthHeaderValue = DirectusClient
+        .instance
+        .client
+        .options
+        .headers['Authorization']
+        ?.toString()
+        .trim();
     final authHeaderMatchesSession =
         normalizedPostSwitchAccessToken.isNotEmpty &&
         liveAuthHeaderValue == 'Bearer $normalizedPostSwitchAccessToken';
-    debugPrint(
-      '[WORKSPACE_SWITCH_SESSION] fresh_session_installed=$switchCredentialsInstalled access_token_present_after=${postSwitchAccessToken?.trim().isNotEmpty == true} access_token_replaced=${tokenChanged(preSwitchAccessToken, postSwitchAccessToken)} refresh_token_present_after=${postSwitchRefreshToken?.trim().isNotEmpty == true} refresh_token_replaced=${tokenChanged(preSwitchRefreshToken, postSwitchRefreshToken)} auth_header_matches_session=$authHeaderMatchesSession',
+    _wsDebug(
+      '[WORKSPACE_SWITCH_SESSION] refresh_succeeded=$refreshSucceeded access_token_present_after=${postSwitchAccessToken?.trim().isNotEmpty == true} access_token_replaced=${tokenChanged(preSwitchAccessToken, postSwitchAccessToken)} refresh_token_present_after=${postSwitchRefreshToken?.trim().isNotEmpty == true} refresh_token_replaced=${tokenChanged(preSwitchRefreshToken, postSwitchRefreshToken)} auth_header_matches_session=$authHeaderMatchesSession',
     );
     _wsDebug(
-      '[WS_HTTP] trace=$trace stage=session_issue method=POST endpoint=/auth/google/mobile-exchange/session started=true status=${switchCredentialsInstalled ? 200 : 0} duration_ms=0 network_error_type=${switchCredentialsInstalled ? 'none' : 'session_issue_failed'} network_error_status=${switchCredentialsInstalled ? 0 : 0}',
+      '[WS_HTTP] trace=$trace stage=session_refresh method=POST endpoint=/auth/refresh started=$refreshAttempted status=${refreshSucceeded ? 200 : 0} duration_ms=0 network_error_type=${refreshSucceeded ? 'none' : 'not_refreshed'} network_error_status=0',
     );
-    _wsDebug(
-      '[WS_TOKEN_REFRESH] trace=$trace success=$switchCredentialsInstalled access_token_present_before=${preSwitchAccessToken?.trim().isNotEmpty == true} access_token_present_after=${postSwitchAccessToken?.trim().isNotEmpty == true} access_token_replaced=${tokenChanged(preSwitchAccessToken, postSwitchAccessToken)} refresh_token_present_before=${preSwitchRefreshToken?.trim().isNotEmpty == true} refresh_token_present_after=${postSwitchRefreshToken?.trim().isNotEmpty == true} refresh_token_replaced=${tokenChanged(preSwitchRefreshToken, postSwitchRefreshToken)} auth_header_matches_session=$authHeaderMatchesSession',
-    );
-    if (!switchCredentialsInstalled) {
-      clearActiveWorkspaceContext();
-      debugPrint('[WORKSPACE_SWITCH] target_verified=false');
-      debugPrint('[WORKSPACE_SWITCH] context_applied=false');
+    if (!switchSessionReady) {
+      _wsDebug('[WORKSPACE_SWITCH] target_verified=false');
+      _wsDebug('[WORKSPACE_SWITCH] context_applied=false');
       throw const OrganizationServiceException(
-        'We could not verify your organization switch right now.',
+        'The server did not confirm the selected workspace. Your active workspace was refreshed; please check the selection and try again.',
       );
     }
 
     var currentUser = await _loadCurrentUser(
       includeActiveWorkspaceFields: true,
     );
-    debugPrint(
+    final tokenPayload = _decodeAccessTokenPayload(postSwitchAccessToken);
+    final tokenRole = _jwtRoleClaim(tokenPayload);
+    final usersMeRoles = <String>{
+      currentUser?.roleId?.trim().toLowerCase() ?? '',
+      currentUser?.role?.trim().toLowerCase() ?? '',
+    }..remove('');
+    final tokenRoleNormalized = tokenRole?.trim().toLowerCase() ?? '';
+    final expectedTargetBusinessProfileId =
+        expectedMembership?.businessProfileId.trim() ?? '';
+    final targetBusinessProfileId = expectedTargetBusinessProfileId.isNotEmpty
+        ? expectedTargetBusinessProfileId
+        : _stringValue(switchResponseWorkspace?['id']) ?? '';
+    final usersMeActiveBusinessProfileId =
+        currentUser?.activeBusinessProfileId?.trim() ?? '';
+    final expectedStatus =
+        expectedMembership?.status.trim().toLowerCase() ?? '';
+    final rawMembershipStatus = expectedStatus.isNotEmpty
+        ? expectedStatus
+        : _stringValue(switchResponseMembership?['status'])?.toLowerCase() ??
+              '';
+    final membershipStatus = switch (rawMembershipStatus) {
+      'active' => 'active',
+      'accepted' => 'accepted',
+      _ => 'other',
+    };
+    _wsDebug(
+      '[WORKSPACE_SWITCH_TOKEN] token_role_claim_present=${tokenRoleNormalized.isNotEmpty} token_role_matches_users_me_role=${tokenRoleNormalized.isNotEmpty && usersMeRoles.contains(tokenRoleNormalized)} token_replaced_by_refresh=${refreshSucceeded && (accessTokenBeforeRefresh?.trim() ?? '') != (postSwitchAccessToken?.trim() ?? '')} users_me_active_business_profile_matches_target=${targetBusinessProfileId.isNotEmpty && usersMeActiveBusinessProfileId == targetBusinessProfileId} membership_status=$membershipStatus',
+    );
+    _wsDebug(
       '[WORKSPACE_SWITCH] user_active_fields_reloaded=${currentUser != null}',
     );
 
     final expectedBusinessProfileId =
         expectedMembership?.businessProfileId.trim() ?? '';
-    final expectedDepartmentId =
-        expectedMembership?.departmentId?.trim() ?? '';
+    final expectedDepartmentId = expectedMembership?.departmentId?.trim() ?? '';
     final expectedRole = _normalizeRole(expectedMembership?.memberRole);
 
     ({
@@ -699,7 +798,8 @@ class OrganizationService {
       bool activeMemberRoleAvailable,
       String activeMemberRoleMatch,
       bool mismatch,
-    }) evaluateUserFields(_CurrentUser? user) {
+    })
+    evaluateUserFields(_CurrentUser? user) {
       final directusRoleName = _normalizeRole(user?.role);
       final directusRoleId = user?.roleId?.trim() ?? '';
       final directusRoleAvailable =
@@ -716,8 +816,8 @@ class OrganizationService {
                   user?.activeBusinessProfileId,
                   expectedBusinessProfileId,
                 )
-              ? 'true'
-              : 'false')
+                ? 'true'
+                : 'false')
           : 'not_available';
       final activeDepartmentValue = user?.activeDepartmentId?.trim() ?? '';
       final activeDepartmentAvailable = expectedDepartmentId.isEmpty
@@ -726,20 +826,21 @@ class OrganizationService {
       final activeDepartmentMatch = expectedDepartmentId.isEmpty
           ? 'true'
           : (activeDepartmentAvailable
-              ? (_verifyActiveFieldMatch(
-                      user?.activeDepartmentId,
-                      expectedDepartmentId,
-                    )
-                  ? 'true'
-                  : 'false')
-              : 'not_available');
+                ? (_verifyActiveFieldMatch(
+                        user?.activeDepartmentId,
+                        expectedDepartmentId,
+                      )
+                      ? 'true'
+                      : 'false')
+                : 'not_available');
       final activeMemberRoleValue =
           (user?.activeMemberRole ?? user?.activeRole)?.trim() ?? '';
       final activeMemberRoleAvailable = activeMemberRoleValue.isNotEmpty;
       final activeMemberRoleMatch = activeMemberRoleAvailable
           ? (_verifyActiveRoleMatch(user, expectedRole) ? 'true' : 'false')
           : 'not_available';
-      final mismatch = directusRoleMatch == 'false' ||
+      final mismatch =
+          directusRoleMatch == 'false' ||
           activeBusinessProfileMatch == 'false' ||
           activeDepartmentMatch == 'false' ||
           activeMemberRoleMatch == 'false';
@@ -757,7 +858,7 @@ class OrganizationService {
     }
 
     var userState = evaluateUserFields(currentUser);
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH_USER_VERIFY] directus_role_available=${userState.directusRoleAvailable} directus_role_match=${userState.directusRoleMatch} active_business_profile_available=${userState.activeBusinessProfileAvailable} active_business_profile_match=${userState.activeBusinessProfileMatch} active_department_available=${userState.activeDepartmentAvailable} active_department_match=${userState.activeDepartmentMatch} active_member_role_available=${userState.activeMemberRoleAvailable} active_member_role_match=${userState.activeMemberRoleMatch}',
     );
     final responseCurrentUser = currentUser;
@@ -792,22 +893,22 @@ class OrganizationService {
         expectedBusinessProfileId.trim();
     final switchDepartmentId =
         switchResponseContext?.departmentId?.trim() ?? '';
-    final selectedDepartmentId =
-        switchDepartmentId.isNotEmpty ? switchDepartmentId : expectedDepartmentId;
+    final selectedDepartmentId = switchDepartmentId.isNotEmpty
+        ? switchDepartmentId
+        : expectedDepartmentId;
     final selectedRole = _normalizeRole(
       switchResponseContext?.membershipRole ??
           switchResponseContext?.finalEffectiveRole ??
           expectedRole,
     );
 
-    final canonicalMembershipId =
-        canonicalContext?.membershipId.trim() ?? '';
+    final canonicalMembershipId = canonicalContext?.membershipId.trim() ?? '';
     final canonicalBusinessProfileId =
         canonicalContext?.businessProfileId.trim() ?? '';
-    final canonicalDepartmentId =
-        canonicalContext?.departmentId?.trim() ?? '';
+    final canonicalDepartmentId = canonicalContext?.departmentId?.trim() ?? '';
     final canonicalRole = _normalizeRole(canonicalContext?.finalEffectiveRole);
-    final canonicalMembershipMatch = canonicalMembershipId.isNotEmpty &&
+    final canonicalMembershipMatch =
+        canonicalMembershipId.isNotEmpty &&
         canonicalMembershipId == selectedMembershipId;
     final canonicalBusinessProfileMatch =
         canonicalBusinessProfileId.isNotEmpty &&
@@ -819,12 +920,13 @@ class OrganizationService {
         switchResponseContext?.membershipId.trim() == selectedMembershipId;
     final switchResponseBusinessProfileMatch =
         switchResponseContext?.businessProfileId.trim() ==
-            selectedBusinessProfileId;
+        selectedBusinessProfileId;
     final switchResponseRoleMatch =
         _normalizeRole(switchResponseContext?.membershipRole) == selectedRole;
     final switchResponseDepartmentMatch =
         switchResponseContext?.departmentId?.trim() == selectedDepartmentId;
-    var canonicalContextVerified = canonicalMembershipMatch &&
+    var canonicalContextVerified =
+        canonicalMembershipMatch &&
         canonicalBusinessProfileMatch &&
         canonicalRoleMatch &&
         canonicalDepartmentMatch;
@@ -833,41 +935,41 @@ class OrganizationService {
       '[WS_VERIFY] trace=$trace membership_match=${selectedMembershipId.isNotEmpty && selectedMembershipId == membershipId.trim()} business_profile_match=${selectedBusinessProfileId.isNotEmpty && selectedBusinessProfileId == expectedBusinessProfileId} department_match=${selectedDepartmentId == expectedDepartmentId} membership_role_match=${selectedRole == expectedRole} directus_role_available=${userState.directusRoleAvailable} directus_role_match=${userState.directusRoleMatch} explicit_user_field_mismatch=${userState.mismatch} canonical_context_verified=$canonicalContextVerified',
     );
 
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH_VERIFY] expected_membership_id=$selectedMembershipId',
     );
-    debugPrint('[WORKSPACE_SWITCH_VERIFY] expected_role=$selectedRole');
-    debugPrint(
+    _wsDebug('[WORKSPACE_SWITCH_VERIFY] expected_role=$selectedRole');
+    _wsDebug(
       '[WORKSPACE_SWITCH_VERIFY] canonical_membership_id=${canonicalMembershipId.isEmpty ? 'missing' : canonicalMembershipId}',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH_VERIFY] canonical_role=${canonicalMembershipId.isEmpty ? 'missing' : canonicalRole}',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH_VERIFY] canonical_membership_match=$canonicalMembershipMatch',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH_VERIFY] canonical_role_match=$canonicalRoleMatch',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH_VERIFY] switch_response_membership_match=$switchResponseMembershipMatch',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH_VERIFY] canonical_business_profile_match=$canonicalBusinessProfileMatch',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH_VERIFY] canonical_department_match=$canonicalDepartmentMatch',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH_VERIFY] switch_response_business_profile_match=$switchResponseBusinessProfileMatch',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH_VERIFY] switch_response_role_match=$switchResponseRoleMatch',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH_VERIFY] switch_response_department_match=$switchResponseDepartmentMatch',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH] switch_response_context_verified=${switchResponseContext != null}',
     );
 
@@ -878,7 +980,7 @@ class OrganizationService {
       finalVerifiedContextSource = 'canonical_context';
     }
 
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH] final_verified_context_source=$finalVerifiedContextSource',
     );
     var probeResult = verifiedContext == null
@@ -899,32 +1001,29 @@ class OrganizationService {
     }
 
     if (retryReason.isNotEmpty) {
-      debugPrint(
+      _wsDebug(
         '[WORKSPACE_SWITCH_SESSION_RETRY] reason=$retryReason attempt=2',
       );
       final retrySucceeded = await _installPostSwitchSessionCredentials(
         response.data,
       );
-      debugPrint(
+      _wsDebug(
         '[WORKSPACE_SWITCH_SESSION] fresh_session_reissued_retry=$retrySucceeded',
       );
       if (!retrySucceeded) {
-        clearActiveWorkspaceContext();
-        debugPrint('[WORKSPACE_SWITCH] target_verified=false');
-        debugPrint('[WORKSPACE_SWITCH] context_applied=false');
+        _wsDebug('[WORKSPACE_SWITCH] target_verified=false');
+        _wsDebug('[WORKSPACE_SWITCH] context_applied=false');
         throw const OrganizationServiceException(
-          'We could not verify your organization switch right now.',
+          'The server did not confirm the selected workspace. Your active workspace was refreshed; please check the selection and try again.',
         );
       }
 
-      currentUser = await _loadCurrentUser(
-        includeActiveWorkspaceFields: true,
-      );
-      debugPrint(
+      currentUser = await _loadCurrentUser(includeActiveWorkspaceFields: true);
+      _wsDebug(
         '[WORKSPACE_SWITCH] user_active_fields_reloaded=${currentUser != null}',
       );
       userState = evaluateUserFields(currentUser);
-      debugPrint(
+      _wsDebug(
         '[WORKSPACE_SWITCH_USER_VERIFY] directus_role_available=${userState.directusRoleAvailable} directus_role_match=${userState.directusRoleMatch} active_business_profile_available=${userState.activeBusinessProfileAvailable} active_business_profile_match=${userState.activeBusinessProfileMatch} active_department_available=${userState.activeDepartmentAvailable} active_department_match=${userState.activeDepartmentMatch} active_member_role_available=${userState.activeMemberRoleAvailable} active_member_role_match=${userState.activeMemberRoleMatch}',
       );
       final retryResponseCurrentUser = currentUser;
@@ -953,7 +1052,8 @@ class OrganizationService {
       );
 
       final retrySelectedMembershipId =
-          retrySwitchResponseContext?.membershipId.trim() ?? membershipId.trim();
+          retrySwitchResponseContext?.membershipId.trim() ??
+          membershipId.trim();
       final retrySelectedBusinessProfileId =
           retrySwitchResponseContext?.businessProfileId.trim() ??
           expectedBusinessProfileId.trim();
@@ -974,8 +1074,9 @@ class OrganizationService {
           retryCanonicalContext?.businessProfileId.trim() ?? '';
       final retryCanonicalDepartmentId =
           retryCanonicalContext?.departmentId?.trim() ?? '';
-      final retryCanonicalRole =
-          _normalizeRole(retryCanonicalContext?.finalEffectiveRole);
+      final retryCanonicalRole = _normalizeRole(
+        retryCanonicalContext?.finalEffectiveRole,
+      );
       final retryCanonicalMembershipMatch =
           retryCanonicalMembershipId.isNotEmpty &&
           retryCanonicalMembershipId == retrySelectedMembershipId;
@@ -985,7 +1086,8 @@ class OrganizationService {
       final retryCanonicalRoleMatch = retryCanonicalRole == retrySelectedRole;
       final retryCanonicalDepartmentMatch =
           retryCanonicalDepartmentId == retrySelectedDepartmentId;
-      canonicalContextVerified = retryCanonicalMembershipMatch &&
+      canonicalContextVerified =
+          retryCanonicalMembershipMatch &&
           retryCanonicalBusinessProfileMatch &&
           retryCanonicalRoleMatch &&
           retryCanonicalDepartmentMatch;
@@ -993,19 +1095,6 @@ class OrganizationService {
       _wsDebug(
         '[WS_VERIFY] trace=$trace membership_match=${retrySelectedMembershipId.isNotEmpty && retrySelectedMembershipId == membershipId.trim()} business_profile_match=${retrySelectedBusinessProfileId.isNotEmpty && retrySelectedBusinessProfileId == expectedBusinessProfileId} department_match=${retrySelectedDepartmentId == expectedDepartmentId} membership_role_match=${retrySelectedRole == expectedRole} directus_role_available=${userState.directusRoleAvailable} directus_role_match=${userState.directusRoleMatch} explicit_user_field_mismatch=${userState.mismatch} canonical_context_verified=$canonicalContextVerified',
       );
-
-      final retrySwitchResponseMembershipMatch =
-          retrySwitchResponseContext?.membershipId.trim() ==
-              retrySelectedMembershipId;
-      final retrySwitchResponseBusinessProfileMatch =
-          retrySwitchResponseContext?.businessProfileId.trim() ==
-              retrySelectedBusinessProfileId;
-      final retrySwitchResponseRoleMatch =
-          _normalizeRole(retrySwitchResponseContext?.membershipRole) ==
-              retrySelectedRole;
-      final retrySwitchResponseDepartmentMatch =
-          retrySwitchResponseContext?.departmentId?.trim() ==
-              retrySelectedDepartmentId;
 
       if (retryCanonicalMembershipMatch &&
           retryCanonicalBusinessProfileMatch &&
@@ -1019,8 +1108,8 @@ class OrganizationService {
           verifiedContext?.businessProfileId.trim() ?? '';
       final retryProbeBusinessProfileId =
           retryVerifiedBusinessProfileId.isNotEmpty
-              ? retryVerifiedBusinessProfileId
-              : retrySelectedBusinessProfileId;
+          ? retryVerifiedBusinessProfileId
+          : retrySelectedBusinessProfileId;
       probeResult = await _probePostSwitchBusinessProfileMembers(
         businessProfileId: retryProbeBusinessProfileId,
         selectedMembershipId: retrySelectedMembershipId,
@@ -1032,84 +1121,66 @@ class OrganizationService {
           selectedMembershipVisible;
 
       if (!canonicalContextVerified || verifiedContext == null) {
-        clearActiveWorkspaceContext();
-        debugPrint('[WORKSPACE_SWITCH] target_verified=false');
-        debugPrint('[WORKSPACE_SWITCH] context_applied=false');
+        _wsDebug('[WORKSPACE_SWITCH] target_verified=false');
+        _wsDebug('[WORKSPACE_SWITCH] context_applied=false');
         throw const OrganizationServiceException(
-          'We could not verify your organization switch right now.',
+          'The server did not confirm the selected workspace. Your active workspace was refreshed; please check the selection and try again.',
         );
       }
     }
 
-    final accessSessionInstalled =
-        normalizedPostSwitchAccessToken.isNotEmpty && authHeaderMatchesSession;
-    final directusRoleVerified =
-        userState.directusRoleAvailable && userState.directusRoleMatch == 'true';
-    final userFieldsVerified = !userState.mismatch;
-    final authReady = accessSessionInstalled &&
-        canonicalContextVerified &&
-        verifiedContext != null &&
-        directusRoleVerified &&
-        userFieldsVerified;
-    debugPrint(
-      '[WORKSPACE_SWITCH_AUTH_READY] membership_id=$selectedMembershipId role=$selectedRole access_session_installed=$accessSessionInstalled directus_role_verified=$directusRoleVerified user_fields_verified=$userFieldsVerified canonical_context_verified=$canonicalContextVerified membership_scope_verified=$membershipScopeVerified ready=$authReady',
+    final authReady = canonicalContextVerified && verifiedContext != null;
+    _wsDebug(
+      '[WORKSPACE_SWITCH_AUTH_READY] membership_id=$selectedMembershipId role=$selectedRole canonical_context_verified=$canonicalContextVerified membership_scope_verified=$membershipScopeVerified ready=$authReady',
     );
 
     if (!authReady) {
-      if (!directusRoleVerified) {
-        _wsDebug(
-          '[WS_SWITCH_RESULT] trace=$trace success=false failure_stage=post_switch_session_verification failure_code=DIRECTUS_ROLE_NOT_SWITCHED membership_id=$selectedMembershipId business_profile=$selectedBusinessProfileId membership_role=$selectedRole directus_role=${userState.directusRoleMatch} canonical_verified=$canonicalContextVerified membership_visible=$selectedMembershipVisible membership_probe_warning=${selectedMembershipVisible ? 'none' : 'selected_membership_not_visible'} context_applied=false duration_ms=0',
-        );
-      } else {
-        _wsDebug(
-          '[WS_SWITCH_RESULT] trace=$trace success=false failure_stage=post_switch_session_verification failure_code=POST_SWITCH_SESSION_NOT_VERIFIED membership_id=$selectedMembershipId business_profile=$selectedBusinessProfileId membership_role=$selectedRole directus_role=${userState.directusRoleMatch} canonical_verified=$canonicalContextVerified membership_visible=$selectedMembershipVisible membership_probe_warning=${selectedMembershipVisible ? 'none' : 'selected_membership_not_visible'} context_applied=false duration_ms=0',
-        );
-      }
-      clearActiveWorkspaceContext();
-      debugPrint('[WORKSPACE_SWITCH] target_verified=false');
-      debugPrint('[WORKSPACE_SWITCH] context_applied=false');
+      _wsDebug(
+        '[WS_SWITCH_RESULT] trace=$trace success=false failure_stage=workspace_context_verification failure_code=TARGET_WORKSPACE_NOT_CONFIRMED membership_id=$selectedMembershipId business_profile=$selectedBusinessProfileId membership_role=$selectedRole canonical_verified=$canonicalContextVerified context_applied=false duration_ms=0',
+      );
+      _wsDebug('[WORKSPACE_SWITCH] target_verified=false');
+      _wsDebug('[WORKSPACE_SWITCH] context_applied=false');
       throw const OrganizationServiceException(
-        'We could not verify your organization switch right now.',
+        'The server did not confirm the selected workspace. Your active workspace was refreshed; please check the selection and try again.',
       );
     }
 
     final verifiedWorkspaceContext = verifiedContext;
-    if (verifiedWorkspaceContext == null) {
-      clearActiveWorkspaceContext();
-      debugPrint('[WORKSPACE_SWITCH] target_verified=false');
-      debugPrint('[WORKSPACE_SWITCH] context_applied=false');
-      throw const OrganizationServiceException(
-        'We could not verify your organization switch right now.',
-      );
-    }
 
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH] trace=$trace final_role=${verifiedWorkspaceContext.memberRole}',
     );
-    debugPrint('[WORKSPACE_SWITCH] trace=$trace target_verified=true');
-    debugPrint('[WORKSPACE_SWITCH] trace=$trace context_applied=true');
+    _wsDebug('[WORKSPACE_SWITCH] trace=$trace target_verified=true');
+    _wsDebug('[WORKSPACE_SWITCH] trace=$trace context_applied=true');
     applyActiveWorkspaceContext(
       verifiedWorkspaceContext,
       source: finalVerifiedContextSource,
     );
     DirectusClient.instance.syncAuthorizationHeaderFromSession();
-    debugPrint('[WORKSPACE_SWITCH_PROBE] trace=$trace diagnostic_only=true');
-    debugPrint(
+    await WellarWorkforceService.instance.fetchWorkforceFromWellar();
+    _wsDebug('[WORKSPACE_SWITCH_PROBE] trace=$trace diagnostic_only=true');
+    _wsDebug(
       '[WORKSPACE_SWITCH_PROBE] trace=$trace business_profile=${verifiedWorkspaceContext.businessProfileId}',
     );
-    debugPrint('[WORKSPACE_SWITCH_PROBE] trace=$trace status=${probeResult.statusCode}');
-    debugPrint(
+    _wsDebug(
+      '[WORKSPACE_SWITCH_PROBE] trace=$trace status=${probeResult.statusCode}',
+    );
+    _wsDebug(
       '[WORKSPACE_SWITCH_PROBE] trace=$trace selected_membership_visible=$selectedMembershipVisible',
     );
-    debugPrint('[WORKSPACE_SWITCH_PROBE] trace=$trace member_count=${probeResult.memberCount}');
-    debugPrint('[WORKSPACE_SWITCH] trace=$trace expected_membership_id=$selectedMembershipId');
-    debugPrint(
+    _wsDebug(
+      '[WORKSPACE_SWITCH_PROBE] trace=$trace member_count=${probeResult.memberCount}',
+    );
+    _wsDebug(
+      '[WORKSPACE_SWITCH] trace=$trace expected_membership_id=$selectedMembershipId',
+    );
+    _wsDebug(
       '[WORKSPACE_SWITCH] trace=$trace final_business_profile=${verifiedWorkspaceContext.businessProfileId}',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH] trace=$trace membership_probe_warning=${selectedMembershipVisible ? 'none' : 'selected_membership_not_visible'}',
     );
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE_SWITCH] trace=$trace trigger=$trigger membership_id=$membershipId',
     );
     _wsDebug(
@@ -1134,45 +1205,50 @@ class OrganizationService {
     final userEmail = me.email;
     if (_cachedWorkspaceContext != null &&
         _cachedWorkspaceContext!.currentUserId != userId) {
-      debugPrint(
+      _wsDebug(
         '[WorkspaceResolver] cached context user mismatch -> clearing cache old=${_cachedWorkspaceContext!.currentUserId} new=$userId',
       );
       _cachedWorkspaceContext = null;
     }
-    debugPrint('[AUTH] currentUserId=$userId');
-    debugPrint('[AUTH] currentUserEmail=$userEmail');
+    _wsDebug('[AUTH] currentUserId=$userId');
+    _wsDebug('[AUTH] currentUserEmail=$userEmail');
 
     final query = <String, dynamic>{
       'limit': 50,
       'sort': '-date_created',
       'fields':
           'id,member_role,status,date_created,department,department.id,department.name,'
-              'business_profile,business_profile.id,business_profile.company_name,business_profile.is_active,'
-              'business_profile.plan_code,business_profile.billing_status,'
-              'user,user.id,user.email,user.first_name,user.last_name',
+          'business_profile,business_profile.id,business_profile.company_name,business_profile.is_active,'
+          'business_profile.plan_code,business_profile.billing_status,'
+          'user,user.id,user.email,user.first_name,user.last_name',
       'filter[_and][0][user][_eq]': userId,
       'filter[status][_eq]': 'active',
     };
-    debugPrint(
+    _wsDebug(
       '[WORKSPACE] membership query URL=${DirectusClient.instance.client.options.baseUrl}/items/business_profile_members',
     );
-    debugPrint('[WORKSPACE] membership query params=$query');
+    _wsDebug('[WORKSPACE] membership query params=$query');
     final qs = query.entries
-        .map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value.toString())}')
+        .map(
+          (e) =>
+              '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value.toString())}',
+        )
         .join('&');
-    debugPrint('[WORKSPACE] membership query full_url=${DirectusClient.instance.client.options.baseUrl}/items/business_profile_members?$qs');
+    _wsDebug(
+      '[WORKSPACE] membership query full_url=${DirectusClient.instance.client.options.baseUrl}/items/business_profile_members?$qs',
+    );
     try {
       final response = await _client.get(
         '/items/business_profile_members',
         queryParameters: query,
       );
-      debugPrint('[WORKSPACE] response status=${response.statusCode}');
-      debugPrint('[WORKSPACE] response body=${response.data}');
+      _wsDebug('[WORKSPACE] response status=${response.statusCode}');
+      _wsDebug('[WORKSPACE] response body=${response.data}');
       final data = response.data['data'];
       final rows = data is List
           ? data.whereType<Map<String, dynamic>>().toList()
           : const <Map<String, dynamic>>[];
-      debugPrint('[WORKSPACE] raw membership count=${rows.length}');
+      _wsDebug('[WORKSPACE] raw membership count=${rows.length}');
 
       final validRows = rows.where((row) {
         final status = row['status']?.toString().trim().toLowerCase() ?? '';
@@ -1191,7 +1267,7 @@ class OrganizationService {
         }
         return true;
       }).toList();
-      debugPrint(
+      _wsDebug(
         '[WorkspaceResolver] membership ids and user ids=${validRows.map((e) => '${e['id']}:${e['user'] is Map ? e['user']['id'] : e['user']}').join(',')}',
       );
       for (final row in validRows) {
@@ -1200,18 +1276,20 @@ class OrganizationService {
             ? userRaw['id']?.toString().trim() ?? ''
             : userRaw?.toString().trim() ?? '';
         final bp = row['business_profile'];
-        final bpId = bp is Map ? bp['id']?.toString() ?? '' : bp?.toString() ?? '';
-        final bpName = bp is Map
-            ? (bp['company_name']?.toString() ?? '')
-            : '';
+        final bpId = bp is Map
+            ? bp['id']?.toString() ?? ''
+            : bp?.toString() ?? '';
+        final bpName = bp is Map ? (bp['company_name']?.toString() ?? '') : '';
         final dept = row['department'];
-        final deptId = dept is Map ? dept['id']?.toString() ?? '' : dept?.toString() ?? '';
+        final deptId = dept is Map
+            ? dept['id']?.toString() ?? ''
+            : dept?.toString() ?? '';
         final deptName = dept is Map ? dept['name']?.toString() ?? '' : '';
-        debugPrint(
+        _wsDebug(
           '[WorkspaceResolver] membership item id=${row['id']} status=${row['status']} role=${row['member_role']} user_raw=$userRaw normalized_user_id=$normalizedUserId business_profile_id=$bpId business_profile_name=$bpName department_id=$deptId department_name=$deptName',
         );
       }
-      debugPrint(
+      _wsDebug(
         '[WorkspaceResolver] fetched memberships=${validRows.map((e) => '{id:${e['id']},user_id:${e['user'] is Map ? e['user']['id'] : e['user']},user_email:${e['user'] is Map ? e['user']['email'] : '-'},role:${e['member_role']},status:${e['status']}}').join(' | ')}',
       );
       if (validRows.isEmpty) {
@@ -1234,11 +1312,11 @@ class OrganizationService {
         }).toList();
         if (matched.isNotEmpty) {
           selected = matched.first;
-          debugPrint(
+          _wsDebug(
             '[WorkspaceResolver] selected cached workspace membership for same user business_profile=${cached.businessProfileId}',
           );
         } else {
-          debugPrint(
+          _wsDebug(
             '[WorkspaceResolver] cached workspace not found in fresh memberships. selecting first valid membership.',
           );
         }
@@ -1273,7 +1351,9 @@ class OrganizationService {
       final departmentId = department is Map
           ? department['id']?.toString()
           : department?.toString();
-      final departmentName = department is Map ? department['name']?.toString() : null;
+      final departmentName = department is Map
+          ? department['name']?.toString()
+          : null;
       final membershipUser = selected['user'];
       final membershipUserId = membershipUser is Map
           ? membershipUser['id']?.toString().trim() ?? ''
@@ -1290,73 +1370,74 @@ class OrganizationService {
       }
       final directusRole = _normalizeRole(me.role);
       final finalEffectiveRole = membershipRole;
-      final status = selected['status']?.toString().trim().toLowerCase() ?? 'unknown';
+      final status =
+          selected['status']?.toString().trim().toLowerCase() ?? 'unknown';
       final scope = departmentName?.trim().isNotEmpty == true
           ? '${finalEffectiveRole.toUpperCase()} - ${departmentName!.trim()}'
           : finalEffectiveRole.toUpperCase();
 
-        final context = ActiveWorkspaceContext(
-          currentUserId: userId,
-          currentUserEmail: Session.instance.userEmail,
-          currentUserFirstName: me.firstName,
-          currentUserLastName: me.lastName,
-          directusRoleId: me.roleId,
-          directusRoleName: me.role,
-          membershipUserId: membershipUserId,
-          businessProfileId: businessId,
-          businessProfileName: businessName,
-          businessProfileStatus: businessStatus,
-          businessPlanCode: businessPlanCode,
-          businessBillingStatus: businessBillingStatus,
-          membershipId: selected['id']?.toString() ?? '',
-          memberRole: membershipRole,
-          membershipRole: membershipRole,
-          finalEffectiveRole: finalEffectiveRole,
-          membershipStatus: status,
-          departmentId: departmentId?.trim().isEmpty == true
-              ? null
-              : departmentId,
-          departmentName: departmentName?.trim().isEmpty == true
-              ? null
-              : departmentName,
-          scopeLabel: scope,
+      final context = ActiveWorkspaceContext(
+        currentUserId: userId,
+        currentUserEmail: Session.instance.userEmail,
+        currentUserFirstName: me.firstName,
+        currentUserLastName: me.lastName,
+        directusRoleId: me.roleId,
+        directusRoleName: me.role,
+        membershipUserId: membershipUserId,
+        businessProfileId: businessId,
+        businessProfileName: businessName,
+        businessProfileStatus: businessStatus,
+        businessPlanCode: businessPlanCode,
+        businessBillingStatus: businessBillingStatus,
+        membershipId: selected['id']?.toString() ?? '',
+        memberRole: membershipRole,
+        membershipRole: membershipRole,
+        finalEffectiveRole: finalEffectiveRole,
+        membershipStatus: status,
+        departmentId: departmentId?.trim().isEmpty == true
+            ? null
+            : departmentId,
+        departmentName: departmentName?.trim().isEmpty == true
+            ? null
+            : departmentName,
+        scopeLabel: scope,
+      );
+      applyActiveWorkspaceContext(context, source: 'legacy_resolver');
+      _wsDebug('[WORKSPACE] selected membership id=${context.membershipId}');
+      _wsDebug('[WORKSPACE] selected member_role=${context.membershipRole}');
+      _wsDebug(
+        '[WORKSPACE] selected business_profile=${context.businessProfileId}',
+      );
+      _wsDebug(
+        '[WORKSPACE] selected department=${context.departmentId ?? "-"}',
+      );
+      _wsDebug('[ROLE_DEBUG] usersMe.id=${context.currentUserId}');
+      _wsDebug('[ROLE_DEBUG] usersMe.email=${context.currentUserEmail}');
+      _wsDebug('[ROLE_DEBUG] directusRoleName=${context.directusRoleName}');
+      _wsDebug('[ROLE_DEBUG] membership.id=${context.membershipId}');
+      _wsDebug('[ROLE_DEBUG] membership.member_role=${context.membershipRole}');
+      _wsDebug('[ROLE_DEBUG] membership.status=${context.membershipStatus}');
+      _wsDebug(
+        '[ROLE_DEBUG] membership.business_profile=${context.businessProfileId}',
+      );
+      _wsDebug('[ROLE_DEBUG] finalEffectiveRole=${context.finalEffectiveRole}');
+      if (directusRole != context.membershipRole) {
+        _wsDebug(
+          '[ROLE_CONFLICT] directusRole=$directusRole membershipRole=${context.membershipRole} finalEffectiveRole=${context.finalEffectiveRole}',
         );
-        applyActiveWorkspaceContext(context, source: 'legacy_resolver');
-        debugPrint(
-          '[WORKSPACE] selected membership id=${context.membershipId}',
-        );
-        debugPrint('[WORKSPACE] selected member_role=${context.membershipRole}');
-        debugPrint(
-          '[WORKSPACE] selected business_profile=${context.businessProfileId}',
-        );
-        debugPrint(
-          '[WORKSPACE] selected department=${context.departmentId ?? "-"}',
-        );
-        debugPrint('[ROLE_DEBUG] usersMe.id=${context.currentUserId}');
-        debugPrint('[ROLE_DEBUG] usersMe.email=${context.currentUserEmail}');
-        debugPrint('[ROLE_DEBUG] directusRoleName=${context.directusRoleName}');
-        debugPrint('[ROLE_DEBUG] membership.id=${context.membershipId}');
-        debugPrint('[ROLE_DEBUG] membership.member_role=${context.membershipRole}');
-        debugPrint('[ROLE_DEBUG] membership.status=${context.membershipStatus}');
-        debugPrint('[ROLE_DEBUG] membership.business_profile=${context.businessProfileId}');
-        debugPrint('[ROLE_DEBUG] finalEffectiveRole=${context.finalEffectiveRole}');
-        if (directusRole != context.membershipRole) {
-          debugPrint(
-            '[ROLE_CONFLICT] directusRole=$directusRole membershipRole=${context.membershipRole} finalEffectiveRole=${context.finalEffectiveRole}',
-          );
-        }
-        debugPrint(
-          'ROLE_CONTEXT_FINAL: currentUserId=${context.currentUserId} currentUserEmail=${context.currentUserEmail} directusRole=${context.directusRoleName} membershipRole=${context.membershipRole} effectiveRole=${context.finalEffectiveRole} memberId=${context.membershipId} businessProfileId=${context.businessProfileId} businessProfileName=${context.businessProfileName} departmentId=${context.departmentId} departmentName=${context.departmentName} shell=${context.finalEffectiveRole}',
-        );
-        return WorkspaceResolveResult(
-          status: WorkspaceResolveStatus.ok,
-          context: context,
-        );
+      }
+      _wsDebug(
+        'ROLE_CONTEXT_FINAL: currentUserId=${context.currentUserId} currentUserEmail=${context.currentUserEmail} directusRole=${context.directusRoleName} membershipRole=${context.membershipRole} effectiveRole=${context.finalEffectiveRole} memberId=${context.membershipId} businessProfileId=${context.businessProfileId} businessProfileName=${context.businessProfileName} departmentId=${context.departmentId} departmentName=${context.departmentName} shell=${context.finalEffectiveRole}',
+      );
+      return WorkspaceResolveResult(
+        status: WorkspaceResolveStatus.ok,
+        context: context,
+      );
     } on DioException catch (e) {
       final status = e.response?.statusCode;
-      debugPrint('[WORKSPACE] response status=$status');
-      debugPrint('[WORKSPACE] response body=${e.response?.data}');
-      debugPrint(
+      _wsDebug('[WORKSPACE] response status=$status');
+      _wsDebug('[WORKSPACE] response body=${e.response?.data}');
+      _wsDebug(
         '[API_ERROR] method=GET endpoint=/items/business_profile_members collection=business_profile_members status=$status body=${e.response?.data}',
       );
       if (status == 401) {
@@ -1367,8 +1448,8 @@ class OrganizationService {
         );
       }
       if (status == 403) {
-        debugPrint('[WorkspaceResolver] 403 forbidden while reading memberships');
-        debugPrint(
+        _wsDebug('[WorkspaceResolver] 403 forbidden while reading memberships');
+        _wsDebug(
           'DIRECTUS PERMISSION ERROR: current Directus role cannot read business_profile_members for this user. role_id=${me.roleId} user_id=$userId',
         );
         clearActiveWorkspaceContext();
@@ -1383,7 +1464,7 @@ class OrganizationService {
         message: _extractMessage(e),
       );
     } catch (e) {
-      debugPrint('[WORKSPACE] membership parse failed: $e');
+      _wsDebug('[WORKSPACE] membership parse failed: $e');
       return WorkspaceResolveResult(
         status: WorkspaceResolveStatus.error,
         message: e.toString(),
@@ -1433,7 +1514,7 @@ class OrganizationService {
         '[WS_HTTP] trace=${_activeSwitchTrace ?? 'none'} stage=users_me method=GET endpoint=/users/me started=true status=${response.statusCode ?? 0} duration_ms=${usersMeStopwatch.elapsedMilliseconds} network_error_type=none network_error_status=0',
       );
       _wsDebug(
-        '[WS_CLIENT_STATE] trace=${_activeSwitchTrace ?? 'none'} label=users_me client_instance_id=${DirectusClient.instance.instanceId} dio_instance_id=${DirectusClient.instance.dioInstanceId} token_fp=${DirectusClient.tokenFingerprint(Session.instance.accessToken)}',
+        '[WS_CLIENT_STATE] trace=${_activeSwitchTrace ?? 'none'} label=users_me client_instance_id=${DirectusClient.instance.instanceId} dio_instance_id=${DirectusClient.instance.dioInstanceId}',
       );
       _wsDebug(
         '[WS_USERS_ME] trace=${_activeSwitchTrace ?? 'none'} loaded=true role_source=${roleRaw is Map ? (roleRaw['name'] != null ? 'role_name' : 'role_id') : (roleRaw != null ? 'scalar' : 'missing')} directus_role_id=${roleId ?? ''} directus_role_name=${role ?? ''} active_business_profile=${activeBusinessProfileId ?? ''} active_department=${activeDepartmentId ?? ''} active_member_role=${activeMemberRole ?? ''} active_role=${activeRole ?? ''} status=${status ?? ''}',
@@ -1468,7 +1549,7 @@ class OrganizationService {
       _wsDebug(
         '[WS_HTTP] trace=${_activeSwitchTrace ?? 'none'} stage=users_me method=GET endpoint=/users/me started=true status=$status duration_ms=${usersMeStopwatch.elapsedMilliseconds} network_error_type=${e.type} network_error_status=$status',
       );
-      debugPrint(
+      _wsDebug(
         '[WorkspaceResolver] /users/me failed status=$status body=${e.response?.data}',
       );
       return null;
@@ -1516,7 +1597,9 @@ class OrganizationService {
       return _cachedBusinessProfile;
     }
 
-    final context = await fetchActiveWorkspaceContext(forceRefresh: forceRefresh);
+    final context = await fetchActiveWorkspaceContext(
+      forceRefresh: forceRefresh,
+    );
     if (context != null && context.businessProfileId.trim().isNotEmpty) {
       final direct = await _fetchBusinessProfileById(context.businessProfileId);
       if (direct != null) {
@@ -2245,7 +2328,8 @@ class OrganizationService {
     final membership = _parseActiveMembership(
       record['membership'],
       fallbackMemberRole:
-          _stringValue(record['memberRole']) ?? _stringValue(record['member_role']),
+          _stringValue(record['memberRole']) ??
+          _stringValue(record['member_role']),
     );
     if (workspace == null || membership == null) return null;
     final department = _parseDepartment(record['department']);
@@ -2298,11 +2382,13 @@ class OrganizationService {
         billingStatus: null,
       );
     }
-    final id = _stringValue(record['id']) ??
+    final id =
+        _stringValue(record['id']) ??
         _stringValue(record['businessProfileId']) ??
         _stringValue(record['business_profile']) ??
         _stringValue(record['business_profile_id']);
-    final companyName = _stringValue(record['companyName']) ??
+    final companyName =
+        _stringValue(record['companyName']) ??
         _stringValue(record['company_name']) ??
         _stringValue(record['businessName']) ??
         _stringValue(record['business_name']) ??
@@ -2312,14 +2398,16 @@ class OrganizationService {
     return _WorkspaceContextWorkspace(
       id: id,
       companyName: companyName,
-      isActive: _isTruthy(
+      isActive:
+          _isTruthy(
             record['isActive'] ?? record['is_active'] ?? record['active'],
           ) ||
           record['isActive'] == true ||
           record['is_active'] == true,
-      planCode: _stringValue(record['planCode']) ??
-          _stringValue(record['plan_code']),
-      billingStatus: _stringValue(record['billingStatus']) ??
+      planCode:
+          _stringValue(record['planCode']) ?? _stringValue(record['plan_code']),
+      billingStatus:
+          _stringValue(record['billingStatus']) ??
           _stringValue(record['billing_status']),
     );
   }
@@ -2331,9 +2419,10 @@ class OrganizationService {
       if (id == null) return null;
       return _WorkspaceContextDepartment(id: id, name: 'Department');
     }
-    final id = _stringValue(record['id']) ??
-        _stringValue(record['department_id']);
-    final name = _stringValue(record['name']) ??
+    final id =
+        _stringValue(record['id']) ?? _stringValue(record['department_id']);
+    final name =
+        _stringValue(record['name']) ??
         _stringValue(record['department_name']) ??
         _stringValue(record['departmentName']) ??
         'Department';
@@ -2356,7 +2445,8 @@ class OrganizationService {
         memberRole: memberRole,
       );
     }
-    final id = _stringValue(record['id']) ??
+    final id =
+        _stringValue(record['id']) ??
         _stringValue(record['membershipId']) ??
         _stringValue(record['membership_id']);
     final status = _stringValue(record['status']) ?? 'active';
@@ -2462,70 +2552,81 @@ class OrganizationService {
     final root = _asMap(raw);
     if (root == null) return null;
     final data = _asMap(root['data']) ?? root;
-    final exactWorkspace = _asMap(data['workspace']) ??
+    final exactWorkspace =
+        _asMap(data['workspace']) ??
         _asMap(data['business_profile']) ??
         _asMap(data['businessProfile']);
-    final exactMembership = _asMap(data['membership']) ??
+    final exactMembership =
+        _asMap(data['membership']) ??
         _asMap(data['active_membership']) ??
         _asMap(data['business_profile_member']) ??
         _asMap(data['member']);
     final exactDepartment =
         _asMap(data['department']) ?? _asMap(data['active_department']);
-    final exactMemberRole = _stringValue(data['memberRole']) ??
-        _stringValue(data['member_role']);
+    final exactMemberRole =
+        _stringValue(data['memberRole']) ?? _stringValue(data['member_role']);
     final candidate =
         data.containsKey('active') || data.containsKey('memberships')
-            ? data
-            : (exactWorkspace != null || exactMembership != null
-                ? <String, dynamic>{
-                    'active': <String, dynamic>{
-                      'workspace': exactWorkspace ?? <String, dynamic>{
-                        'id': _stringValue(data['workspace']) ??
-                            _stringValue(data['business_profile']) ??
-                            _stringValue(data['businessProfile']),
-                        'companyName': _stringValue(
-                              _asMap(data['workspace'])?['companyName'],
-                            ) ??
-                            _stringValue(
-                              _asMap(data['workspace'])?['company_name'],
-                            ) ??
-                            _stringValue(
-                              _asMap(data['workspace'])?['name'],
-                            ),
-                      },
-                      'membership': exactMembership ??
-                          <String, dynamic>{
-                            'id': _stringValue(data['membership']) ??
-                                _stringValue(data['active_membership']) ??
-                                _stringValue(data['business_profile_member']) ??
-                                _stringValue(data['member']),
-                            'status': _stringValue(
-                                  _asMap(data['membership'])?['status'],
-                                ) ??
-                                _stringValue(
-                                  _asMap(data['active_membership'])?['status'],
-                                ) ??
-                                'active',
-                            'memberRole': _stringValue(
-                                  _asMap(data['membership'])?['memberRole'],
-                                ) ??
-                                _stringValue(
-                                  _asMap(data['membership'])?['member_role'],
-                                ) ??
-                                _stringValue(
-                                  _asMap(data['membership'])?['role'],
-                                ) ??
-                                exactMemberRole,
-                          },
-                      'department': exactDepartment,
-                      'memberRole': exactMemberRole,
-                      'member_role': exactMemberRole,
-                    },
-                    'memberships': data['memberships'] ?? const [],
-                  }
-                : null);
+        ? data
+        : (exactWorkspace != null || exactMembership != null
+              ? <String, dynamic>{
+                  'active': <String, dynamic>{
+                    'workspace':
+                        exactWorkspace ??
+                        <String, dynamic>{
+                          'id':
+                              _stringValue(data['workspace']) ??
+                              _stringValue(data['business_profile']) ??
+                              _stringValue(data['businessProfile']),
+                          'companyName':
+                              _stringValue(
+                                _asMap(data['workspace'])?['companyName'],
+                              ) ??
+                              _stringValue(
+                                _asMap(data['workspace'])?['company_name'],
+                              ) ??
+                              _stringValue(_asMap(data['workspace'])?['name']),
+                        },
+                    'membership':
+                        exactMembership ??
+                        <String, dynamic>{
+                          'id':
+                              _stringValue(data['membership']) ??
+                              _stringValue(data['active_membership']) ??
+                              _stringValue(data['business_profile_member']) ??
+                              _stringValue(data['member']),
+                          'status':
+                              _stringValue(
+                                _asMap(data['membership'])?['status'],
+                              ) ??
+                              _stringValue(
+                                _asMap(data['active_membership'])?['status'],
+                              ) ??
+                              'active',
+                          'memberRole':
+                              _stringValue(
+                                _asMap(data['membership'])?['memberRole'],
+                              ) ??
+                              _stringValue(
+                                _asMap(data['membership'])?['member_role'],
+                              ) ??
+                              _stringValue(
+                                _asMap(data['membership'])?['role'],
+                              ) ??
+                              exactMemberRole,
+                        },
+                    'department': exactDepartment,
+                    'memberRole': exactMemberRole,
+                    'member_role': exactMemberRole,
+                  },
+                  'memberships': data['memberships'] ?? const [],
+                }
+              : null);
     if (candidate == null) return null;
-    return _buildCanonicalWorkspaceSnapshot(candidate, currentUser: currentUser);
+    return _buildCanonicalWorkspaceSnapshot(
+      candidate,
+      currentUser: currentUser,
+    );
   }
 
   ActiveWorkspaceContext? _verifiedCanonicalContext(
@@ -2539,28 +2640,35 @@ class OrganizationService {
     final context = snapshot.activeContext;
     if (context == null) return null;
     final normalizedExpectedMembershipId = expectedMembershipId.trim();
-    final normalizedExpectedBusinessProfileId = expectedBusinessProfileId.trim();
+    final normalizedExpectedBusinessProfileId = expectedBusinessProfileId
+        .trim();
     final normalizedExpectedDepartmentId = expectedDepartmentId.trim();
-    final normalizedExpectedEffectiveRole = expectedEffectiveRole.trim().toLowerCase();
+    final normalizedExpectedEffectiveRole = expectedEffectiveRole
+        .trim()
+        .toLowerCase();
     final normalizedContextMembershipId = context.membershipId.trim();
     final normalizedCurrentUserId = context.currentUserId.trim();
     final normalizedMembershipUserId = context.membershipUserId.trim();
     final normalizedBusinessProfileId = context.businessProfileId.trim();
     final normalizedDepartmentId = context.departmentId?.trim() ?? '';
-    final normalizedMembershipStatus = context.membershipStatus.trim().toLowerCase();
-    final normalizedMembershipRole = context.membershipRole.trim().toLowerCase();
+    final normalizedMembershipStatus = context.membershipStatus
+        .trim()
+        .toLowerCase();
+    final normalizedMembershipRole = context.membershipRole
+        .trim()
+        .toLowerCase();
     if (normalizedCurrentUserId.isEmpty ||
         normalizedMembershipUserId != normalizedCurrentUserId ||
         normalizedContextMembershipId.isEmpty ||
         normalizedBusinessProfileId.isEmpty ||
         normalizedContextMembershipId != normalizedExpectedMembershipId ||
         (normalizedExpectedBusinessProfileId.isNotEmpty &&
-            normalizedBusinessProfileId != normalizedExpectedBusinessProfileId) ||
+            normalizedBusinessProfileId !=
+                normalizedExpectedBusinessProfileId) ||
         (normalizedExpectedDepartmentId.isNotEmpty &&
             normalizedDepartmentId != normalizedExpectedDepartmentId) ||
         (normalizedExpectedEffectiveRole.isNotEmpty &&
-            normalizedMembershipRole !=
-                normalizedExpectedEffectiveRole) ||
+            normalizedMembershipRole != normalizedExpectedEffectiveRole) ||
         (normalizedMembershipStatus != 'active' &&
             normalizedMembershipStatus != 'accepted')) {
       return null;
@@ -2600,7 +2708,7 @@ class OrganizationService {
       );
       probeStopwatch.stop();
       _wsDebug(
-        '[WS_CLIENT_STATE] trace=$trace label=membership_probe client_instance_id=${DirectusClient.instance.instanceId} dio_instance_id=${DirectusClient.instance.dioInstanceId} token_fp=${DirectusClient.tokenFingerprint(Session.instance.accessToken)}',
+        '[WS_CLIENT_STATE] trace=$trace label=membership_probe client_instance_id=${DirectusClient.instance.instanceId} dio_instance_id=${DirectusClient.instance.dioInstanceId}',
       );
       final data = response.data;
       final rows = data is Map ? data['data'] : null;
@@ -2633,7 +2741,7 @@ class OrganizationService {
       probeStopwatch.stop();
       final status = e.response?.statusCode ?? 0;
       _wsDebug(
-        '[WS_CLIENT_STATE] trace=$trace label=membership_probe client_instance_id=${DirectusClient.instance.instanceId} dio_instance_id=${DirectusClient.instance.dioInstanceId} token_fp=${DirectusClient.tokenFingerprint(Session.instance.accessToken)}',
+        '[WS_CLIENT_STATE] trace=$trace label=membership_probe client_instance_id=${DirectusClient.instance.instanceId} dio_instance_id=${DirectusClient.instance.dioInstanceId}',
       );
       _wsDebug(
         '[WS_HTTP] trace=$trace stage=membership_probe method=GET endpoint=/items/business_profile_members started=true status=$status duration_ms=${probeStopwatch.elapsedMilliseconds} network_error_type=${e.type} network_error_status=$status',
@@ -2683,25 +2791,54 @@ class OrganizationService {
 
   Future<bool> _applySwitchSessionCredentials(dynamic raw) async {
     final root = _asMap(raw);
-    if (root == null) return false;
+    if (root == null) return true;
     final data = _asMap(root['data']);
     final accessToken =
-        _stringValue(root['access_token']) ?? _stringValue(data?['access_token']);
+        _stringValue(root['access_token']) ??
+        _stringValue(data?['access_token']);
     final refreshToken =
         _stringValue(root['refresh_token']) ??
         _stringValue(data?['refresh_token']);
-    if (accessToken == null || accessToken.isEmpty) {
-      return false;
-    }
-    if (refreshToken != null) {
+    if (accessToken != null && accessToken.isNotEmpty) {
       await Session.instance.setAuth(
         accessToken: accessToken,
-        refreshToken: refreshToken,
+        refreshToken: refreshToken ?? Session.instance.refreshToken,
       );
-    } else {
-      await Session.instance.setAuth(accessToken: accessToken);
+      return true;
+    }
+    if (refreshToken != null && refreshToken.isNotEmpty) {
+      final currentAccessToken = Session.instance.accessToken?.trim() ?? '';
+      if (currentAccessToken.isNotEmpty) {
+        await Session.instance.setAuth(
+          accessToken: currentAccessToken,
+          refreshToken: refreshToken,
+        );
+      }
     }
     return true;
+  }
+
+  Map<String, dynamic>? _decodeAccessTokenPayload(String? token) {
+    try {
+      final parts = token?.split('.') ?? const <String>[];
+      if (parts.length < 2) return null;
+      final payloadBytes = base64Url.decode(base64Url.normalize(parts[1]));
+      final decoded = jsonDecode(utf8.decode(payloadBytes));
+      return decoded is Map<String, dynamic> ? decoded : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? _jwtRoleClaim(Map<String, dynamic>? payload) {
+    final raw =
+        payload?['role'] ?? payload?['role_name'] ?? payload?['roleName'];
+    if (raw is Map) {
+      return _stringValue(raw['id']) ??
+          _stringValue(raw['name']) ??
+          _stringValue(raw['role']);
+    }
+    return _stringValue(raw);
   }
 
   Future<bool> _installPostSwitchSessionCredentials(dynamic raw) async {
@@ -2789,7 +2926,10 @@ class OrganizationService {
     return actual == normalizedExpected;
   }
 
-  bool _verifyDirectusRoleMatch(_CurrentUser? currentUser, String expectedRole) {
+  bool _verifyDirectusRoleMatch(
+    _CurrentUser? currentUser,
+    String expectedRole,
+  ) {
     final normalizedExpected = expectedRole.trim().toLowerCase();
     if (normalizedExpected.isEmpty || currentUser == null) return false;
 
@@ -2855,7 +2995,6 @@ class OrganizationService {
     );
     return response;
   }
-
 }
 
 class _CurrentUser {

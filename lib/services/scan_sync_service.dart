@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../utils/safe_debug_log.dart';
 
 import '../models/scan_result.dart';
 import '../models/notification_item.dart';
@@ -25,12 +25,12 @@ class ScanSyncService {
 
     for (int attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_RESULT_POLL] step=8 poll attempt=${attempt + 1} scan_id=$scanId',
         );
         final scan = await ScanService.instance.fetchWellnessScanStatus(scanId);
         if (scan.isFailed) {
-          debugPrint(
+          safeDebugLog(
             '[ScanFlow] final failed state scan_id=$scanId failure_reason=${scan.failureReason}',
           );
           return null;
@@ -40,10 +40,10 @@ class ScanSyncService {
             scanId,
           );
           if (result != null) {
-            debugPrint(
+            safeDebugLog(
               '[SCAN_RESULT_POLL] step=8 poll success scan_id=$scanId result_id=${result.id}',
             );
-            debugPrint('[ScanFlow] final completed state scan_id=$scanId');
+            safeDebugLog('[ScanFlow] final completed state scan_id=$scanId');
             return result;
           }
         }
@@ -65,7 +65,7 @@ class ScanSyncService {
 
     for (int attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_HISTORY_POLL] attempt=${attempt + 1} scan_id=$scanId',
         );
         final home = await ScanService.instance.fetchHomeData(limit: 50);
@@ -77,10 +77,10 @@ class ScanSyncService {
         return;
       } on DioException catch (e) {
         if (!_isTransientNetworkError(e)) {
-          debugPrint('[SCAN_SYNC_WAIT_FAILED] ${e.message}');
+          safeDebugLog('[SCAN_SYNC_WAIT_FAILED] ${e.message}');
         }
       } catch (e) {
-        debugPrint('[SCAN_SYNC_WAIT_FAILED] $e');
+        safeDebugLog('[SCAN_SYNC_WAIT_FAILED] $e');
       }
 
       await Future.delayed(delay);
@@ -130,7 +130,7 @@ class ScanSyncService {
       }
       await _refreshAll(container);
     } catch (e, s) {
-      debugPrint('[SCAN_SYNC_FAILED] $e\n$s');
+      safeDebugLog('[SCAN_SYNC_FAILED] $e\n$s');
     }
   }
 
@@ -163,7 +163,7 @@ class ScanSyncService {
         container.read(activityEventsProvider.future),
       ]);
     } catch (e) {
-      debugPrint('[SCAN_SYNC_REFRESH_FAILED] $e');
+      safeDebugLog('[SCAN_SYNC_REFRESH_FAILED] $e');
     }
   }
 
@@ -208,14 +208,16 @@ class ScanSyncService {
       );
     } on DioException catch (e) {
       if ((e.response?.statusCode ?? 0) == 403) {
-        debugPrint(
+        safeDebugLog(
           '[SCAN_RESULT_NOTIFICATION] ignored notifications 403 scan_id=$scanId',
         );
         return;
       }
       rethrow;
     } catch (e) {
-      debugPrint('[SCAN_RESULT_NOTIFICATION] ignored error scan_id=$scanId $e');
+      safeDebugLog(
+        '[SCAN_RESULT_NOTIFICATION] ignored error scan_id=$scanId $e',
+      );
     }
   }
 

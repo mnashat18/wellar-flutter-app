@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import '../i18n/tr.dart';
 
 import '../services/request_service.dart';
 import '../utils/app_colors.dart';
@@ -44,7 +45,9 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
               color: AppColors.primarySoft,
               onRefresh: () async {
                 final next = _load();
-                setState(() => _future = next);
+                setState(() {
+                  _future = next;
+                });
                 await next;
               },
               child: SingleChildScrollView(
@@ -59,12 +62,15 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
                     if (snapshot.hasError) {
                       return StatusCard(
                         title: 'Request details unavailable',
-                        message: snapshot.error.toString(),
+                        message: Tr.localized(context, 'generic_load_error'),
                         icon: Icons.warning_amber_rounded,
                         iconColor: AppColors.highRisk,
                         actionText: 'Retry',
                         onAction: () {
-                          setState(() => _future = _load());
+                          final next = _load();
+                          setState(() {
+                            _future = next;
+                          });
                         },
                       );
                     }
