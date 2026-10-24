@@ -295,7 +295,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                                   ),
                                   const SizedBox(width: 8),
                                   const Text(
-                                    'Wellar',
+                                    'Wisebase',
                                     style: TextStyle(
                                       color: _authTeal,
                                       fontWeight: FontWeight.w800,
@@ -640,7 +640,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         v.contains('connection') ||
         v.contains('socket') ||
         v.contains('host lookup')) {
-      return 'Could not connect to Wellar right now. Check your connection.';
+      return 'Could not connect to Wisebase right now. Check your connection.';
     }
     if (v.contains('timeout') || v.contains('too long')) {
       return 'Server took too long. Try again.';

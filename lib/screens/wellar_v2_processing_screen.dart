@@ -1,13 +1,14 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/wellar_v2_result.dart';
 import '../services/wellar_v2_client.dart';
+import '../utils/safe_debug_log.dart';
 import '../utils/scan_local_media_cleanup.dart';
 import 'wellar_v2_result_screen.dart';
 
@@ -16,11 +17,15 @@ class WellarV2ProcessingScreen extends StatefulWidget {
     super.key,
     required this.videoFile,
     required this.audioFile,
+    required this.mediaProcessingConsent,
+    required this.consentVersion,
     this.imageBytes,
   });
 
   final XFile videoFile;
   final XFile audioFile;
+  final bool mediaProcessingConsent;
+  final String consentVersion;
   final Uint8List? imageBytes;
 
   @override
@@ -32,7 +37,7 @@ class _WellarV2ProcessingScreenState extends State<WellarV2ProcessingScreen> {
   late final CancelToken _cancelToken = CancelToken();
   late final WellarV2Client _client;
   final List<String> _uploadedRefs = [];
-  String _message = 'Preparing compatible local media…';
+  String _message = 'Preparing captured media…';
   bool _accepted = false;
   bool _submissionOutcomeUnknown = false;
   bool _terminalReached = false;
@@ -62,6 +67,7 @@ class _WellarV2ProcessingScreenState extends State<WellarV2ProcessingScreen> {
 
   Future<void> _run() async {
     try {
+      if (kDebugMode) safeDebugLog('[WELLAR_V2] selected_backend=v2');
       _setMessage('Checking captured MP4 and WAV media…');
       final videoLength = await File(widget.videoFile.path).length();
       final audioLength = await File(widget.audioFile.path).length();
@@ -73,21 +79,21 @@ class _WellarV2ProcessingScreenState extends State<WellarV2ProcessingScreen> {
           statusCode: 413,
           code: 'media_too_large',
           message:
-              'Captured media exceeds the supported local V2 size limit. Retake the scan.',
+              'Captured media exceeds the supported V2 size limit. Retake the scan.',
         );
       }
       final video = await File(widget.videoFile.path).readAsBytes();
       final audio = await File(widget.audioFile.path).readAsBytes();
       if (_cancelToken.isCancelled) return;
 
-      _setMessage('Uploading video to local Wellar AI V2…');
+      _setMessage('Uploading video to Wisebase AI V2…');
       _uploadedRefs.add(
         await _client.uploadImage(imageBytes, cancelToken: _cancelToken),
       );
       _uploadedRefs.add(
         await _client.uploadVideo(video, cancelToken: _cancelToken),
       );
-      _setMessage('Uploading WAV audio to local Wellar AI V2…');
+      _setMessage('Uploading WAV audio to Wisebase AI V2…');
       _uploadedRefs.add(
         await _client.uploadAudio(audio, cancelToken: _cancelToken),
       );
@@ -98,6 +104,8 @@ class _WellarV2ProcessingScreenState extends State<WellarV2ProcessingScreen> {
       try {
         scanId = await _client.submitScan(
           mediaRefs: List.unmodifiable(_uploadedRefs),
+          mediaProcessingConsent: widget.mediaProcessingConsent,
+          consentVersion: widget.consentVersion,
           idempotencyKey: idempotencyKey,
           cancelToken: _cancelToken,
         );
@@ -110,7 +118,7 @@ class _WellarV2ProcessingScreenState extends State<WellarV2ProcessingScreen> {
         rethrow;
       }
       _accepted = true;
-      _setMessage('V2 accepted the scan. Waiting for the local worker…');
+      _setMessage('V2 accepted the scan. Waiting for processing…');
       final deadline = DateTime.now().add(const Duration(minutes: 2));
       WellarV2Result? result;
       while (DateTime.now().isBefore(deadline)) {
@@ -130,7 +138,7 @@ class _WellarV2ProcessingScreenState extends State<WellarV2ProcessingScreen> {
           throw const WellarV2ApiException(
             statusCode: null,
             code: 'scan_failed',
-            message: 'The local V2 worker reported a terminal failure.',
+            message: 'The V2 processing service reported a terminal failure.',
           );
         }
         if (status == 'completed') {
@@ -153,7 +161,7 @@ class _WellarV2ProcessingScreenState extends State<WellarV2ProcessingScreen> {
           statusCode: null,
           code: 'poll_timeout',
           message:
-              'Timed out waiting for a local V2 result. The scan may still be processing.',
+              'Timed out waiting for a V2 result. The scan may still be processing.',
           retryable: true,
         );
       }
@@ -167,12 +175,12 @@ class _WellarV2ProcessingScreenState extends State<WellarV2ProcessingScreen> {
       );
     } on DioException catch (_) {
       _fail(
-        'The local V2 request was interrupted. Check the service and network.',
+        'The V2 request was interrupted. Check the service and network.',
       );
     } on WellarV2ApiException catch (error) {
       if (error.code == 'result_unavailable') {
         _fail(
-          'V2 accepted the scan but has not published a result. Keep the local worker running and retry later.',
+          'V2 accepted the scan but has not published a result yet. Retry later.',
         );
       } else {
         _fail(error.message);
@@ -181,7 +189,7 @@ class _WellarV2ProcessingScreenState extends State<WellarV2ProcessingScreen> {
       _fail('Captured media is no longer available. Retake the scan.');
     } catch (_) {
       _fail(
-        'The local V2 scan could not be completed. Check the service and retake if needed.',
+        'The V2 scan could not be completed. Check the service and retake if needed.',
       );
     } finally {
       // If submission was never accepted, uploaded refs are not worker inputs
@@ -220,7 +228,7 @@ class _WellarV2ProcessingScreenState extends State<WellarV2ProcessingScreen> {
 
   void _cancel() {
     _cancelled = true;
-    _cancelToken.cancel('User cancelled local V2 wait');
+    _cancelToken.cancel('User cancelled V2 wait');
     // The API has no scan-cancel route. An already accepted job may continue;
     // its media is retained for the worker and then governed by V2 retention.
     Navigator.of(context).pop();
@@ -229,7 +237,7 @@ class _WellarV2ProcessingScreenState extends State<WellarV2ProcessingScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Local V2 scan'),
+      title: const Text('Wisebase AI V2 scan'),
       leading: IconButton(
         tooltip: 'Cancel',
         onPressed: _finished ? () => Navigator.of(context).pop() : _cancel,

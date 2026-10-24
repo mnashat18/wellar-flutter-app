@@ -443,7 +443,7 @@ class Tr {
       'result_preparing': 'Result is still being prepared.',
       'try_again_shortly': 'Please try again shortly.',
       'privacy_note':
-          'Wellar uses role-based access so each user only sees information available to their workspace role.',
+          'Wisebase uses role-based access so each user only sees information available to their workspace role.',
       'security_privacy': 'Security & Privacy',
       'logout_confirm_title': 'Sign out?',
       'logout_confirm_body': 'This will sign you out from this device.',
@@ -912,7 +912,7 @@ class Tr {
       'result_preparing': 'النتيجة قيد التجهيز.',
       'try_again_shortly': 'يرجى المحاولة بعد قليل.',
       'privacy_note':
-          'تستخدم Wellar صلاحيات وصول حسب الدور بحيث يرى كل مستخدم المعلومات المتاحة لدوره في مساحة العمل فقط.',
+          'تستخدم Wisebase صلاحيات وصول حسب الدور بحيث يرى كل مستخدم المعلومات المتاحة لدوره في مساحة العمل فقط.',
       'security_privacy': 'الأمان والخصوصية',
       'logout_confirm_title': 'تسجيل الخروج؟',
       'logout_confirm_body': 'سيتم تسجيل خروجك من هذا الجهاز.',

@@ -12,7 +12,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'package:waller_app/main.dart';
-import 'package:waller_app/screens/public_home_screen.dart';
+import 'package:waller_app/screens/public_entry_screen.dart';
 import 'package:waller_app/screens/splash_screen.dart';
 import 'package:waller_app/state/app_language_state.dart';
 import 'package:waller_app/state/session.dart';
@@ -40,7 +40,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 6000));
       await tester.pump();
 
-      expect(find.byType(PublicHomeScreen), findsOneWidget);
+      expect(find.byType(PublicEntryScreen), findsOneWidget);
 
       await tester.pump(const Duration(milliseconds: 1500));
       await tester.pumpWidget(const SizedBox.shrink());

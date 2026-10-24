@@ -349,7 +349,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Wellar AI',
+              'Wisebase',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,

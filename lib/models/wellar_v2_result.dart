@@ -27,6 +27,9 @@ class WellarV2Result {
   final String modelInvocationStatus;
   final Map<String, WellarV2Target> targets;
   final Map<String, dynamic> quality;
+  final Map<String, dynamic> measurements;
+  final Map<String, dynamic> behavioralEvidence;
+  final Map<String, dynamic> predictionExtension;
   final Map<String, dynamic> features;
   final Map<String, dynamic> drowsinessIndicator;
   final Map<String, dynamic> internalAnalysis;
@@ -40,6 +43,9 @@ class WellarV2Result {
     required this.modelInvocationStatus,
     required this.targets,
     required this.quality,
+    this.measurements = const {},
+    this.behavioralEvidence = const {},
+    this.predictionExtension = const {},
     required this.features,
     required this.drowsinessIndicator,
     required this.internalAnalysis,
@@ -70,6 +76,9 @@ class WellarV2Result {
       quality: _stringMap(json['quality']).isNotEmpty
           ? _stringMap(json['quality'])
           : _stringMap(internal['quality']),
+      measurements: _stringMap(json['measurements']),
+      behavioralEvidence: _stringMap(json['behavioral_evidence']),
+      predictionExtension: _stringMap(json['prediction_extension']),
       features: _stringMap(json['features']).isNotEmpty
           ? _stringMap(json['features'])
           : _stringMap(internal['features']),

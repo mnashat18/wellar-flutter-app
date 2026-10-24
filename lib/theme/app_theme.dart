@@ -24,7 +24,7 @@ class WellarTheme {
   static const double sectionGap = 16;
   static const Duration fast = Duration(milliseconds: 180);
 
-  static TextStyle get heading => GoogleFonts.spaceGrotesk(
+  static TextStyle get heading => GoogleFonts.sora(
     fontSize: 24,
     fontWeight: FontWeight.w700,
     color: text,
@@ -35,7 +35,7 @@ class WellarTheme {
   static TextStyle get caption =>
       GoogleFonts.inter(fontSize: 12, color: textMuted);
 
-  static TextTheme get textTheme => GoogleFonts.manropeTextTheme().copyWith(
+  static TextTheme get textTheme => GoogleFonts.interTextTheme().copyWith(
     headlineSmall: heading,
     bodyMedium: body,
     bodySmall: caption,

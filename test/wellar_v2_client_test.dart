@@ -94,8 +94,9 @@ ResponseBody _json(Map<String, dynamic> value, int status) =>
 
 void main() {
   group('WellarV2Client', () {
-    test('V2 feature flag is disabled by default', () {
-      expect(WellarV2Feature.enabledFor(null), isFalse);
+    test('V2 routing does not depend on a client user ID allowlist', () {
+      expect(WellarV2Feature.enabledFor(null), isTrue);
+      expect(WellarV2Feature.enabledFor('any-authenticated-user'), isTrue);
     });
 
     test(
@@ -154,6 +155,26 @@ void main() {
       expect(adapter.requests, isEmpty);
     });
 
+    test('declined or stale operational consent is rejected before network access', () async {
+      final adapter = _FakeAdapter();
+      final client = _client(adapter);
+      for (final consent in [
+        (accepted: false, version: WellarV2Client.operationalMediaConsentVersion),
+        (accepted: true, version: 'expired-copy-v0'),
+      ]) {
+        await expectLater(
+          client.submitScan(
+            mediaRefs: const [],
+            mediaProcessingConsent: consent.accepted,
+            consentVersion: consent.version,
+            idempotencyKey: 'consent-required',
+          ),
+          throwsA(isA<WellarV2ApiException>().having((e) => e.code, 'code', 'consent_required')),
+        );
+      }
+      expect(adapter.requests, isEmpty);
+    });
+
     test('submission uses V2 schema and required idempotency key', () async {
       final adapter = _FakeAdapter()
         ..respond = (_) =>
@@ -161,7 +182,7 @@ void main() {
       await _client(adapter).submitScan(
         mediaRefs: const ['media://synthetic/0123456789abcdef'],
         mediaProcessingConsent: true,
-        researchUseConsent: false,
+        consentVersion: WellarV2Client.operationalMediaConsentVersion,
         idempotencyKey: 'stable-key-for-safe-retry',
       );
       final request = adapter.requests.single;
@@ -171,6 +192,7 @@ void main() {
       expect(body['reaction_task'], isNull);
       expect(body['consent'], {
         'media_processing': true,
+        'consent_version': WellarV2Client.operationalMediaConsentVersion,
         'research_use': false,
       });
       expect(
@@ -198,7 +220,7 @@ void main() {
         final scanId = await _client(adapter).submitScan(
           mediaRefs: const [],
           mediaProcessingConsent: true,
-          researchUseConsent: false,
+          consentVersion: WellarV2Client.operationalMediaConsentVersion,
           idempotencyKey: 'same-key-on-both-attempts',
         );
         expect(scanId, 'scan-replayed');
@@ -224,7 +246,7 @@ void main() {
           _client(adapter).submitScan(
             mediaRefs: const [],
             mediaProcessingConsent: true,
-            researchUseConsent: false,
+            consentVersion: WellarV2Client.operationalMediaConsentVersion,
             idempotencyKey: 'timeout-safe-replay',
           ),
           throwsA(
@@ -264,7 +286,7 @@ void main() {
           _client(adapter).submitScan(
             mediaRefs: const [],
             mediaProcessingConsent: true,
-            researchUseConsent: false,
+            consentVersion: WellarV2Client.operationalMediaConsentVersion,
             idempotencyKey: 'auth-failure',
           ),
           throwsA(
@@ -327,7 +349,7 @@ void main() {
           _client(adapter).submitScan(
             mediaRefs: const [],
             mediaProcessingConsent: true,
-            researchUseConsent: false,
+            consentVersion: WellarV2Client.operationalMediaConsentVersion,
             idempotencyKey: 'media-rejection',
           ),
           throwsA(

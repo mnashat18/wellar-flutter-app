@@ -157,7 +157,7 @@ class _BrandBlock extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Wellar AI',
+              'Wisebase',
               style: TextStyle(
                 color: Colors.white,
                 fontSize: 18,

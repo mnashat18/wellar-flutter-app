@@ -887,7 +887,6 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
 
   Widget _buildV2Result(WellarV2Result result) {
     final indicator = result.drowsinessIndicator;
-    final baseline = _stringMap(indicator['personal_baseline']);
     final quality = result.quality;
     final videoQuality = quality['video']?.toString();
     final audioQuality = quality['audio']?.toString();
@@ -922,36 +921,6 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
     final statusColor = insufficient
         ? ScanTheme.textSecondary
         : _stateColor(stateEnglish);
-    final fraction = result.eyeClosureFraction;
-    final blinkRate = result.blinkRatePerMinute;
-    final metrics = <ScanResultMetricDisplay>[
-      if (fraction != null)
-        ScanResultMetricDisplay(
-          label: isArabic ? 'نسبة إغلاق العين المرصودة' : 'Measured eye-closure fraction',
-          value: fraction.toStringAsFixed(3),
-        ),
-      if (blinkRate != null)
-        ScanResultMetricDisplay(
-          label: isArabic ? 'معدل الرمش في الدقيقة' : 'Blink rate per minute',
-          value: blinkRate.toStringAsFixed(1),
-        ),
-      ScanResultMetricDisplay(
-        label: isArabic ? 'جودة الإشارة' : 'Signal quality',
-        value: effectiveQuality,
-      ),
-      if (baseline['status'] == 'available') ...[
-        if (baseline['z_score'] is num)
-          ScanResultMetricDisplay(
-            label: isArabic ? 'مقارنة بخطك الأساسي' : 'Personal baseline comparison',
-            value: (baseline['z_score'] as num).toStringAsFixed(2),
-          ),
-        if (baseline['prior_scans'] is num)
-          ScanResultMetricDisplay(
-            label: isArabic ? 'عدد الفحوصات السابقة' : 'Prior baseline scans',
-            value: baseline['prior_scans'].toString(),
-          ),
-      ],
-    ];
     final explanatoryCopy = insufficient
         ? (isArabic
               ? 'الإشارات المتاحة غير كافية لعرض قراءة. حسّن الإضاءة وثبّت الكاميرا وأعد الفحص إذا رغبت.'
@@ -959,6 +928,19 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
         : (isArabic
               ? 'هذه مؤشرات وصفية أولية وليست تشخيصًا أو تنبؤًا مُعتمدًا. استخدمها للاسترشاد فقط.'
               : 'These are indicative descriptive signals, not a diagnosis or validated prediction. Use them as guidance only.');
+    final behavioral = result.behavioralEvidence;
+    final visibleEvidence = _stringMap(behavioral['visible_fatigue_indicators']);
+    final vigilanceEvidence = _stringMap(behavioral['vigilance_indicators']);
+    final visibleObservations = _stringMap(visibleEvidence['observations']);
+    final visibleReasons = _displayAbstentionReasons(visibleEvidence['abstention_reasons'], isArabic);
+    final vigilanceReasons = _displayAbstentionReasons(vigilanceEvidence['abstention_reasons'], isArabic);
+    final evidenceMetrics = _displayEvidenceMetrics(visibleObservations, result.measurements, isArabic);
+    final predictionDisabled =
+        _stringMap(behavioral['model_prediction'])['status'] == 'disabled' ||
+        result.predictionExtension['status'] == 'disabled';
+    final unverifiedReactionTask =
+        _stringMap(result.measurements['vigilance'])['status'] ==
+        'observed_unverified';
 
     return FadeTransition(
       opacity: _revealController,
@@ -981,21 +963,15 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
               ),
             ),
             const SizedBox(height: 12),
-            _PlainSectionCard(
-              title: isArabic ? 'مؤشر استرشادي غير تشخيصي' : 'Indicative, non-diagnostic signal',
-              body: explanatoryCopy,
-              accent: statusColor,
-            ),
-            const SizedBox(height: 12),
-            if (metrics.isNotEmpty)
-              _MetricListCard(
-                title: isArabic ? 'القياسات المتاحة' : 'Available measurements',
-                metrics: metrics,
-              ),
-            const SizedBox(height: 14),
-            Text(
-              isArabic ? 'مرجع الفحص: ${result.scanId}' : 'Scan reference: ${result.scanId}',
-              style: GoogleFonts.inter(color: ScanTheme.textSecondary, fontSize: 12),
+            _V2EvidenceSection(
+              isArabic: isArabic,
+              statusColor: statusColor,
+              visibleStatus: visibleEvidence['status']?.toString(),
+              vigilanceStatus: vigilanceEvidence['status']?.toString(),
+              measurements: evidenceMetrics,
+              unavailableReasons: [...visibleReasons, ...vigilanceReasons],
+              predictionDisabled: predictionDisabled,
+              unverifiedReactionTask: unverifiedReactionTask,
             ),
           ],
         ),
@@ -1006,6 +982,88 @@ class _ScanDetailsScreenState extends State<ScanDetailsScreen>
   Map<String, dynamic> _stringMap(dynamic value) => value is Map
       ? value.map((key, item) => MapEntry(key.toString(), item))
       : const {};
+
+  List<ScanResultMetricDisplay> _displayEvidenceMetrics(
+    Map<String, dynamic> observations,
+    Map<String, dynamic> measurements,
+    bool isArabic,
+  ) {
+    const labels = <String, (String, String, String)>{
+      'short_clip_eye_closure_fraction': ('Short-clip eye closure', 'إغلاق العين خلال المقطع', 'fraction'),
+      'blink_rate_per_minute': ('Blink rate', 'معدل الرمش', 'events/min'),
+      'blink_event_count': ('Observed blink events', 'مرات الرمش المرصودة', 'events'),
+      'face_coverage': ('Face visibility', 'وضوح الوجه', 'fraction'),
+      'median_eye_aspect_ratio': ('Eye geometry', 'قياس شكل العين', 'ratio'),
+      'median_mouth_aspect_ratio': ('Mouth geometry', 'قياس شكل الفم', 'ratio'),
+      'mean_luminance': ('Image brightness', 'إضاءة الصورة', ''),
+      'mean_blur_variance': ('Image sharpness', 'حدة الصورة', ''),
+    };
+    final candidates = <String, dynamic>{...observations};
+    final fatigue = _stringMap(measurements['fatigue']);
+    candidates.addAll(_stringMap(fatigue['observations']));
+    final metrics = <ScanResultMetricDisplay>[];
+    for (final entry in labels.entries) {
+      final observation = _stringMap(candidates[entry.key]);
+      final value = observation['value'];
+      if (value is! num || !value.isFinite) continue;
+      final formatted = value == value.roundToDouble()
+          ? value.toStringAsFixed(0)
+          : value.toStringAsFixed(2);
+      final units = entry.value.$3;
+      metrics.add(
+        ScanResultMetricDisplay(
+          label: isArabic ? entry.value.$2 : entry.value.$1,
+          value: units.isEmpty ? formatted : '$formatted $units',
+        ),
+      );
+    }
+    final vigilance = _stringMap(measurements['vigilance']);
+    final vigilanceValue = _stringMap(vigilance['value']);
+    if (vigilance['status'] == 'observed_unverified') {
+      for (final entry in <(String, String, String)>[
+        (
+          'median_valid_rt_ms',
+          'Median reaction time (unverified)',
+          'وسيط زمن الاستجابة (غير متحقق)',
+        ),
+        (
+          'p90_valid_rt_ms',
+          '90th percentile reaction time (unverified)',
+          'المئين 90 لزمن الاستجابة (غير متحقق)',
+        ),
+      ]) {
+        final value = vigilanceValue[entry.$1];
+        if (value is num && value.isFinite) {
+          metrics.add(ScanResultMetricDisplay(
+            label: isArabic ? entry.$3 : entry.$2,
+            value: '${value.toStringAsFixed(0)} ms',
+          ));
+        }
+      }
+    }
+    return metrics;
+  }
+
+  List<String> _displayAbstentionReasons(dynamic reasons, bool isArabic) {
+    if (reasons is! List) return const [];
+    const labels = <String, (String, String)>{
+      'reaction_task_measurement_missing': ('No reaction-time task measurement was submitted.', 'مافيش قياس لزمن الاستجابة ضمن نتيجة الفحص.'),
+      'sampling_rate_insufficient_for_blink_resolution': ('Video sampling could not resolve blink events.', 'معدل أخذ عينات الفيديو مايسمحش بقياس الرمش بدقة.'),
+      'short_clip_eye_closure_unavailable_or_insufficient': ('Eye-closure measurement was unavailable.', 'قياس إغلاق العين غير متاح.'),
+      'video_quality_insufficient': ('Video quality did not support this observation.', 'جودة الفيديو ماكفتش للرصد ده.'),
+      'image_quality_insufficient': ('Image quality did not support this observation.', 'جودة الصورة ماكفتش للرصد ده.'),
+    };
+    final displayed = reasons.map((reason) {
+      final label = labels[reason.toString()];
+      if (label != null) return isArabic ? label.$2 : label.$1;
+      return isArabic
+          ? 'بعض الملاحظات المطلوبة ماكانتش متاحة في النتيجة دي.'
+          : 'Some requested observations were unavailable in this result.';
+    });
+    return displayed
+        .toSet()
+        .toList(growable: false);
+  }
 
   void _retryScan() {
     Navigator.pushReplacement(
@@ -2107,88 +2165,249 @@ class _PlainSectionCard extends StatelessWidget {
   }
 }
 
-class _MetricListCard extends StatelessWidget {
-  final String title;
-  final List<ScanResultMetricDisplay> metrics;
+class _V2EvidenceSection extends StatelessWidget {
+  final bool isArabic;
+  final Color statusColor;
+  final String? visibleStatus;
+  final String? vigilanceStatus;
+  final List<ScanResultMetricDisplay> measurements;
+  final List<String> unavailableReasons;
+  final bool predictionDisabled;
+  final bool unverifiedReactionTask;
 
-  const _MetricListCard({required this.title, required this.metrics});
+  const _V2EvidenceSection({
+    required this.isArabic,
+    required this.statusColor,
+    required this.visibleStatus,
+    required this.vigilanceStatus,
+    required this.measurements,
+    required this.unavailableReasons,
+    required this.predictionDisabled,
+    required this.unverifiedReactionTask,
+  });
+
+  String _statusLabel(String? status) => switch (status) {
+    'observed' => isArabic ? 'ملاحظات متاحة' : 'Observations available',
+    'partial_evidence' => isArabic ? 'ملاحظات جزئية' : 'Partial observations',
+    'insufficient_evidence' => isArabic ? 'بيانات غير كافية' : 'Insufficient data',
+    'not_provided' => isArabic ? 'غير متاح' : 'Not provided',
+    _ => isArabic ? 'غير متاح' : 'Unavailable',
+  };
 
   @override
   Widget build(BuildContext context) {
+    final title = isArabic ? 'الملاحظات والقياسات' : 'Observations & measurements';
+    final emptyCopy = isArabic
+        ? 'مافيش قياسات مدعومة متاحة للعرض في النتيجة دي.'
+        : 'No supported measurements are available in this result.';
+    final caveat = isArabic
+        ? 'دي ملاحظات وصفية فقط، ومش درجة إرهاق أو تشخيص.'
+        : 'These are descriptive observations, not a fatigue score or diagnosis.';
+    final predictionCopy = isArabic
+        ? 'التنبؤ المعتمد بالجاهزية غير مفعّل حاليًا؛ ده مش معناه إن الفحص فشل.'
+        : 'Validated readiness prediction is disabled; this does not mean the scan failed.';
+    final reactionCopy = isArabic
+        ? 'توقيتات الاستجابة مُبلّغ عنها من الجهاز وغير متحقق منها، ومش اختبار يقظة معتمد.'
+        : 'Reaction times are client-reported and unverified; this is not a validated vigilance test.';
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF111826),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        color: ScanTheme.surface.withValues(alpha: 0.72),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: GoogleFonts.spaceGrotesk(
-              color: ScanTheme.textPrimary,
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.insights_rounded, color: statusColor, size: 19),
+              ),
+              const SizedBox(width: 11),
+              Expanded(
+                child: Text(
+                  title,
+                  style: GoogleFonts.spaceGrotesk(
+                    color: ScanTheme.textPrimary,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 14),
-          ...metrics
-              .map(
-                (metric) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: _MetricRow(metric: metric),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _EvidenceStatusChip(
+                label: isArabic ? 'المؤشرات الظاهرة' : 'Visible indicators',
+                value: _statusLabel(visibleStatus),
+              ),
+              _EvidenceStatusChip(
+                label: isArabic ? 'اليقظة' : 'Vigilance',
+                value: _statusLabel(vigilanceStatus),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (measurements.isEmpty)
+            Text(
+              emptyCopy,
+              style: GoogleFonts.inter(
+                color: ScanTheme.textSecondary,
+                fontSize: 13,
+                height: 1.5,
+              ),
+            )
+          else ...[
+            for (var index = 0; index < measurements.length; index++) ...[
+              if (index > 0)
+                Divider(
+                  height: 16,
+                  color: Colors.white.withValues(alpha: 0.07),
                 ),
-              )
-              .toList(),
+              _EvidenceMeasurementRow(metric: measurements[index]),
+            ],
+          ],
+          if (unavailableReasons.isNotEmpty) ...[
+            const SizedBox(height: 13),
+            Divider(height: 1, color: Colors.white.withValues(alpha: 0.07)),
+            const SizedBox(height: 10),
+            for (final reason in unavailableReasons.toSet())
+              Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.info_outline_rounded, size: 16, color: ScanTheme.textSecondary),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        reason,
+                        style: GoogleFonts.inter(
+                          color: ScanTheme.textSecondary,
+                          fontSize: 12,
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+          const SizedBox(height: 12),
+          Text(
+            caveat,
+            style: GoogleFonts.inter(
+              color: ScanTheme.textSecondary,
+              fontSize: 12,
+              height: 1.45,
+            ),
+          ),
+          if (unverifiedReactionTask) ...[
+            const SizedBox(height: 9),
+            Text(
+              reactionCopy,
+              style: GoogleFonts.inter(
+                color: ScanTheme.textSecondary,
+                fontSize: 12,
+                height: 1.45,
+              ),
+            ),
+          ],
+          if (predictionDisabled) ...[
+            const SizedBox(height: 9),
+            Text(
+              predictionCopy,
+              style: GoogleFonts.inter(
+                color: ScanTheme.textSecondary,
+                fontSize: 12,
+                height: 1.45,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-class _MetricRow extends StatelessWidget {
-  final ScanResultMetricDisplay metric;
+class _EvidenceStatusChip extends StatelessWidget {
+  final String label;
+  final String value;
 
-  const _MetricRow({required this.metric});
+  const _EvidenceStatusChip({required this.label, required this.value});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.03),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              metric.label,
-              style: GoogleFonts.inter(
-                color: ScanTheme.textPrimary,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+  Widget build(BuildContext context) => Container(
+    constraints: const BoxConstraints(maxWidth: 260),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    decoration: BoxDecoration(
+      color: Colors.white.withValues(alpha: 0.035),
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: GoogleFonts.inter(color: ScanTheme.textSecondary, fontSize: 10)),
+        const SizedBox(height: 3),
+        Text(
+          value,
+          softWrap: true,
+          style: GoogleFonts.inter(
+            color: ScanTheme.textPrimary,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
           ),
-          const SizedBox(width: 10),
-          Text(
-            metric.value,
-            style: GoogleFonts.inter(
-              color: ScanTheme.textPrimary,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
+        ),
+      ],
+    ),
+  );
+}
+
+class _EvidenceMeasurementRow extends StatelessWidget {
+  final ScanResultMetricDisplay metric;
+
+  const _EvidenceMeasurementRow({required this.metric});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Expanded(
+        child: Text(
+          metric.label,
+          softWrap: true,
+          style: GoogleFonts.inter(color: ScanTheme.textSecondary, fontSize: 13),
+        ),
       ),
-    );
-  }
+      const SizedBox(width: 12),
+      Flexible(
+        child: Text(
+          metric.value,
+          textAlign: TextAlign.end,
+          softWrap: true,
+          style: GoogleFonts.inter(
+            color: ScanTheme.textPrimary,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    ],
+  );
 }
 
 class _ResultBulletChip extends StatelessWidget {

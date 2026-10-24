@@ -266,7 +266,7 @@ class _AppRootState extends ConsumerState<_AppRoot> {
           navigatorKey: _navKey,
           navigatorObservers: [RouteRefreshObserver()],
           debugShowCheckedModeBanner: false,
-          title: 'Waller AI',
+          title: 'Wisebase',
           locale: lang.locale,
           supportedLocales: const [Locale('en'), Locale('ar')],
           localizationsDelegates: const [

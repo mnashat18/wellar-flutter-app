@@ -2,7 +2,8 @@
 <resources>
     <style name="Theme.Wellar.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/wellar_splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/wellar_splash_blank</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/wisebase_splash_logo</item>
+        <item name="windowSplashScreenIconBackgroundColor">@color/wellar_splash_background</item>
         <item name="windowSplashScreenAnimationDuration">500</item>
         <item name="postSplashScreenTheme">@style/NormalTheme</item>
     </style>

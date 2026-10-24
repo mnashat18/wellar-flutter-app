@@ -537,7 +537,7 @@ class AuthService {
         message.contains('network') ||
         message.contains('socket') ||
         message.contains('host lookup')) {
-      return 'Could not connect to Wellar right now. Check your connection.';
+      return 'Could not connect to Wisebase right now. Check your connection.';
     }
     return e.message ?? 'Request could not be completed. Try again.';
   }
@@ -551,7 +551,7 @@ class AuthService {
         raw.contains('network') ||
         raw.contains('socket') ||
         raw.contains('host lookup')) {
-      return 'Could not connect to Wellar right now. Check your connection.';
+      return 'Could not connect to Wisebase right now. Check your connection.';
     }
     return 'Account creation could not be completed. Try again.';
   }

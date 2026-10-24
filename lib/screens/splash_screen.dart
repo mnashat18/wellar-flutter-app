@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -33,10 +34,8 @@ class _SplashScreenState extends State<SplashScreen>
     'preparing_experience',
   ];
 
-  // If startup exceeds this window, morph the bottom into the premium
-  // "Preparing your workspace" panel so the user is never left staring at
-  // only a logo. No artificial floor is enforced; fast startup routes
-  // immediately when resolveVerifiedRouteResult completes.
+  // Keep the branded splash visible long enough for its intro to complete.
+  static const Duration _minimumSplashDuration = Duration(milliseconds: 900);
   static const Duration _slowStateThreshold = Duration(milliseconds: 1400);
 
   late final AnimationController _intro;
@@ -48,6 +47,8 @@ class _SplashScreenState extends State<SplashScreen>
 
   Timer? _slowTimer;
   Timer? _statusRotator;
+  Timer? _navigationTimer;
+  final DateTime _splashStartedAt = DateTime.now();
   int _statusIndex = 0;
   bool _slowMode = false;
   bool _startupFailed = false;
@@ -132,6 +133,7 @@ class _SplashScreenState extends State<SplashScreen>
   void dispose() {
     _slowTimer?.cancel();
     _statusRotator?.cancel();
+    _navigationTimer?.cancel();
     _intro.dispose();
     _ambient.dispose();
     super.dispose();
@@ -345,6 +347,12 @@ class _SplashScreenState extends State<SplashScreen>
   void _navigateToResolvedTarget() {
     final target = _resolvedTarget;
     if (!mounted || _navigationCommitted || target == null) return;
+    final remaining = _minimumSplashDuration -
+        DateTime.now().difference(_splashStartedAt);
+    if (remaining > Duration.zero) {
+      _navigationTimer ??= Timer(remaining, _navigateToResolvedTarget);
+      return;
+    }
     _navigationCommitted = true;
     Navigator.of(
       context,
@@ -354,15 +362,24 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
     return Scaffold(
-      backgroundColor: const Color(0xFF03070D),
+      backgroundColor: isAndroid
+          ? const Color(0xFF0B131E)
+          : const Color(0xFF03070D),
       body: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: _skipToResolvedTarget,
         child: Stack(
           fit: StackFit.expand,
           children: [
-            WelcomeGalaxyBackground(reduceMotion: _reduceMotion),
+            if (isAndroid)
+              _WisebaseAndroidSplashBackground(
+                animation: _ambient,
+                reduceMotion: _reduceMotion,
+              )
+            else
+              WelcomeGalaxyBackground(reduceMotion: _reduceMotion),
             SafeArea(
               child: LayoutBuilder(
                 builder: (context, constraints) => SingleChildScrollView(
@@ -375,12 +392,15 @@ class _SplashScreenState extends State<SplashScreen>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          SizedBox(height: constraints.maxHeight * 0.12),
+                          SizedBox(
+                            height: constraints.maxHeight *
+                                (isAndroid ? 0.36 : 0.12),
+                          ),
                           _buildBrandBlock(),
                           const SizedBox(height: 24),
                           _buildBottomBlock(),
                           const SizedBox(height: 22),
-                          _buildFooter(),
+                          if (!isAndroid) _buildFooter(),
                           const SizedBox(height: 20),
                         ],
                       ),
@@ -396,6 +416,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Widget _buildBrandBlock() {
+    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
     return Center(
       child: AnimatedBuilder(
         animation: _intro,
@@ -403,15 +424,30 @@ class _SplashScreenState extends State<SplashScreen>
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (isAndroid) ...[
+                Transform.translate(
+                  offset: Offset(0, _wordmarkOffset.value),
+                  child: Opacity(
+                    opacity: _wordmarkOpacity.value,
+                    child: Image.asset(
+                      'assets/branding/wisebase-mark.png',
+                      width: 132,
+                      height: 132,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+              ],
               Transform.translate(
                 offset: Offset(0, _wordmarkOffset.value),
                 child: Opacity(
                   opacity: _wordmarkOpacity.value,
                   child: Text(
-                    'WELLAR',
+                    'Wisebase',
                     style: GoogleFonts.spaceGrotesk(
                       fontSize: 32,
-                      letterSpacing: 6,
+                      letterSpacing: isAndroid ? 0.8 : 6,
                       fontWeight: FontWeight.w700,
                       color: Colors.white,
                       height: 1,
@@ -419,26 +455,28 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
-              Opacity(
-                opacity: _subtitleOpacity.value,
-                child: Text(
-                  _greetingText(),
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.spaceGrotesk(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 25,
-                    height: 1.16,
-                    letterSpacing: -0.2,
+              if (!isAndroid) ...[
+                const SizedBox(height: 12),
+                Opacity(
+                  opacity: _subtitleOpacity.value,
+                  child: Text(
+                    _greetingText(),
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.spaceGrotesk(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 25,
+                      height: 1.16,
+                      letterSpacing: -0.2,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              Opacity(
-                opacity: _subtitleOpacity.value,
-                child: _buildSubtitle(context),
-              ),
+                const SizedBox(height: 10),
+                Opacity(
+                  opacity: _subtitleOpacity.value,
+                  child: _buildSubtitle(context),
+                ),
+              ],
             ],
           );
         },
@@ -498,6 +536,31 @@ class _SplashScreenState extends State<SplashScreen>
 
   Widget _buildBottomBlock() {
     if (_startupFailed) return _startupErrorState();
+    if (Theme.of(context).platform == TargetPlatform.android) {
+      if (_slowMode) {
+        return SizedBox(
+          height: 76,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _tr(context, _slowLoadingStates[_statusIndex]),
+                textAlign: TextAlign.center,
+                style: GoogleFonts.inter(
+                  color: Colors.white.withValues(alpha: .68),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: .25,
+                ),
+              ),
+              const SizedBox(height: 4),
+              _idleIndicator(),
+            ],
+          ),
+        );
+      }
+      return _idleIndicator();
+    }
     return SizedBox(
       height: 48,
       child: Center(
@@ -522,6 +585,7 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Widget _idleIndicator() {
+    final isAndroid = Theme.of(context).platform == TargetPlatform.android;
     return SizedBox(
       key: const ValueKey('idle-indicator'),
       height: 48,
@@ -534,6 +598,7 @@ class _SplashScreenState extends State<SplashScreen>
               child: _ShimmerLine(
                 controller: _ambient,
                 reduceMotion: _reduceMotion,
+                color: isAndroid ? AppColors.stable : AppColors.primarySoft,
               ),
             );
           },
@@ -681,11 +746,110 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
+class _WisebaseAndroidSplashBackground extends StatelessWidget {
+  final Animation<double> animation;
+  final bool reduceMotion;
+
+  const _WisebaseAndroidSplashBackground({
+    required this.animation,
+    required this.reduceMotion,
+  });
+
+  @override
+  Widget build(BuildContext context) => Positioned.fill(
+    child: CustomPaint(
+      painter: _WisebaseSplashPainter(animation, reduceMotion),
+    ),
+  );
+}
+
+class _WisebaseSplashPainter extends CustomPainter {
+  final Animation<double> animation;
+  final bool reduceMotion;
+
+  _WisebaseSplashPainter(this.animation, this.reduceMotion)
+    : super(repaint: reduceMotion ? null : animation);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final bounds = Offset.zero & size;
+    canvas.drawRect(
+      bounds,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF0B131E), Color(0xFF07171D), Color(0xFF0B131E)],
+        ).createShader(bounds),
+    );
+
+    final phase = reduceMotion ? 0.0 : animation.value * 2 * math.pi;
+    final drift = math.sin(phase) * size.width * 0.035;
+    final curves = <Path>[
+      Path()
+        ..moveTo(-size.width * .18, size.height * .58)
+        ..cubicTo(
+          size.width * .20 + drift,
+          size.height * .42,
+          size.width * .55 - drift,
+          size.height * .78,
+          size.width * 1.18,
+          size.height * .52,
+        ),
+      Path()
+        ..moveTo(-size.width * .16, size.height * .70)
+        ..cubicTo(
+          size.width * .30 - drift,
+          size.height * .53,
+          size.width * .62 + drift,
+          size.height * .88,
+          size.width * 1.16,
+          size.height * .66,
+        ),
+    ];
+
+    for (var i = 0; i < curves.length; i++) {
+      final curve = curves[i];
+      canvas.drawPath(
+        curve,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = i == 0 ? 18 : 10
+          ..strokeCap = StrokeCap.round
+          ..color = const Color(
+            0xFF2FBF8C,
+          ).withValues(alpha: i == 0 ? .10 : .08)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
+      );
+      canvas.drawPath(
+        curve,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = i == 0 ? 1.4 : 1
+          ..strokeCap = StrokeCap.round
+          ..shader = const LinearGradient(
+            colors: [Color(0x0030C990), Color(0x5530C990), Color(0x0030C990)],
+          ).createShader(bounds),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _WisebaseSplashPainter oldDelegate) =>
+      oldDelegate.animation != animation ||
+      oldDelegate.reduceMotion != reduceMotion;
+}
+
 class _ShimmerLine extends StatelessWidget {
   final AnimationController controller;
   final bool reduceMotion;
+  final Color color;
 
-  const _ShimmerLine({required this.controller, required this.reduceMotion});
+  const _ShimmerLine({
+    required this.controller,
+    required this.reduceMotion,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -694,7 +858,7 @@ class _ShimmerLine extends StatelessWidget {
         width: 120,
         height: 2,
         decoration: BoxDecoration(
-          color: AppColors.primarySoft.withValues(alpha: 0.4),
+          color: color.withValues(alpha: 0.4),
           borderRadius: BorderRadius.circular(1),
         ),
       );
@@ -720,7 +884,7 @@ class _ShimmerLine extends StatelessWidget {
                       gradient: LinearGradient(
                         colors: [
                           Colors.transparent,
-                          AppColors.primarySoft.withValues(alpha: 0.75),
+                          color.withValues(alpha: 0.75),
                           Colors.transparent,
                         ],
                       ),

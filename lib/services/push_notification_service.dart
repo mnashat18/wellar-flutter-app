@@ -24,7 +24,7 @@ class PushNotificationService {
   static final PushNotificationService instance = PushNotificationService._();
 
   static const String channelId = 'waller_alerts';
-  static const String channelName = 'Waller Alerts';
+  static const String channelName = 'Wisebase Alerts';
   static const String channelDescription =
       'Pre-shift checks, assignment alerts, and depot updates.';
   static const String _deviceIdStorageKey = 'push_install_device_id';
@@ -601,7 +601,7 @@ class PushNotificationService {
   Future<void> _showLocalNotification(RemoteMessage message) async {
     final notification = message.notification;
     final title =
-        notification?.title ?? message.data['title']?.toString() ?? 'Waller AI';
+        notification?.title ?? message.data['title']?.toString() ?? 'Wisebase';
     final body = notification?.body ?? message.data['body']?.toString() ?? '';
     if (body.isEmpty && title.isEmpty) return;
 

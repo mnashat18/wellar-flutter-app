@@ -6,6 +6,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'package:waller_app/services/wellar_v2_client.dart';
 import 'package:waller_app/screens/wellar_v2_processing_screen.dart';
 
 Future<void> main() async {
@@ -50,6 +51,8 @@ class _V2SmokeHomeState extends State<_V2SmokeHome> {
           builder: (_) => WellarV2ProcessingScreen(
             videoFile: XFile(video.path),
             audioFile: XFile(audio.path),
+            mediaProcessingConsent: true,
+            consentVersion: WellarV2Client.operationalMediaConsentVersion,
           ),
         ),
       );

@@ -318,7 +318,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
         lower.contains('connection') ||
         lower.contains('socket') ||
         lower.contains('host lookup')) {
-      return 'Could not connect to Wellar right now. Check your connection.';
+      return 'Could not connect to Wisebase right now. Check your connection.';
     }
     return 'Account creation could not be completed. Try again.';
   }
@@ -397,7 +397,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen>
                                   ),
                                   const SizedBox(width: 8),
                                   const Text(
-                                    'Wellar',
+                                    'Wisebase',
                                     style: TextStyle(
                                       color: _authTeal,
                                       fontWeight: FontWeight.w800,

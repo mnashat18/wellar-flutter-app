@@ -480,7 +480,7 @@ class _BusinessMembersManageScreenState
           ),
           const SizedBox(height: 8),
           const Text(
-            'Only users with an existing Wellar account can be added. This screen cannot invite new users.',
+            'Only users with an existing Wisebase account can be added. This screen cannot invite new users.',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 11),
           ),
           if (_errorMessage != null) ...[

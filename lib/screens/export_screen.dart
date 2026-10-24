@@ -553,7 +553,7 @@ class _ExportScreenState extends ConsumerState<ExportScreen> {
         pageTheme: const pw.PageTheme(margin: pw.EdgeInsets.all(24)),
         build: (context) => [
           pw.Text(
-            'Waller Export',
+            'Wisebase Export',
             style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
           ),
           pw.SizedBox(height: 4),

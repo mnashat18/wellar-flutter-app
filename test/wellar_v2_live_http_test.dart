@@ -42,14 +42,14 @@ void main() {
         scanId = await client.submitScan(
           mediaRefs: List.unmodifiable(refs),
           mediaProcessingConsent: true,
-          researchUseConsent: false,
+          consentVersion: WellarV2Client.operationalMediaConsentVersion,
           idempotencyKey: idempotencyKey,
         );
         submitWatch.stop();
         final replayedScanId = await client.submitScan(
           mediaRefs: List.unmodifiable(refs),
           mediaProcessingConsent: true,
-          researchUseConsent: false,
+          consentVersion: WellarV2Client.operationalMediaConsentVersion,
           idempotencyKey: idempotencyKey,
         );
         expect(replayedScanId, scanId);

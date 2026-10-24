@@ -57,17 +57,10 @@ class AppConfig {
     ),
   );
 
-  // V2 rollout is opt-in and remains disabled unless explicitly enabled.
-  static const bool enableWellarV2Scans = bool.fromEnvironment(
-    'ENABLE_WELLAR_V2_SCANS',
-    defaultValue: false,
-  );
+  // All new scans use V2. The legacy URL remains available only to old
+  // compatibility code and must never be selected by the scan workflow.
   static const String wellarV2BaseUrl = String.fromEnvironment(
     'WELLAR_V2_BASE_URL',
     defaultValue: 'https://conntinuity-wellar-ai-v2.csiwm3.easypanel.host',
-  );
-  static const String wellarV2TestUserAllowlist = String.fromEnvironment(
-    'WELLAR_V2_TEST_USER_ALLOWLIST',
-    defaultValue: '',
   );
 }

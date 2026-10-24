@@ -1,7 +1,6 @@
 import 'dart:math';
-import 'dart:typed_data';
-
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 import '../config/app_config.dart';
 import '../models/wellar_v2_result.dart';
@@ -28,15 +27,9 @@ class WellarV2ApiException implements Exception {
 
 class WellarV2Feature {
   static bool enabledFor(String? directusUserId) {
-    if (!AppConfig.enableWellarV2Scans) return false;
-    final id = directusUserId?.trim();
-    if (id == null || id.isEmpty) return false;
-    final allowed = AppConfig.wellarV2TestUserAllowlist
-        .split(',')
-        .map((value) => value.trim())
-        .where((value) => value.isNotEmpty)
-        .toSet();
-    return allowed.contains(id) && configurationError == null;
+    // Authorization belongs to the V2 Directus session and membership
+    // validator. Never gate production routing on a client-side user ID.
+    return true;
   }
 
   static String? get configurationError {
@@ -79,7 +72,7 @@ class WellarV2Client {
       throw const WellarV2ApiException(
         statusCode: null,
         code: 'v2_not_configured',
-        message: 'Wellar AI V2 is not safely configured.',
+        message: 'Wisebase AI V2 is not safely configured.',
       );
     }
     return WellarV2Client(
@@ -93,7 +86,68 @@ class WellarV2Client {
   static const int maxVideoBytes = 20 * 1024 * 1024;
   static const int maxAudioBytes = 8 * 1024 * 1024;
   static const int maxImageBytes = 5 * 1024 * 1024;
+  static const String operationalMediaConsentVersion = 'operational-media-v1';
   static const Duration requestTimeout = Duration(seconds: 20);
+
+  /// One-shot, debug-build-only auth check. It never submits a scan or media.
+  Future<void> debugAuthenticatedNoMediaProbe() async {
+    if (!kDebugMode) return;
+    const path = '/api/v1/scans/nonexistent-test-scan-id';
+    final stopwatch = Stopwatch()..start();
+    int? status;
+    var errorCode = 'none';
+    try {
+      final response = await _send(
+        (options) => _dio.get<dynamic>('$_baseUrl$path', options: options),
+        method: 'GET',
+        path: path,
+        contentType: 'application/json',
+        logRequest: false,
+      );
+      status = response.statusCode;
+      if (status != null && status >= 400) {
+        errorCode = _safeProbeErrorCode(response.data);
+      }
+    } on DioException catch (error) {
+      status = error.response?.statusCode;
+      errorCode = _safeProbeErrorCode(error.response?.data);
+      if (status == null && errorCode == 'none') {
+        errorCode = 'network_error';
+      }
+    } on WellarV2ApiException catch (error) {
+      status = error.statusCode;
+      errorCode = _sanitizeProbeCode(error.code);
+    } catch (_) {
+      errorCode = 'probe_error';
+    } finally {
+      stopwatch.stop();
+      final host = Uri.parse(_baseUrl).host.replaceAll(
+        RegExp(r'[^A-Za-z0-9.-]'),
+        '',
+      );
+      debugPrint(
+        '[WELLAR_V2_AUTH_PROBE] host=$host path=$path status=${status ?? 'none'} error_code=$errorCode duration_ms=${stopwatch.elapsedMilliseconds}',
+      );
+    }
+  }
+
+  String _safeProbeErrorCode(dynamic body) {
+    final top = _map(body);
+    final error = top['error'];
+    final detail = top['detail'];
+    final source = error is Map
+        ? error
+        : detail is Map
+        ? detail
+        : top;
+    final rawCode = source['code'];
+    return rawCode is String ? _sanitizeProbeCode(rawCode) : 'none';
+  }
+
+  String _sanitizeProbeCode(String code) {
+    final safe = code.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '');
+    return safe.isEmpty ? 'unknown' : safe.substring(0, min(48, safe.length));
+  }
 
   Future<String> uploadVideo(Uint8List bytes, {CancelToken? cancelToken}) =>
       _upload('video', bytes, 'video/mp4', cancelToken);
@@ -150,6 +204,8 @@ class WellarV2Client {
           options: options,
           cancelToken: cancelToken,
         ),
+        method: 'POST',
+        path: '/api/v1/media/$modality',
         contentType: contentType,
       );
       final body = _map(response.data);
@@ -170,11 +226,19 @@ class WellarV2Client {
 
   Future<String> submitScan({
     required List<String> mediaRefs,
-    bool? mediaProcessingConsent,
-    bool? researchUseConsent,
+    required bool mediaProcessingConsent,
+    required String consentVersion,
     required String idempotencyKey,
     CancelToken? cancelToken,
   }) async {
+    if (!mediaProcessingConsent ||
+        consentVersion != operationalMediaConsentVersion) {
+      throw const WellarV2ApiException(
+        statusCode: 422,
+        code: 'consent_required',
+        message: 'Accept the current operational media consent before scanning.',
+      );
+    }
     if (idempotencyKey.trim().isEmpty) {
       throw const WellarV2ApiException(
         statusCode: null,
@@ -195,7 +259,11 @@ class WellarV2Client {
       'schema_version': '1.0',
       'media_refs': mediaRefs,
       'reaction_task': null,
-      'consent': {'media_processing': true, 'research_use': false},
+      'consent': {
+        'media_processing': mediaProcessingConsent,
+        'consent_version': consentVersion,
+        'research_use': false,
+      },
     };
     for (var attempt = 0; attempt < 2; attempt++) {
       try {
@@ -206,6 +274,8 @@ class WellarV2Client {
             options: options,
             cancelToken: cancelToken,
           ),
+          method: 'POST',
+          path: '/api/v1/scans',
           contentType: 'application/json',
           idempotencyKey: idempotencyKey,
         );
@@ -290,6 +360,8 @@ class WellarV2Client {
           options: options,
           cancelToken: cancelToken,
         ),
+        method: 'DELETE',
+        path: '/api/v1/media',
         contentType: 'application/json',
       );
       if (response.statusCode != 204) {
@@ -312,6 +384,8 @@ class WellarV2Client {
           options: options,
           cancelToken: cancelToken,
         ),
+        method: 'GET',
+        path: path,
         contentType: 'application/json',
       );
       if (response.statusCode != 200) {
@@ -325,22 +399,53 @@ class WellarV2Client {
 
   Future<Response<dynamic>> _send(
     Future<Response<dynamic>> Function(Options options) request, {
+    required String method,
+    required String path,
     required String contentType,
     String? idempotencyKey,
+    bool logRequest = true,
   }) async {
     final token = await _currentToken();
     if (token == null || token.isEmpty) {
+      if (logRequest) {
+        _log('request_blocked_auth_missing', method: method, path: path);
+      }
       throw const WellarV2ApiException(
         statusCode: null,
         code: 'v2_auth_missing',
         message: 'Sign in again before starting a V2 scan.',
       );
     }
+    final stopwatch = Stopwatch()..start();
+    if (logRequest) _log('request_started', method: method, path: path);
     try {
-      return await request(_options(contentType, token, idempotencyKey));
+      final response = await request(
+        _options(contentType, token, idempotencyKey),
+      );
+      if (logRequest) {
+        _log(
+          'request_completed',
+          path: response.requestOptions.path,
+          method: method,
+          status: response.statusCode,
+          durationMs: stopwatch.elapsedMilliseconds,
+        );
+      }
+      return response;
     } on DioException catch (error) {
-      if (error.response?.statusCode != 401 || _refreshToken == null) rethrow;
-      final refreshed = await _refreshToken!();
+      if (logRequest) {
+        _log(
+          'request_failed',
+          path: error.requestOptions.path,
+          method: method,
+          status: error.response?.statusCode,
+          durationMs: stopwatch.elapsedMilliseconds,
+          errorType: error.type.name,
+        );
+      }
+      final refreshToken = _refreshToken;
+      if (error.response?.statusCode != 401 || refreshToken == null) rethrow;
+      final refreshed = await refreshToken();
       final retryToken = refreshed ? await _currentToken() : null;
       if (retryToken == null || retryToken.isEmpty) rethrow;
       // Exactly one retry follows the existing Directus refresh path.
@@ -372,7 +477,7 @@ class WellarV2Client {
         statusCode: status,
         code: 'v2_auth_rejected',
         message:
-            'V2 rejected the configured local identity. Check its synthetic scope.',
+            'Your session or workspace access could not be verified. Sign in again or contact your workspace administrator.',
       );
     }
     if (status == 404 && body['code']?.toString() == 'result_unavailable') {
@@ -406,7 +511,7 @@ class WellarV2Client {
         statusCode: status,
         code: 'v2_auth_rejected',
         message:
-            'V2 rejected the configured local identity. Check its synthetic scope.',
+            'Your session or workspace access could not be verified. Sign in again or contact your workspace administrator.',
       );
     }
     if (status == 404 && code == 'result_unavailable') {
@@ -495,9 +600,22 @@ class WellarV2Client {
     ).map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
   }
 
-  static void _log(String event, {String? modality, int? status}) {
+  void _log(
+    String event, {
+    String? modality,
+    String? path,
+    String? method,
+    int? status,
+    int? durationMs,
+    String? errorType,
+  }) {
     safeDebugLog(
-      '[WELLAR_V2] event=$event${modality == null ? '' : ' modality=$modality'}${status == null ? '' : ' status=$status'}',
+      '[WELLAR_V2] selected_backend=v2 event=$event host=${Uri.parse(_baseUrl).host}${method == null ? '' : ' method=$method'}${path == null ? '' : ' path=${_safePath(path)}'}${modality == null ? '' : ' modality=$modality'}${status == null ? '' : ' status=$status'}${durationMs == null ? '' : ' duration_ms=$durationMs'}${errorType == null ? '' : ' exception_type=$errorType'}',
     );
+  }
+
+  static String _safePath(String value) {
+    final path = Uri.tryParse(value)?.path ?? '/api/v1/unknown';
+    return path.replaceAll(RegExp(r'(/scans)/[^/]+'), r'$1/{scan_id}');
   }
 }

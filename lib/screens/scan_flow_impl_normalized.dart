@@ -703,7 +703,7 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
           Center(
             child: Text(
               WellarV2Feature.enabledFor(Session.instance.userId)
-                  ? 'A Wellar AI V2 scan. No validated fatigue or vigilance prediction is available.'
+                  ? 'A Wisebase AI V2 scan. No validated fatigue or vigilance prediction is available.'
                   : 'A quick readiness check using camera, voice, and focus signals.',
               textAlign: TextAlign.center,
               style: GoogleFonts.inter(
@@ -1935,6 +1935,8 @@ class _ScanFlowScreenState extends State<ScanFlowScreen>
           builder: (_) => WellarV2ProcessingScreen(
             videoFile: video,
             audioFile: audio,
+            mediaProcessingConsent: _consentAccepted,
+            consentVersion: WellarV2Client.operationalMediaConsentVersion,
             imageBytes: Uint8List.fromList(_thumbnailBytes!),
           ),
         ),

@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 import '../services/directus_client.dart';
 import '../services/organization_service.dart';
 import '../services/workspace_selection_service.dart';
+import '../services/wellar_v2_client.dart';
 import '../state/app_providers.dart';
 import '../state/session.dart';
 import '../theme/app_theme.dart';
@@ -33,6 +34,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _logoutInProgress = false;
+  bool _authProbeTriggered = false;
   late Future<CanonicalWorkspaceContextResult> _switchableOrganizationsFuture;
   ProviderSubscription? _workspaceSubscription;
   String _workspaceIdentity = '';
@@ -268,6 +270,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               ? null
                               : () => _confirmLogout(ref),
                         ),
+                        if (kDebugMode) ...[
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: _authProbeTriggered
+                                ? null
+                                : _runAuthenticatedNoMediaProbe,
+                            icon: const Icon(Icons.shield_outlined),
+                            label: Text(
+                              _authProbeTriggered
+                                  ? 'Auth probe triggered'
+                                  : 'Run V2 auth probe once',
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -278,6 +294,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _runAuthenticatedNoMediaProbe() async {
+    if (!kDebugMode || _authProbeTriggered) return;
+    setState(() => _authProbeTriggered = true);
+    try {
+      await WellarV2Client.fromSession().debugAuthenticatedNoMediaProbe();
+    } catch (_) {
+      // The probe service emits only its sanitized result line.
+    }
   }
 
   Widget _buildSwitchOrganizationControl(BuildContext context) {

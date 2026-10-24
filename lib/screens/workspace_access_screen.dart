@@ -297,7 +297,7 @@ class _WorkspaceAccessScreenState extends State<WorkspaceAccessScreen> {
         ),
         const SizedBox(height: 8),
         const Text(
-          'Set up your company workspace to start using Wellar.',
+          'Set up your company workspace to start using Wisebase.',
           style: TextStyle(color: AppColors.textSecondary, height: 1.4),
         ),
         const SizedBox(height: 18),

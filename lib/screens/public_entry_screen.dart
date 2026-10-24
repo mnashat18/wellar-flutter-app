@@ -305,7 +305,7 @@ class _PublicEntryScreenState extends State<PublicEntryScreen>
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                'WELLAR',
+                'WISEBASE',
                 style: GoogleFonts.spaceGrotesk(
                   fontSize: 34,
                   letterSpacing: 6.5,
@@ -366,7 +366,7 @@ class _PublicEntryScreenState extends State<PublicEntryScreen>
           ),
           const SizedBox(height: 8),
           Text(
-            'Sign in to your workspace, or start your organization to begin using Wellar.',
+            'Sign in to your workspace, or start your organization to begin using Wisebase.',
             style: GoogleFonts.inter(
               color: AppColors.textSecondary,
               fontSize: 13.5,
